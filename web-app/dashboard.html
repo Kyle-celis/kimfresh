@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>KimFresh - Dashboard</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .menu { margin-bottom: 20px; }
+        .menu a { margin-right: 15px; text-decoration: none; color: #333; font-weight: bold; }
+        .menu a:hover { color: #d32f2f; }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .card h3 { margin: 0 0 10px 0; color: #666; font-size: 14px; }
+        .card .value { font-size: 32px; font-weight: bold; color: #d32f2f; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f0f0f0; }
+        canvas { max-height: 300px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<h2>KimFresh Admin</h2>
+<div class="menu">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="orders.html">Orders</a>
+    <a href="drivers.html">Drivers</a>
+    <a href="products.html">Products</a>
+    <a href="#" onclick="logout()">Logout</a>
+</div>
+<hr>
+
+<h3>Summary</h3>
+<div class="cards">
+    <div class="card"><h3>Products</h3><div class="value" id="c-products">-</div></div>
+    <div class="card"><h3>Drivers</h3><div class="value" id="c-drivers">-</div></div>
+    <div class="card"><h3>Total Orders</h3><div class="value" id="c-orders">-</div></div>
+    <div class="card"><h3>Pending</h3><div class="value" id="c-pending">-</div></div>
+    <div class="card"><h3>Approved</h3><div class="value" id="c-approved">-</div></div>
+    <div class="card"><h3>Rejected</h3><div class="value" id="c-rejected">-</div></div>
+    <div class="card"><h3>Low Stock</h3><div class="value" id="c-lowstock">-</div></div>
+    <div class="card"><h3>This Week</h3><div class="value" id="c-week">-</div></div>
+</div>
+
+<h3>Orders Per Week</h3>
+<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+    <button onclick="prevWeek()">◀ Previous Week</button>
+    <span id="weekLabel" style="font-weight: bold;"></span>
+    <button onclick="nextWeek()" id="nextBtn">Next Week ▶</button>
+</div>
+<canvas id="ordersChart"></canvas>
+
+<h3>Recent Orders (Last 10)</h3>
+<table>
+<thead>
+<tr>
+    <th>Order ID</th>
+    <th>Customer</th>
+    <th>Product</th>
+    <th>Qty</th>
+    <th>Total</th>
+    <th>Status</th>
+</tr>
+</thead>
+<tbody id="recentOrders"></tbody>
+</table>
+
+<script>
+const API = 'http://192.168.1.125:5000';
+const admin = JSON.parse(localStorage.getItem('admin'));
+
+if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
+
+function logout() {
+    localStorage.removeItem('admin');
+    window.location.href = 'login.html';
+}
+
+// ---------- SUMMARY ----------
+fetch(`${API}/api/dashboard/summary`)
+    .then(res => res.json())
+    .then(d => {
+        document.getElementById('c-products').textContent = d.total_products;
+        document.getElementById('c-drivers').textContent = d.total_drivers;
+        document.getElementById('c-orders').textContent = d.total_orders;
+        document.getElementById('c-pending').textContent = d.pending_orders;
+        document.getElementById('c-approved').textContent = d.approved_orders;
+        document.getElementById('c-rejected').textContent = d.rejected_orders;
+        document.getElementById('c-lowstock').textContent = d.low_stock;
+        document.getElementById('c-week').textContent = d.this_week;
+    });
+
+// ---------- CHART ----------
+// ---------- CHART ----------
+let chart = null;
+let currentWeekStart = getMonday(new Date());
+
+function getMonday(d) {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(date.setDate(diff));
+}
+
+function formatDateParam(d) {
+    return d.toISOString().split('T')[0];
+}
+
+function loadChart() {
+    const weekStr = formatDateParam(currentWeekStart);
+    
+    fetch(`${API}/api/dashboard/orders-per-week?week_start=${weekStr}`)
+        .then(res => res.json())
+        .then(d => {
+            document.getElementById('weekLabel').textContent = `${d.week_start} to ${d.week_end}`;
+            
+            const today = new Date();
+            const currentMonday = getMonday(today);
+            document.getElementById('nextBtn').disabled = currentWeekStart >= currentMonday;
+            
+            if (chart) chart.destroy();
+            
+            chart = new Chart(document.getElementById('ordersChart'), {
+                type: 'bar',
+                data: {
+                    labels: d.days,
+                    datasets: [{
+                        label: 'Orders',
+                        data: d.counts,
+                        backgroundColor: '#d32f2f'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        });
+}
+
+function prevWeek() {
+    currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+    loadChart();
+}
+
+function nextWeek() {
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+    loadChart();
+}
+
+loadChart();
+
+// ---------- RECENT ORDERS ----------
+fetch(`${API}/api/orders/all`)
+    .then(res => res.json())
+    .then(data => {
+        const list = document.getElementById('recentOrders');
+        list.innerHTML = '';
+        data.slice(0, 10).forEach(o => {
+            list.innerHTML += `<tr>
+                <td>${o.order_id}</td>
+                <td>${o.customer_code || '-'}</td>
+                <td>${o.product_name || '-'}</td>
+                <td>${o.quantity || '-'}</td>
+                <td>${o.total_amount}</td>
+                <td>${o.order_status}</td>
+            </tr>`;
+        });
+    });
+</script>
+</body>
+</html>

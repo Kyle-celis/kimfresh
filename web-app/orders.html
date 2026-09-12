@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>KimFresh - Orders</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f0f0f0; }
+        button { padding: 6px 12px; margin: 2px; cursor: pointer; }
+        .menu { margin-bottom: 20px; }
+        .menu a { margin-right: 15px; text-decoration: none; color: #333; font-weight: bold; }
+        .menu a:hover { color: #d32f2f; }
+        .filters { display: flex; gap: 10px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+<h2>KimFresh Admin</h2>
+<div class="menu">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="orders.html">Orders</a>
+    <a href="drivers.html">Drivers</a>
+    <a href="products.html">Products</a>
+    <a href="#" onclick="logout()">Logout</a>
+</div>
+<hr>
+
+<h3>Orders</h3>
+<div class="filters">
+    <select id="statusFilter" onchange="filterOrders()" style="padding: 8px; width: 200px;">
+        <option value="all">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+    </select>
+    <input type="text" id="searchBox" placeholder="Search by customer ID, product, or SKU..." oninput="filterOrders()" style="padding: 8px; width: 300px;">
+</div>
+
+<table>
+<thead>
+<tr>
+    <th>Customer ID</th>
+    <th>Order ID</th>
+    <th>Date</th>
+    <th>Product</th>
+    <th>SKU</th>
+    <th>Qty</th>
+    <th>Unit Price</th>
+    <th>Subtotal</th>
+    <th>Total</th>
+    <th>Status</th>
+    <th>Action</th>
+</tr>
+</thead>
+<tbody id="orderList"></tbody>
+</table>
+
+<script>
+const API = 'http://192.168.1.125:5000';
+const admin = JSON.parse(localStorage.getItem('admin'));
+
+if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
+
+let allOrders = [];
+
+function logout() {
+    localStorage.removeItem('admin');
+    window.location.href = 'login.html';
+}
+
+// ---------- LOAD ORDERS ----------
+function loadOrders() {
+    fetch(`${API}/api/orders/all`)
+        .then(res => res.json())
+        .then(data => {
+            allOrders = data;
+            renderOrders(data);
+        });
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${mins}`;
+}
+
+function renderOrders(orders) {
+    const list = document.getElementById('orderList');
+    list.innerHTML = '';
+    if (orders.length === 0) {
+        list.innerHTML = '<tr><td colspan="11">No orders</td></tr>';
+        return;
+    }
+    orders.forEach(o => {
+        list.innerHTML += `<tr>
+            <td>${o.customer_code || '-'}</td>
+            <td>${o.order_id}</td>
+            <td>${formatDate(o.order_date)}</td>
+            <td>${o.product_name || '-'}</td>
+            <td>${o.sku || '-'}</td>
+            <td>${o.quantity || '-'}</td>
+            <td>${o.unit_price || '-'}</td>
+            <td>${o.subtotal || '-'}</td>
+            <td>${o.total_amount}</td>
+            <td>${o.order_status}</td>
+            <td>
+                <button onclick="updateStatus(${o.order_id}, 'approved')">Approve</button>
+                <button onclick="updateStatus(${o.order_id}, 'rejected')">Reject</button>
+            </td>
+        </tr>`;
+    });
+}
+
+
+function filterOrders() {
+    const status = document.getElementById('statusFilter').value;
+    const query = document.getElementById('searchBox').value.toLowerCase();
+    
+    let filtered = allOrders;
+    
+    if (status !== 'all') {
+        filtered = filtered.filter(o => o.order_status === status);
+    }
+    
+    if (query) {
+        filtered = filtered.filter(o => 
+            (o.customer_code && o.customer_code.toLowerCase().includes(query)) ||
+            (o.product_name && o.product_name.toLowerCase().includes(query)) ||
+            (o.sku && o.sku.toLowerCase().includes(query))
+        );
+    }
+    
+    renderOrders(filtered);
+}
+
+function updateStatus(orderId, status) {
+    fetch(`${API}/api/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: status})
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert(data.message);
+        loadOrders();
+    });
+}
+
+loadOrders();
+</script>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>KimFresh - Drivers</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f0f0f0; }
+        input[type="text"] { padding: 8px; margin: 4px; }
+        button { padding: 6px 12px; margin: 2px; cursor: pointer; }
+        .menu { margin-bottom: 20px; }
+        .menu a { margin-right: 15px; text-decoration: none; color: #333; font-weight: bold; }
+        .menu a:hover { color: #d32f2f; }
+    </style>
+</head>
+<body>
+<h2>KimFresh Admin</h2>
+<div class="menu">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="orders.html">Orders</a>
+    <a href="drivers.html">Drivers</a>
+    <a href="products.html">Products</a>
+    <a href="#" onclick="logout()">Logout</a>
+</div>
+<hr>
+
+<h3>Add Driver</h3>
+<input type="text" id="dName" placeholder="Name">
+<input type="text" id="dEmail" placeholder="Email">
+<input type="text" id="dPhone" placeholder="Phone">
+<input type="text" id="dLicense" placeholder="License Number">
+<button onclick="addDriver()">Add</button>
+<p id="addMsg"></p>
+<hr>
+
+<h3>Drivers</h3>
+<table>
+<thead>
+<tr>
+    <th>ID</th>
+    <th>Name</th>
+    <th>Email</th>
+    <th>Phone</th>
+    <th>License</th>
+    <th>Status</th>
+    <th>Assigned Orders</th>
+    <th>Action</th>
+</tr>
+</thead>
+<tbody id="driverList"></tbody>
+</table>
+
+<script>
+const API = 'http://192.168.1.125:5000';
+const admin = JSON.parse(localStorage.getItem('admin'));
+
+if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
+
+function logout() {
+    localStorage.removeItem('admin');
+    window.location.href = 'login.html';
+}
+
+// ---------- ADD DRIVER ----------
+function addDriver() {
+    const body = {
+        name: document.getElementById('dName').value,
+        email: document.getElementById('dEmail').value,
+        phone: document.getElementById('dPhone').value,
+        license_number: document.getElementById('dLicense').value
+    };
+    
+    fetch(`${API}/api/drivers`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('addMsg').textContent = data.message;
+        loadDrivers();
+    });
+}
+
+// ---------- LOAD DRIVERS ----------
+function loadDrivers() {
+    fetch(`${API}/api/drivers`)
+        .then(res => res.json())
+        .then(data => {
+            const list = document.getElementById('driverList');
+            list.innerHTML = '';
+            if (data.length === 0) {
+                list.innerHTML = '<tr><td colspan="8">No drivers</td></tr>';
+                return;
+            }
+            data.forEach(d => {
+                list.innerHTML += `<tr>
+                    <td>${d.driver_id}</td>
+                    <td>${d.name}</td>
+                    <td>${d.email || '-'}</td>
+                    <td>${d.phone || '-'}</td>
+                    <td>${d.license_number || '-'}</td>
+                    <td>${d.status}</td>
+                    <td>${d.assigned_orders || '-'}</td>
+                    <td>
+                        <button onclick="assignOrderToDriver(${d.driver_id})">Assign Order</button>
+                    </td>
+                </tr>`;
+            });
+        });
+}
+
+// ---------- ASSIGN ORDER ----------
+function assignOrderToDriver(driverId) {
+    const orderId = prompt('Enter Order ID:');
+    if (!orderId) return;
+    
+    fetch(`${API}/api/drivers/${driverId}/assign`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ order_id: parseInt(orderId) })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert(data.message);
+        loadDrivers();
+    });
+}
+
+loadDrivers();
+</script>
+</body>
+</html>

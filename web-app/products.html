@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>KimFresh - Products</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f0f0f0; }
+        input[type="text"], input[type="number"] { padding: 8px; margin: 4px; }
+        button { padding: 6px 12px; margin: 2px; cursor: pointer; }
+        .menu { margin-bottom: 20px; }
+        .menu a { margin-right: 15px; text-decoration: none; color: #333; font-weight: bold; }
+        .menu a:hover { color: #d32f2f; }
+    </style>
+</head>
+<body>
+<h2>KimFresh Admin</h2>
+<div class="menu">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="orders.html">Orders</a>
+    <a href="drivers.html">Drivers</a>
+    <a href="products.html">Products</a>
+    <a href="#" onclick="logout()">Logout</a>
+</div>
+<hr>
+
+<h3>Add Product</h3>
+<input type="text" id="pName" placeholder="Name">
+<input type="text" id="pSku" placeholder="SKU (leave blank for auto)">
+<input type="number" id="pPrice" placeholder="Price">
+<input type="number" id="pStock" placeholder="Stock Quantity">
+<input type="number" id="pReorder" placeholder="Reorder Level">
+<button onclick="addProduct()">Add</button>
+<p id="addMsg"></p>
+<hr>
+
+<div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+    <select id="productFilter" onchange="handleFilter()" style="padding: 8px; width: 200px;">
+        <option value="active">Show Active</option>
+        <option value="all">Show All (Including Hidden)</option>
+    </select>
+    <input type="text" id="searchBox" placeholder="Search by name, SKU, or status..." oninput="searchProducts()" style="width: 300px; padding: 8px;">
+</div>
+
+<table>
+<thead>
+<tr>
+    <th>ID</th>
+    <th>Name</th>
+    <th>SKU</th>
+    <th>Price</th>
+    <th>Stock</th>
+    <th>Reorder Level</th>
+    <th>Status</th>
+    <th>Action</th>
+</tr>
+</thead>
+<tbody id="productList"></tbody>
+</table>
+
+<script>
+const API = 'http://192.168.1.125:5000';
+const admin = JSON.parse(localStorage.getItem('admin'));
+
+if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
+
+let allProducts = [];
+
+function logout() {
+    localStorage.removeItem('admin');
+    window.location.href = 'login.html';
+}
+
+function addProduct() {
+    const body = {
+        name: document.getElementById('pName').value,
+        sku: document.getElementById('pSku').value,
+        unit_price: document.getElementById('pPrice').value,
+        stock_quantity: document.getElementById('pStock').value,
+        reorder_level: document.getElementById('pReorder').value
+    };
+    fetch(`${API}/api/products`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('addMsg').textContent = data.message;
+        loadProducts();
+    });
+}
+
+function loadProducts() {
+    fetch(`${API}/api/products`)
+        .then(res => res.json())
+        .then(data => { allProducts = data; renderProducts(data); });
+}
+
+function loadAllProducts() {
+    fetch(`${API}/api/products/all`)
+        .then(res => res.json())
+        .then(data => { allProducts = data; renderProducts(data); });
+}
+
+function renderProducts(products) {
+    const list = document.getElementById('productList');
+    list.innerHTML = '';
+    if (products.length === 0) {
+        list.innerHTML = '<tr><td colspan="8">No products found</td></tr>';
+        return;
+    }
+    products.forEach(p => {
+        let action = p.status === 'available'
+            ? `<button onclick="hideProduct(${p.product_id})">Hide</button>`
+            : `<button onclick="restoreProduct(${p.product_id})">Restore</button>`;
+        list.innerHTML += `<tr>
+            <td>${p.product_id}</td>
+            <td>${p.name}</td>
+            <td>${p.sku}</td>
+            <td>${p.unit_price}</td>
+            <td>${p.stock_quantity || 0}</td>
+            <td>${p.reorder_level}</td>
+            <td>${p.status}</td>
+            <td>${action}</td>
+        </tr>`;
+    });
+}
+
+function handleFilter() {
+    document.getElementById('productFilter').value === 'all' ? loadAllProducts() : loadProducts();
+}
+
+function hideProduct(id) {
+    if (!confirm('Hide this product?')) return;
+    fetch(`${API}/api/products/${id}/hide`, { method: 'PUT' })
+        .then(res => res.json()).then(data => { alert(data.message); loadProducts(); });
+}
+
+function restoreProduct(id) {
+    fetch(`${API}/api/products/${id}/restore`, { method: 'PUT' })
+        .then(res => res.json()).then(data => { alert(data.message); loadAllProducts(); });
+}
+
+function searchProducts() {
+    const q = document.getElementById('searchBox').value.toLowerCase();
+    renderProducts(allProducts.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.sku.toLowerCase().includes(q) ||
+        p.status.toLowerCase().includes(q)
+    ));
+}
+
+loadProducts();
+</script>
+</body>
+</html>
