@@ -338,11 +338,21 @@ def get_all_orders():
             oi.unit_price,
             oi.subtotal,
             p.name AS product_name,
-            p.sku
+            p.sku,
+            sd.temperature,
+            sd.humidity,
+            sd.is_alert
         FROM `order` o
         LEFT JOIN order_item oi ON o.order_id = oi.order_id
         LEFT JOIN product p ON oi.product_id = p.product_id
         LEFT JOIN retailer r ON o.retailer_id = r.retailer_id
+        LEFT JOIN delivery d ON o.order_id = d.order_id
+        LEFT JOIN (
+            SELECT delivery_id, MAX(sensor_id) AS latest_id
+            FROM sensor_data
+            GROUP BY delivery_id
+        ) latest ON d.delivery_id = latest.delivery_id
+        LEFT JOIN sensor_data sd ON sd.sensor_id = latest.latest_id
         ORDER BY o.order_date DESC
     """)
     orders = cursor.fetchall()
@@ -623,6 +633,117 @@ def retailer_register():
         conn.close()
         return jsonify({"success": False, "message": str(err)}), 400
 
+
+# ---------- GET DRIVER DELIVERIES ----------
+@app.route('/api/driver/<int:driver_id>/deliveries', methods=['GET'])
+def get_driver_deliveries(driver_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT 
+            dl.delivery_id,
+            dl.order_id,
+            dl.delivery_status,
+            r.name AS retailer_name,
+            r.address AS retailer_address,
+            r.phone AS retailer_phone,
+            p.name AS product_name,
+            oi.quantity
+        FROM delivery dl
+        LEFT JOIN `order` o ON dl.order_id = o.order_id
+        LEFT JOIN retailer r ON o.retailer_id = r.retailer_id
+        LEFT JOIN order_item oi ON o.order_id = oi.order_id
+        LEFT JOIN product p ON oi.product_id = p.product_id
+        WHERE dl.driver_id = %s
+        ORDER BY dl.delivery_id DESC
+    """, (driver_id,))
+    deliveries = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(deliveries)
+
+# ---------- UPDATE DELIVERY STATUS ----------
+@app.route('/api/deliveries/<int:delivery_id>/status', methods=['PUT'])
+def update_delivery_status(delivery_id):
+    data = request.get_json()
+    new_status = data.get('delivery_status')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    # Get order_id for this delivery
+    cursor.execute("SELECT order_id FROM delivery WHERE delivery_id = %s", (delivery_id,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "message": "Delivery not found"}), 404
+    
+    order_id = row['order_id']
+    
+    # Update delivery status
+    cursor.execute("UPDATE delivery SET delivery_status = %s WHERE delivery_id = %s", (new_status, delivery_id))
+    
+    # Map delivery status to order status
+    order_status_map = {
+        'assigned': 'approved',
+        'picked_up': 'waiting_for_pickup',
+        'in_transit': 'in_transit',
+        'delivered': 'delivered'
+    }
+    new_order_status = order_status_map.get(new_status, 'approved')
+    
+    cursor.execute("UPDATE `order` SET order_status = %s WHERE order_id = %s", (new_order_status, order_id))
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True, "message": f"Delivery {delivery_id} set to {new_status}, order set to {new_order_status}"})
+
+
+# ---------- SAVE SENSOR DATA ----------
+@app.route('/api/sensor', methods=['POST'])
+def save_sensor():
+    data = request.get_json()
+    delivery_id = data.get('delivery_id')
+    temperature = data.get('temperature')
+    humidity = data.get('humidity')
+    is_alert = data.get('is_alert', False)
+    
+    if not delivery_id or temperature is None or humidity is None:
+        return jsonify({"success": False, "message": "Missing required fields"}), 400
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO sensor_data (delivery_id, temperature, humidity, is_alert) VALUES (%s, %s, %s, %s)",
+            (delivery_id, temperature, humidity, is_alert)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Sensor data saved"})
+    except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "message": str(e)}), 400
+
+# ---------- GET SENSOR DATA BY DELIVERY ----------
+@app.route('/api/sensor/<int:delivery_id>', methods=['GET'])
+def get_sensor_data(delivery_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT * FROM sensor_data 
+        WHERE delivery_id = %s 
+        ORDER BY reading_timestamp DESC
+    """, (delivery_id,))
+    readings = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(readings)
 
 # ---------- RUN ----------
 if __name__ == '__main__':

@@ -48,6 +48,8 @@
     <th>Unit Price</th>
     <th>Subtotal</th>
     <th>Total</th>
+    <th>Temp</th>
+    <th>Humidity</th>
     <th>Status</th>
     <th>Action</th>
 </tr>
@@ -93,11 +95,16 @@ function renderOrders(orders) {
     const list = document.getElementById('orderList');
     list.innerHTML = '';
     if (orders.length === 0) {
-        list.innerHTML = '<tr><td colspan="11">No orders</td></tr>';
+        list.innerHTML = '<tr><td colspan="13">No orders</td></tr>';
         return;
     }
     orders.forEach(o => {
-        list.innerHTML += `<tr>
+        const alert = o.is_alert === true || o.is_alert === 1;
+        const rowStyle = alert ? 'background-color: #ffcccc;' : '';
+        const tempCell = o.temperature ? `${o.temperature} °C` : '-';
+        const humCell = o.humidity ? `${o.humidity} %` : '-';
+
+        list.innerHTML += `<tr style="${rowStyle}">
             <td>${o.customer_code || '-'}</td>
             <td>${o.order_id}</td>
             <td>${formatDate(o.order_date)}</td>
@@ -107,6 +114,8 @@ function renderOrders(orders) {
             <td>${o.unit_price || '-'}</td>
             <td>${o.subtotal || '-'}</td>
             <td>${o.total_amount}</td>
+            <td>${tempCell}</td>
+            <td>${humCell}</td>
             <td>${o.order_status}</td>
             <td>
                 <button onclick="updateStatus(${o.order_id}, 'approved')">Approve</button>
@@ -116,17 +125,16 @@ function renderOrders(orders) {
     });
 }
 
-
 function filterOrders() {
     const status = document.getElementById('statusFilter').value;
     const query = document.getElementById('searchBox').value.toLowerCase();
-    
+
     let filtered = allOrders;
-    
+
     if (status !== 'all') {
         filtered = filtered.filter(o => o.order_status === status);
     }
-    
+
     if (query) {
         filtered = filtered.filter(o => 
             (o.customer_code && o.customer_code.toLowerCase().includes(query)) ||
@@ -134,7 +142,7 @@ function filterOrders() {
             (o.sku && o.sku.toLowerCase().includes(query))
         );
     }
-    
+
     renderOrders(filtered);
 }
 
