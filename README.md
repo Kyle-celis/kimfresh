@@ -1,6 +1,6 @@
 # KimFresh: IoT-Based Kimchi Management System
 
-An integrated web and mobile-based system for managing kimchi distribution in Bacolod City.
+An integrated web and mobile-based system for managing kimchi distribution in Bacolod City with IoT temperature and humidity monitoring.
 
 ## Components
 
@@ -9,24 +9,19 @@ An integrated web and mobile-based system for managing kimchi distribution in Ba
 | Backend API | Flask + MySQL | ✅ |
 | Admin Web | HTML + JS | ✅ |
 | Retailer App | Flutter + Dart | ✅ |
-| Driver App | Flutter + Dart | 🚧 |
-| IoT Sensor | ESP32 + BLE | 🚧 |
+| Driver App | Flutter + Dart | ✅ |
+| IoT Sensor | ESP32 + DHT22 + BLE | ✅ |
 
 ## Features
 
-- Product management (add, edit, hide, restore)
-- Order management (place, approve, reject)
-- Driver management (add, assign orders)
-- Retailer mobile app (browse, order, track)
-- IoT temperature/humidity monitoring (planned)
+- **Product management** — add, edit, hide, restore
+- **Order management** — place, approve, reject
+- **Driver management** — add, assign orders
+- **Retailer sign up** — self-registration with unique customer code
+- **Delivery tracking** — assigned → picked up → in transit → delivered
+- **IoT monitoring** — real-time temperature/humidity via ESP32 + BLE
+- **Offline storage** — ESP32 stores readings when phone disconnects
+- **Alert detection** — red row when temperature/humidity out of range
+- **Sensor data** — saved to database, shown in admin dashboard
 
-## Setup
-
-### Backend
-
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install flask flask-cors mysql-connector-python
-python app.py
+## Architecture
