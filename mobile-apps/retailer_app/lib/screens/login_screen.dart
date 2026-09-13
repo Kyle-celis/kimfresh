@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api.dart';
 import 'products_screen.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -14,7 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void login() async {
     final result = await ApiService.login(emailController.text, passwordController.text);
-    if (result != null) {
+    if (result != null && result['success'] == true) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => ProductsScreen(
@@ -23,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
         )),
       );
     } else {
-      setState(() => message = 'Invalid credentials');
+      setState(() => message = result?['message'] ?? 'Invalid credentials');
     }
   }
 
@@ -35,11 +36,32 @@ class _LoginScreenState extends State<LoginScreen> {
         padding: EdgeInsets.all(20),
         child: Column(
           children: [
-            TextField(controller: emailController, decoration: InputDecoration(labelText: 'Email')),
-            TextField(controller: passwordController, decoration: InputDecoration(labelText: 'Password'), obscureText: true),
+            TextField(
+              controller: emailController,
+              decoration: InputDecoration(labelText: 'Email'),
+            ),
+            TextField(
+              controller: passwordController,
+              decoration: InputDecoration(labelText: 'Password'),
+              obscureText: true,
+            ),
             SizedBox(height: 20),
-            ElevatedButton(onPressed: login, child: Text('Login')),
+            ElevatedButton(
+              onPressed: login,
+              child: Text('Login'),
+            ),
+            SizedBox(height: 10),
             Text(message, style: TextStyle(color: Colors.red)),
+            SizedBox(height: 20),
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => RegisterScreen()),
+                );
+              },
+              child: Text('No account? Sign Up'),
+            ),
           ],
         ),
       ),
