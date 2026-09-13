@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from db_config import get_db_connection
@@ -7,7 +7,7 @@ import hashlib
 import os
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 # ---------- HOME ----------
 @app.route('/', methods=['GET'])
@@ -567,6 +567,62 @@ def orders_per_week():
         "week_start": week_start,
         "week_end": end_date.strftime('%Y-%m-%d')
     })
+
+
+
+# ---------- RETAILER REGISTER ----------
+@app.route('/api/retailer/register', methods=['POST'])
+def retailer_register():
+    data = request.get_json()
+    name = data.get('name')
+    email = data.get('email')
+    password = data.get('password')
+    phone = data.get('phone', '')
+    address = data.get('address', '')
+    
+    if not name or not email or not password:
+        return jsonify({"success": False, "message": "Name, email, and password required"}), 400
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT retailer_id FROM retailer WHERE email = %s", (email,))
+    if cursor.fetchone():
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "message": "Email already registered"}), 400
+    
+    import random
+    while True:
+        code = str(random.randint(100000, 999999))
+        cursor.execute("SELECT retailer_id FROM retailer WHERE customer_code = %s", (code,))
+        if not cursor.fetchone():
+            break
+    
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    
+    try:
+        cursor.execute(
+            "INSERT INTO retailer (name, email, phone, password_hash, address, customer_code) VALUES (%s, %s, %s, %s, %s, %s)",
+            (name, email, phone, password_hash, address, code)
+        )
+        conn.commit()
+        retailer_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": True,
+            "retailer_id": retailer_id,
+            "customer_code": code,
+            "name": name,
+            "message": f"Registered! Your customer code: {code}"
+        })
+    except mysql.connector.Error as err:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": False, "message": str(err)}), 400
+
 
 # ---------- RUN ----------
 if __name__ == '__main__':

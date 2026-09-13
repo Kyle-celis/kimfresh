@@ -76,7 +76,7 @@
 </table>
 
 <script>
-const API = http://${window.location.hostname}:5000;
+const API = `http://${window.location.hostname}:5000`;
 const admin = JSON.parse(localStorage.getItem('admin'));
 
 if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
