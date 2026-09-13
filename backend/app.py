@@ -3,6 +3,8 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 from db_config import get_db_connection
 import mysql.connector
+import hashlib
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -13,25 +15,34 @@ def home():
     return jsonify({"message": "KimFresh API is running!"})
 
 # ---------- LOGIN ----------
+import hashlib
+
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
     email = data.get('email')
+    password = data.get('password')
+    
+    if not email or not password:
+        return jsonify({"success": False, "message": "Email and password required"}), 400
+    
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
     
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
+    # Try admin
     cursor.execute("SELECT admin_id, name, email FROM admin WHERE email = %s", (email,))
     user = cursor.fetchone()
     role = "admin"
     
     if not user:
-        cursor.execute("SELECT retailer_id as user_id, name, email FROM retailer WHERE email = %s", (email,))
+        cursor.execute("SELECT retailer_id as user_id, name, email, password_hash FROM retailer WHERE email = %s", (email,))
         user = cursor.fetchone()
         role = "retailer"
         
     if not user:
-        cursor.execute("SELECT driver_id as user_id, name, email FROM driver WHERE email = %s", (email,))
+        cursor.execute("SELECT driver_id as user_id, name, email, password_hash FROM driver WHERE email = %s", (email,))
         user = cursor.fetchone()
         role = "driver"
     
@@ -40,6 +51,12 @@ def login():
     
     if not user:
         return jsonify({"success": False, "message": "User not found"}), 401
+    
+    # Check password (skip for admin for now, or set admin password)
+    if role in ['retailer', 'driver']:
+        stored_hash = user.get('password_hash')
+        if stored_hash and stored_hash != password_hash:
+            return jsonify({"success": False, "message": "Invalid password"}), 401
     
     return jsonify({
         "success": True,
@@ -459,12 +476,12 @@ def assign_order_to_driver(driver_id):
         return jsonify({"success": False, "message": str(e)}), 400
 
 # ---------- SERVE WEB FILES ----------
-from flask import send_from_directory
+
+WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'web-app')
 
 @app.route('/app/<path:filename>')
 def serve_web(filename):
-    return send_from_directory('/home/kyle/kimfresh/web-app', filename)
-
+    return send_from_directory(WEB_DIR, filename)
 
     # ---------- DASHBOARD SUMMARY ----------
 @app.route('/api/dashboard/summary', methods=['GET'])
@@ -553,4 +570,4 @@ def orders_per_week():
 
 # ---------- RUN ----------
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
