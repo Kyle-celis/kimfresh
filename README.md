@@ -1,6 +1,6 @@
 # KimFresh: IoT-Based Kimchi Management System
 
-An integrated web and mobile-based system for managing kimchi distribution in Bacolod City with IoT temperature and humidity monitoring.
+An integrated web and mobile-based system for managing kimchi distribution in Bacolod City.
 
 ## Components
 
@@ -10,18 +10,58 @@ An integrated web and mobile-based system for managing kimchi distribution in Ba
 | Admin Web | HTML + JS | ✅ |
 | Retailer App | Flutter + Dart | ✅ |
 | Driver App | Flutter + Dart | ✅ |
-| IoT Sensor | ESP32 + DHT22 + BLE | ✅ |
+| IoT Sensor | ESP32 + BLE | ✅ |
+
+## Screenshots
+
+### Admin Orders Dashboard with IoT Data
+
+![Admin Orders](screenshots/orders.png)
+
+The admin dashboard shows temperature and humidity for each delivery. Rows turn red when temperature exceeds the threshold.
 
 ## Features
 
-- **Product management** — add, edit, hide, restore
-- **Order management** — place, approve, reject
-- **Driver management** — add, assign orders
-- **Retailer sign up** — self-registration with unique customer code
-- **Delivery tracking** — assigned → picked up → in transit → delivered
-- **IoT monitoring** — real-time temperature/humidity via ESP32 + BLE
-- **Offline storage** — ESP32 stores readings when phone disconnects
-- **Alert detection** — red row when temperature/humidity out of range
-- **Sensor data** — saved to database, shown in admin dashboard
+### Admin Web
+- Product management (add, edit, hide, restore)
+- Order management (view, approve, reject)
+- Driver management (add, assign orders)
+- Temperature and humidity monitoring per delivery
+- Alert detection (red row for out-of-range readings)
 
-## Architecture
+### Retailer App
+- Sign up with auto-generated customer code
+- Browse products
+- Place orders
+- Track order status
+
+### Driver App
+- View assigned deliveries
+- Update delivery status (Assigned → Picked Up → In Transit → Delivered)
+- Connect to ESP32 via BLE
+- View real-time temperature and humidity
+- View stored offline readings
+- Auto-save sensor data to backend
+
+### IoT Device (ESP32)
+- DHT22 temperature/humidity sensor
+- BLE communication to driver app
+- Offline data logging (LittleFS)
+- Command-based stored data retrieval
+- LED status indicator
+- Alert detection (temperature > 10°C)
+
+## System Architecture
+
+ESP32 → BLE → Driver App → REST API → MySQL → Admin Dashboard
+
+## Setup
+
+### Backend
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install flask flask-cors mysql-connector-python
+python app.py
