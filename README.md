@@ -16,7 +16,7 @@ An integrated web and mobile-based system for managing kimchi distribution in Ba
 
 ### Admin Orders Dashboard with IoT Data
 
-![Admin Orders](screenshots/orders.png)
+![Admin Orders](screenshots/Screenshot 2026-09-13 221721.png)
 
 The admin dashboard shows temperature and humidity for each delivery. Rows turn red when temperature exceeds the threshold.
 
