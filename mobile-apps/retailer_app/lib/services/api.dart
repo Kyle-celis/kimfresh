@@ -16,8 +16,26 @@ class ApiService {
       if (data['success'] == true && data['role'] == 'retailer') {
         return data;
       }
+      return data;
     }
     return null;
+  }
+
+  // REGISTER
+  static Future<Map<String, dynamic>?> register(
+      String name, String email, String password, String phone, String address) async {
+    final res = await http.post(
+      Uri.parse('$API/api/retailer/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'name': name,
+        'email': email,
+        'password': password,
+        'phone': phone,
+        'address': address,
+      }),
+    );
+    return jsonDecode(res.body);
   }
 
   // GET PRODUCTS
