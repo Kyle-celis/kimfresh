@@ -206,7 +206,7 @@ OWASP ZAP 2.17.0 (Zed Attack Proxy) — automated web application security scann
 
 Added security headers in Flask:
 
-```python
+python
 @app.after_request
 def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -219,6 +219,13 @@ def add_security_headers(response):
         "frame-ancestors 'none';"
     )
     return response
+
+Tenant Isolation Fix
+Problem Discovered
+Any client could access /api/orders/<retailer_id> without authentication. Changing the ID returned another retailer's data.
+
+Known Limitation
+Headers can be faked. Anyone can send X-User-Role: admin to bypass. In production, use JWT tokens signed by the server.
 
 
 ## Repository
