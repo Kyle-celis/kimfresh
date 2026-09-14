@@ -182,6 +182,45 @@
 
 ---
 
+## Security Testing with OWASP ZAP
+
+### Tool Used
+OWASP ZAP 2.17.0 (Zed Attack Proxy) — automated web application security scanner.
+
+### Scan Setup
+- URL: `http://localhost:5000`
+- Mode: Automated Scan with traditional spider
+
+### Findings
+
+| # | Alert | Risk | Status |
+|---|-------|------|--------|
+| 1 | CSP Header Not Set | Medium | Fixed |
+| 2 | Server Version Leak | Low | Known limitation |
+| 3 | X-Content-Type-Options Missing | Low | Fixed |
+| 4 | CSP: script-src unsafe-inline | Medium | Accepted (inline scripts) |
+| 5 | CSP: style-src unsafe-inline | Medium | Accepted (inline styles) |
+| 6 | CSP: No Fallback Directive | Medium | Fixed with frame-ancestors |
+
+### Fixes Applied
+
+Added security headers in Flask:
+
+```python
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "frame-ancestors 'none';"
+    )
+    return response
+
+
 ## Repository
 
 https://github.com/Kyle-celis/kimfresh
