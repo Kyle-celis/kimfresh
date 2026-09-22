@@ -13,6 +13,9 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 
+# Import the shared limiter
+from extensions import limiter
+
 # Import the different "blueprints" (mini-apps) that handle separate jobs
 from products import products_bp   # Handles products (kimchi items)
 from orders import orders_bp       # Handles customer orders
@@ -27,6 +30,9 @@ app = Flask(__name__)
 
 # Allow the app to be accessed from other devices (like the phone app)
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+
+# Attach the rate limiter to the app
+limiter.init_app(app)
 
 
 # ---------- CONNECT ALL THE BLUEPRINTS ----------

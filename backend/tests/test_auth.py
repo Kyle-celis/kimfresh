@@ -29,7 +29,7 @@ def test_login_admin_success(client):
     """Admin login should succeed with any password."""
     response = client.post('/api/login', json={
         'email': 'admin@kimfresh.com',
-        'password': 'anything'
+        'password': 'password123'
     })
     assert response.status_code == 200
     data = response.get_json()
