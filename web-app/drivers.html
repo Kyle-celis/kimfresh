@@ -52,7 +52,7 @@
 </table>
 
 <script>
-const API = `http://${window.location.hostname}:5000`;
+const API = `${window.location.protocol}//${window.location.hostname}`;;
 
 const admin = JSON.parse(localStorage.getItem('admin'));
 
