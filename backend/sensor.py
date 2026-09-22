@@ -46,12 +46,14 @@ def save_sensor():
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": "Sensor data saved"})
+    
     except Exception as e:
         conn.rollback()
         cursor.close()
         conn.close()
-        return jsonify({"success": False, "message": str(e)}), 400
         logger.error(f"Sensor save failed: {e}", exc_info=True)
+        return jsonify({"success": False, "message": str(e)}), 400
+
 
 @sensor_bp.route('/api/sensor/<int:delivery_id>', methods=['GET'])
 def get_sensor_data(delivery_id):
