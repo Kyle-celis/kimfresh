@@ -210,6 +210,38 @@ OWASP ZAP 2.17.0 (Zed Attack Proxy) — automated web application security scann
 
 ### Fixes Applied
 
+## Input Validation
+
+All user inputs are validated in `utils/validators.py`:
+
+| Validator | Rule |
+|-----------|------|
+| `validate_email` | Must match email pattern |
+| `validate_password` | Min 6 chars, max 100 |
+| `validate_name` | Required, max 100 |
+| `validate_positive_int` | > 0, max 100000 |
+| `validate_positive_float` | >= 0, max 1000000 |
+| `validate_items_list` | Non-empty, max 50 items |
+
+## Logging
+
+Logs written to both terminal and `logs/kimfresh.log`:
+
+| Level | When |
+|-------|------|
+| INFO | Successful logins, new registrations, orders |
+| WARNING | Failed logins |
+| ERROR | Unhandled exceptions |
+
+Log file rotates at 1 MB, keeps last 5 files.
+
+## Error Handling
+
+Global error handler catches all unhandled exceptions and returns:
+
+```json
+{"success": false, "message": "Internal server error"}
+
 Added security headers in Flask:
 
 ```python
