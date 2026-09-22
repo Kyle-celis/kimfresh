@@ -28,8 +28,7 @@ from utils.logger import logger
 # Create the main app. This is our server.
 app = Flask(__name__)
 
-# Allow the app to be accessed from other devices (like the phone app)
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Attach the rate limiter to the app
 limiter.init_app(app)

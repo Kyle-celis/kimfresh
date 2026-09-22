@@ -1,6 +1,7 @@
 """Sensor data routes."""
 from flask import Blueprint, request, jsonify
 from utils.logger import logger
+from extensions import require_auth
 from utils.validators import validate_positive_int, validate_positive_float
 from db_config import get_db_connection
 
@@ -8,6 +9,7 @@ sensor_bp = Blueprint('sensor', __name__)
 
 
 @sensor_bp.route('/api/sensor', methods=['POST'])
+@require_auth(['driver'])
 def save_sensor():
     """
     Save a sensor reading for a delivery.

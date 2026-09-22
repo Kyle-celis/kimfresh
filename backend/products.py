@@ -1,5 +1,6 @@
 """Product management routes."""
 from utils.validators import validate_name, validate_positive_float, validate_positive_int
+from extensions import require_auth
 from flask import Blueprint, request, jsonify
 from db_config import get_db_connection
 from config import (
@@ -55,16 +56,20 @@ def get_product(product_id):
 
 
 @products_bp.route('/api/products', methods=['POST'])
+@require_auth(['admin'])
 def add_or_update_product():
     """
     Add a new product or update an existing one.
-    
+
     If SKU or name matches an existing product, it is updated.
     Otherwise, a new product is created with an auto-generated SKU.
     """
     data = request.get_json()
     name = data.get('name')
     sku = data.get('sku')
+
+    if not name and not sku:
+        return jsonify({"success": False, "message": "Name or SKU required"}), 400
 
     if name:
         is_valid, err = validate_name(name, "Product name")
@@ -80,9 +85,6 @@ def add_or_update_product():
         is_valid, err = validate_positive_int(data['reorder_level'], "Reorder level")
         if not is_valid:
             return jsonify({"success": False, "message": err}), 400
-
-    if not name and not sku:
-        return jsonify({"success": False, "message": "Name or SKU required"}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -159,6 +161,7 @@ def _create_new_product(cursor, conn, data, name, sku):
 
 
 @products_bp.route('/api/products/<int:product_id>/hide', methods=['PUT'])
+@require_auth(['admin'])
 def hide_product(product_id):
     """Soft-delete a product by marking it inactive."""
     conn = get_db_connection()
@@ -180,6 +183,7 @@ def hide_product(product_id):
 
 
 @products_bp.route('/api/products/<int:product_id>/restore', methods=['PUT'])
+@require_auth(['admin'])
 def restore_product(product_id):
     """Restore a hidden product back to available."""
     conn = get_db_connection()

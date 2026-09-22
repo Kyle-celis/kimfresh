@@ -1,5 +1,6 @@
 """Driver management routes."""
 from flask import Blueprint, request, jsonify
+from extensions import require_auth
 from utils.validators import validate_name, validate_positive_int, validate_email
 from db_config import get_db_connection
 import mysql.connector
@@ -33,6 +34,7 @@ def get_drivers():
 
 
 @drivers_bp.route('/api/drivers', methods=['POST'])
+@require_auth(['admin'])
 def add_driver():
     """
     Add a new driver or update an existing one.
@@ -89,6 +91,7 @@ def add_driver():
 
 
 @drivers_bp.route('/api/drivers/<int:driver_id>/assign', methods=['POST'])
+@require_auth(['admin'])
 def assign_order_to_driver(driver_id):
     """
     Assign an order to a driver.
@@ -146,6 +149,7 @@ def assign_order_to_driver(driver_id):
 
 
 @drivers_bp.route('/api/driver/<int:driver_id>/deliveries', methods=['GET'])
+@require_auth(['admin', 'driver'])
 def get_driver_deliveries(driver_id):
     """Return all deliveries assigned to a specific driver."""
     conn = get_db_connection()
@@ -175,6 +179,7 @@ def get_driver_deliveries(driver_id):
 
 
 @drivers_bp.route('/api/deliveries/<int:delivery_id>/status', methods=['PUT'])
+@require_auth(['driver'])
 def update_delivery_status(delivery_id):
     """
     Update a delivery's status and sync the related order status.

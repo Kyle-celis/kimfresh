@@ -1,6 +1,7 @@
 """Order management routes."""
 
 from utils.validators import validate_positive_int, validate_items_list
+from extensions import require_auth
 from utils.logger import logger
 from flask import Blueprint, request, jsonify
 from db_config import get_db_connection
@@ -15,14 +16,14 @@ orders_bp = Blueprint('orders', __name__)
 
 
 @orders_bp.route('/api/orders', methods=['POST'])
-@orders_bp.route('/api/orders', methods=['POST'])
+@require_auth(['retailer'])
 def place_order():
     """
     Place a new order.
-    
+
     Validates stock for all items before creating the order.
     Reduces stock quantity after successful creation.
-    
+
     Performance note: Fetches all products in a single query (instead of
     one per item) to avoid the N+1 query problem.
     """
@@ -37,11 +38,12 @@ def place_order():
     is_valid, err = validate_items_list(items)
     if not is_valid:
         return jsonify({"success": False, "message": err}), 400
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # --- FETCH ALL PRODUCTS IN ONE QUERY (fixes N+1) ---
+        # Fetch all products in one query (fixes N+1)
         product_ids = [item['product_id'] for item in items]
         placeholders = ','.join(['%s'] * len(product_ids))
         cursor.execute(
@@ -50,7 +52,7 @@ def place_order():
         )
         products = {p['product_id']: p for p in cursor.fetchall()}
 
-        # --- VALIDATE STOCK ---
+        # Validate stock
         total = 0
         for item in items:
             product = products.get(item['product_id'])
@@ -63,7 +65,7 @@ def place_order():
                 }), 400
             total += product['unit_price'] * item['quantity']
 
-        # --- CREATE ORDER HEADER ---
+        # Create order header
         cursor.execute(
             """INSERT INTO `order` 
                (retailer_id, order_date, total_amount, order_status) 
@@ -72,7 +74,7 @@ def place_order():
         )
         order_id = cursor.lastrowid
 
-        # --- CREATE ORDER ITEMS AND UPDATE STOCK ---
+        # Create order items and update stock
         order_items = []
         update_stocks = []
 
@@ -121,63 +123,16 @@ def place_order():
         conn.rollback()
         cursor.close()
         conn.close()
-        return jsonify({"success": False, "message": str(e)}), 500
-
         logger.error(f"Order placement failed: {e}", exc_info=True)
-
-def _validate_stock(cursor, items):
-    """Check if enough stock exists for all items. Returns total price or error."""
-    total = 0
-    for item in items:
-        cursor.execute(
-            "SELECT product_id, name, unit_price, stock_quantity FROM product WHERE product_id = %s",
-            (item['product_id'],)
-        )
-        product = cursor.fetchone()
-
-        if not product:
-            return {'error': f"Product {item['product_id']} not found", 'total': 0}
-
-        if product['stock_quantity'] < item['quantity']:
-            return {
-                'error': f"Not enough stock for {product['name']}. Available: {product['stock_quantity']}",
-                'total': 0
-            }
-
-        total += product['unit_price'] * item['quantity']
-
-    return {'error': None, 'total': total}
-
-
-def _create_order_item(cursor, order_id, item):
-    """Insert an order item and reduce its product stock."""
-    cursor.execute(
-        "SELECT unit_price, stock_quantity FROM product WHERE product_id = %s",
-        (item['product_id'],)
-    )
-    product = cursor.fetchone()
-    unit_price = product['unit_price']
-    subtotal = unit_price * item['quantity']
-
-    cursor.execute(
-        """INSERT INTO order_item 
-           (order_id, product_id, quantity, unit_price, subtotal) 
-           VALUES (%s, %s, %s, %s, %s)""",
-        (order_id, item['product_id'], item['quantity'], unit_price, subtotal)
-    )
-
-    new_stock = product['stock_quantity'] - item['quantity']
-    cursor.execute(
-        "UPDATE product SET stock_quantity = %s WHERE product_id = %s",
-        (new_stock, item['product_id'])
-    )
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @orders_bp.route('/api/orders/<int:retailer_id>', methods=['GET'])
+@require_auth(['admin', 'retailer'])
 def get_orders(retailer_id):
     """Return all orders for a specific retailer. Requires auth."""
-    requester_role = request.headers.get('X-User-Role')
-    requester_id = request.headers.get('X-User-Id')
+    requester_role = request.user.get('role')
+    requester_id = request.user.get('user_id')
 
     if requester_role != 'admin':
         if requester_role != 'retailer' or str(retailer_id) != str(requester_id):
@@ -212,6 +167,7 @@ def get_orders(retailer_id):
 
 
 @orders_bp.route('/api/orders/all', methods=['GET'])
+@require_auth(['admin'])
 def get_all_orders():
     """Return all orders with sensor data for admin dashboard."""
     conn = get_db_connection()
@@ -251,6 +207,7 @@ def get_all_orders():
 
 
 @orders_bp.route('/api/orders/<int:order_id>/status', methods=['PUT'])
+@require_auth(['admin'])
 def update_order_status(order_id):
     """Update the status of an order."""
     data = request.get_json()
@@ -266,4 +223,3 @@ def update_order_status(order_id):
     cursor.close()
     conn.close()
     return jsonify({"success": True, "message": f"Order {order_id} set to {new_status}"})
-

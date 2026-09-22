@@ -5,6 +5,7 @@ Uses Argon2id for password hashing.
 """
 from utils.validators import validate_email, validate_password, validate_name
 from utils.logger import logger
+from utils.auth_token import create_token
 from flask import Blueprint, request, jsonify
 from db_config import get_db_connection
 from utils.security import hash_password, verify_password
@@ -71,9 +72,13 @@ def login():
 
     logger.info(f"Login success: {email} as {role}")
 
+    user_id = user['admin_id'] if role == 'admin' else user['user_id']
+    token = create_token(user_id=user_id, role=role, email=user['email'])
+
     return jsonify({
         "success": True,
-        "user_id": user['admin_id'] if role == 'admin' else user['user_id'],
+        "token": token,
+        "user_id": user_id,
         "name": user['name'],
         "email": user['email'],
         "role": role
