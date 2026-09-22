@@ -130,3 +130,20 @@ flask_limiter.errors.RateLimitExceeded: 429 Too Many Requests: 5 per 15 minute
 [2026-09-23 06:52:43,213] INFO in orders: Order #38 placed by retailer 1 total ₱175.00
 [2026-09-23 06:52:43,368] INFO in orders: Order #39 placed by retailer 1 total ₱350.00
 [2026-09-23 06:52:43,661] INFO in orders: Order #40 placed by retailer 1 total ₱175.00
+[2026-09-23 07:01:50,621] INFO in auth: Login success: admin@kimfresh.com as admin
+[2026-09-23 07:01:57,822] INFO in auth: Login success: admin@kimfresh.com as admin
+[2026-09-23 07:01:57,996] INFO in auth: Login success: retailer@kimfresh.com as retailer
+[2026-09-23 07:01:58,169] INFO in auth: Login success: driver@kimfresh.com as driver
+[2026-09-23 07:01:58,348] WARNING in auth: Login failed: wrong password for retailer@kimfresh.com
+[2026-09-23 07:01:58,419] WARNING in auth: Login failed: unknown email nobody@kimfresh.com
+[2026-09-23 07:01:59,499] INFO in orders: Order #41 placed by retailer 1 total ₱175.00
+[2026-09-23 07:01:59,667] INFO in orders: Order #42 placed by retailer 1 total ₱350.00
+[2026-09-23 07:01:59,962] INFO in orders: Order #43 placed by retailer 1 total ₱175.00
+[2026-09-23 07:04:12,784] INFO in auth: Login success: admin@kimfresh.com as admin
+[2026-09-23 07:04:12,961] INFO in auth: Login success: retailer@kimfresh.com as retailer
+[2026-09-23 07:04:13,138] INFO in auth: Login success: driver@kimfresh.com as driver
+[2026-09-23 07:04:13,312] WARNING in auth: Login failed: wrong password for retailer@kimfresh.com
+[2026-09-23 07:04:13,383] WARNING in auth: Login failed: unknown email nobody@kimfresh.com
+[2026-09-23 07:04:14,514] INFO in orders: Order #44 placed by retailer 1 total ₱175.00
+[2026-09-23 07:04:14,654] INFO in orders: Order #45 placed by retailer 1 total ₱350.00
+[2026-09-23 07:04:14,973] INFO in orders: Order #46 placed by retailer 1 total ₱175.00

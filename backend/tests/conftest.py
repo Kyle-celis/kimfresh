@@ -3,6 +3,7 @@ Shared pytest fixtures for KimFresh tests.
 """
 import os
 os.environ['TESTING'] = '1'
+os.environ['JWT_SECRET'] = 'test-secret-for-pytest-only-32chars-minimum'
 
 import pytest
 import sys

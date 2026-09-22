@@ -7,12 +7,19 @@ Issues signed tokens on login and verifies them on protected routes.
 import jwt
 import os
 from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
 
-# Secret key — load from environment in production
-SECRET_KEY = os.environ.get('JWT_SECRET', 'kimfresh-dev-secret-change-in-production')
+load_dotenv()
+
+SECRET_KEY = os.environ.get('JWT_SECRET')
+if not SECRET_KEY:
+    raise RuntimeError(
+        "JWT_SECRET environment variable is not set. "
+        "Add it to your .env file."
+    )
+
 ALGORITHM = 'HS256'
 TOKEN_EXPIRY_HOURS = 8
-
 
 def create_token(user_id, role, email):
     """

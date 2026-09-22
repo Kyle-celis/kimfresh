@@ -9,6 +9,7 @@ drivers_bp = Blueprint('drivers', __name__)
 
 
 @drivers_bp.route('/api/drivers', methods=['GET'])
+@require_auth(['admin'])
 def get_drivers():
     """Return all drivers with their assigned orders."""
     conn = get_db_connection()

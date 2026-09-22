@@ -18,3 +18,4 @@ mobile-apps/**/.flutter-plugins
 # OS
 .DS_Store
 Thumbs.db
+.env

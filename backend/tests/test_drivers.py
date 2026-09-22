@@ -1,10 +1,18 @@
 """Unit tests for driver routes."""
 
 
-def test_get_drivers(client):
+def test_get_drivers_requires_admin(client):
+    """Without token, get drivers should fail."""
     response = client.get('/api/drivers')
-    assert response.status_code == 200
+    assert response.status_code == 401
 
+
+def test_get_drivers_as_admin(client, admin_token):
+    """Admin can list drivers."""
+    response = client.get('/api/drivers', headers={
+        'Authorization': f'Bearer {admin_token}'
+    })
+    assert response.status_code == 200
 
 def test_add_driver_requires_admin(client):
     response = client.post('/api/drivers', json={'name': 'No Token'})
