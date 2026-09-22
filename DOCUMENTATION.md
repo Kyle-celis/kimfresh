@@ -2,7 +2,7 @@
 
 **Developer:** Kyle Francis Celis
 **Project:** KimFresh: IoT-Based Kimchi Management System
-**Date:** September 14, 2026
+**Date:** September 22, 2026
 
 ---
 
@@ -109,7 +109,7 @@
 | **Error** | `http://192.168.1.125:5000` broke if IP changed |
 | **Cause** | IP was hardcoded in every HTML file |
 | **Logic Fix** | Auto-detect hostname from browser |
-| **Code Change** | ``const API = `http://${window.location.hostname}:5000` `` |
+| **Code Change** | ``const API = `${window.location.protocol}//${window.location.hostname}` `` |
 | **Result** | Works from any device on the network |
 
 ---
@@ -162,26 +162,6 @@
 
 ---
 
-## Summary
-
-| # | Problem | Solution |
-|---|---------|----------|
-| 1 | Login bypass | SHA-256 password check |
-| 2 | Status not syncing | Map delivery → order status |
-| 3 | BLE data missed | Command-based retrieval |
-| 4 | Data not saved | Auto-save from Flutter |
-| 5 | No active delivery | Pick non-delivered delivery |
-| 6 | Duplicate SKU | Update existing product |
-| 7 | Hardcoded password | `.env` file |
-| 8 | Hardcoded path | Relative path |
-| 9 | Hardcoded IP | Auto-detect hostname |
-| 10 | Null stock | Default value |
-| 11 | Partial order | Rollback on error |
-| 12 | Duplicate assignment | Existence check |
-| 13 | Database growth | 30-day cleanup |
-
----
-
 ## Security Testing with OWASP ZAP
 
 ### Tool Used
@@ -206,7 +186,7 @@ OWASP ZAP 2.17.0 (Zed Attack Proxy) — automated web application security scann
 
 Added security headers in Flask:
 
-python
+```python
 @app.after_request
 def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -219,15 +199,3 @@ def add_security_headers(response):
         "frame-ancestors 'none';"
     )
     return response
-
-Tenant Isolation Fix
-Problem Discovered
-Any client could access /api/orders/<retailer_id> without authentication. Changing the ID returned another retailer's data.
-
-Known Limitation
-Headers can be faked. Anyone can send X-User-Role: admin to bypass. In production, use JWT tokens signed by the server.
-
-
-## Repository
-
-https://github.com/Kyle-celis/kimfresh
