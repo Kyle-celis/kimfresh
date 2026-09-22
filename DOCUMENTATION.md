@@ -182,6 +182,32 @@ OWASP ZAP 2.17.0 (Zed Attack Proxy) — automated web application security scann
 | 5 | CSP: style-src unsafe-inline | Medium | Accepted (inline styles) |
 | 6 | CSP: No Fallback Directive | Medium | Fixed with frame-ancestors |
 
+## Security Features
+
+| Feature | Implementation |
+|---------|----------------|
+| Password hashing | Argon2id via `argon2-cffi` |
+| Login rate limiting | 5 attempts per 15 minutes |
+| Registration rate limiting | 10 attempts per hour |
+| Tenant isolation | Header-based checks |
+| SQL injection | Parameterized queries |
+| Security headers | CSP, X-Frame, nosniff |
+| Secrets | `.env` file |
+| Debug mode | Disabled |
+
+## All 68 Tests Passing
+
+| File | Tests |
+|------|-------|
+| test_auth.py | 8 |
+| test_tenant_isolation.py | 8 |
+| test_products.py | 12 |
+| test_orders.py | 10 |
+| test_sensor.py | 9 |
+| test_drivers.py | 11 |
+| test_dashboard.py | 10 |
+| **Total** | **68** |
+
 ### Fixes Applied
 
 Added security headers in Flask:
@@ -199,3 +225,5 @@ def add_security_headers(response):
         "frame-ancestors 'none';"
     )
     return response
+
+
