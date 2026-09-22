@@ -1,4 +1,5 @@
 """Product management routes."""
+from utils.validators import validate_name, validate_positive_float, validate_positive_int
 from flask import Blueprint, request, jsonify
 from db_config import get_db_connection
 from config import (
@@ -64,6 +65,21 @@ def add_or_update_product():
     data = request.get_json()
     name = data.get('name')
     sku = data.get('sku')
+
+    if name:
+        is_valid, err = validate_name(name, "Product name")
+        if not is_valid:
+            return jsonify({"success": False, "message": err}), 400
+
+    if data.get('unit_price') not in [None, '']:
+        is_valid, err = validate_positive_float(data['unit_price'], "Unit price")
+        if not is_valid:
+            return jsonify({"success": False, "message": err}), 400
+
+    if data.get('reorder_level') not in [None, '']:
+        is_valid, err = validate_positive_int(data['reorder_level'], "Reorder level")
+        if not is_valid:
+            return jsonify({"success": False, "message": err}), 400
 
     if not name and not sku:
         return jsonify({"success": False, "message": "Name or SKU required"}), 400

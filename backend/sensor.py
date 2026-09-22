@@ -1,5 +1,7 @@
 """Sensor data routes."""
 from flask import Blueprint, request, jsonify
+from utils.logger import logger
+from utils.validators import validate_positive_int, validate_positive_float
 from db_config import get_db_connection
 
 sensor_bp = Blueprint('sensor', __name__)
@@ -18,9 +20,17 @@ def save_sensor():
     humidity = data.get('humidity')
     is_alert = data.get('is_alert', False)
 
-    if not delivery_id or temperature is None or humidity is None:
-        return jsonify({"success": False, "message": "Missing required fields"}), 400
+    is_valid, err = validate_positive_int(delivery_id, "Delivery ID")
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
 
+    is_valid, err = validate_positive_float(temperature, "Temperature")
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
+
+    is_valid, err = validate_positive_float(humidity, "Humidity")
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -39,7 +49,7 @@ def save_sensor():
         cursor.close()
         conn.close()
         return jsonify({"success": False, "message": str(e)}), 400
-
+        logger.error(f"Sensor save failed: {e}", exc_info=True)
 
 @sensor_bp.route('/api/sensor/<int:delivery_id>', methods=['GET'])
 def get_sensor_data(delivery_id):

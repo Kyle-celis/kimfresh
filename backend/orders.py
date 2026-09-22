@@ -1,4 +1,7 @@
 """Order management routes."""
+
+from utils.validators import validate_positive_int, validate_items_list
+from utils.logger import logger
 from flask import Blueprint, request, jsonify
 from db_config import get_db_connection
 from config import (
@@ -27,9 +30,13 @@ def place_order():
     retailer_id = data.get('retailer_id')
     items = data.get('items', [])
 
-    if not retailer_id or not items:
-        return jsonify({"success": False, "message": "Missing retailer_id or items"}), 400
+    is_valid, err = validate_positive_int(retailer_id, "Retailer ID")
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
 
+    is_valid, err = validate_items_list(items)
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -101,6 +108,8 @@ def place_order():
         cursor.close()
         conn.close()
 
+        logger.info(f"Order #{order_id} placed by retailer {retailer_id} total ₱{total}")
+
         return jsonify({
             "success": True,
             "order_id": order_id,
@@ -113,6 +122,8 @@ def place_order():
         cursor.close()
         conn.close()
         return jsonify({"success": False, "message": str(e)}), 500
+
+        logger.error(f"Order placement failed: {e}", exc_info=True)
 
 def _validate_stock(cursor, items):
     """Check if enough stock exists for all items. Returns total price or error."""
@@ -255,3 +266,4 @@ def update_order_status(order_id):
     cursor.close()
     conn.close()
     return jsonify({"success": True, "message": f"Order {order_id} set to {new_status}"})
+

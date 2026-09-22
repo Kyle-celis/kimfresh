@@ -23,7 +23,7 @@ from sensor import sensor_bp       # Handles temperature/humidity data
 from drivers import drivers_bp     # Handles delivery drivers
 from dashboard import dashboard_bp # Handles summary counts and charts
 from auth import auth_bp           # Handles login and sign up
-
+from utils.logger import logger
 
 # Create the main app. This is our server.
 app = Flask(__name__)
@@ -97,6 +97,19 @@ def add_security_headers(response):
     )
     return response
 
+
+# ---------- GLOBAL ERROR HANDLER ----------
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """
+    Catch any unhandled exception and log it.
+    Returns a clean JSON error instead of an HTML traceback.
+    """
+    logger.error(f"Unhandled exception: {e}", exc_info=True)
+    return jsonify({
+        "success": False,
+        "message": "Internal server error"
+    }), 500
 
 # ---------- START THE SERVER ----------
 if __name__ == '__main__':

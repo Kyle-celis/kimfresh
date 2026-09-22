@@ -3,7 +3,8 @@ Authentication routes: login and retailer registration.
 
 Uses Argon2id for password hashing.
 """
-
+from utils.validators import validate_email, validate_password, validate_name
+from utils.logger import logger
 from flask import Blueprint, request, jsonify
 from db_config import get_db_connection
 from utils.security import hash_password, verify_password
@@ -54,16 +55,21 @@ def login():
     conn.close()
 
     if not user:
+        logger.warning(f"Login failed: unknown email {email}")
         return jsonify({"success": False, "message": "Invalid email or password"}), 401
 
-    # Users must have a password hash set
+    # Get the stored password hash
     stored_hash = user.get('password_hash')
+
     if not stored_hash:
+        logger.warning(f"Login failed: no password hash set for {email}")
         return jsonify({"success": False, "message": "Account has no password set. Contact admin."}), 401
 
-    # Verify password
     if not verify_password(password, stored_hash):
+        logger.warning(f"Login failed: wrong password for {email}")
         return jsonify({"success": False, "message": "Invalid email or password"}), 401
+
+    logger.info(f"Login success: {email} as {role}")
 
     return jsonify({
         "success": True,
@@ -72,7 +78,6 @@ def login():
         "email": user['email'],
         "role": role
     })
-
 
 @auth_bp.route('/api/retailer/register', methods=['POST'])
 @limiter.limit("10 per hour")
@@ -90,12 +95,17 @@ def retailer_register():
     phone = data.get('phone', '')
     address = data.get('address', '')
 
-    if not name or not email or not password:
-        return jsonify({"success": False, "message": "Name, email, and password required"}), 400
+    is_valid, err = validate_name(name, "Name")
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
 
-    if len(password) < 6:
-        return jsonify({"success": False, "message": "Password must be at least 6 characters"}), 400
+    is_valid, err = validate_email(email)
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
 
+    is_valid, err = validate_password(password)
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -123,6 +133,9 @@ def retailer_register():
         retailer_id = cursor.lastrowid
         cursor.close()
         conn.close()
+
+        logger.info(f"New retailer registered: {email}")
+
         return jsonify({
             "success": True,
             "retailer_id": retailer_id,
@@ -130,8 +143,10 @@ def retailer_register():
             "name": name,
             "message": f"Registered! Your customer code: {code}"
         })
+
     except mysql.connector.Error as err:
         conn.rollback()
         cursor.close()
         conn.close()
+        logger.error(f"Retailer registration failed: {err}", exc_info=True)
         return jsonify({"success": False, "message": str(err)}), 400

@@ -1,5 +1,6 @@
 """Driver management routes."""
 from flask import Blueprint, request, jsonify
+from utils.validators import validate_name, validate_positive_int, validate_email
 from db_config import get_db_connection
 import mysql.connector
 
@@ -46,6 +47,15 @@ def add_driver():
     name = data.get('name')
     email = data.get('email')
 
+    is_valid, err = validate_name(name, "Driver name")
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
+
+    if email:
+        is_valid, err = validate_email(email)
+        if not is_valid:
+            return jsonify({"success": False, "message": err}), 400
+
     if not name:
         return jsonify({"success": False, "message": "Name is required"}), 400
 
@@ -91,6 +101,9 @@ def assign_order_to_driver(driver_id):
     data = request.get_json()
     order_id = data.get('order_id')
 
+    is_valid, err = validate_positive_int(order_id, "Order ID")
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
     if not order_id:
         return jsonify({"success": False, "message": "Order ID required"}), 400
 
