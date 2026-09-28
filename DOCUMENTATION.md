@@ -259,3 +259,15 @@ def add_security_headers(response):
     return response
 
 
+## Error Handling
+
+All API errors return consistent JSON:
+
+| Status | When | Response |
+|--------|------|----------|
+| 401 | Missing/invalid token | `{"success": false, "message": "..."}` |
+| 403 | Wrong role | `{"success": false, "message": "Forbidden"}` |
+| 404 | Unknown endpoint | `{"success": false, "message": "..."}` |
+| 405 | Wrong HTTP method | `{"success": false, "message": "..."}` |
+| 429 | Rate limit hit | `{"success": false, "message": "Too many requests..."}` |
+| 500 | Unhandled error | `{"success": false, "message": "Internal server error"}` |
