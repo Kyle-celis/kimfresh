@@ -17,7 +17,7 @@ auth_bp = Blueprint('auth', __name__)
 
 
 @auth_bp.route('/api/login', methods=['POST'])
-@limiter.limit("5 per 15 minutes")
+@limiter.limit("50 per 15 minutes")
 def login():
     """
     Log in a user (admin, retailer, or driver).
@@ -85,7 +85,7 @@ def login():
     })
 
 @auth_bp.route('/api/retailer/register', methods=['POST'])
-@limiter.limit("10 per hour")
+@limiter.limit("100 per hour")
 def retailer_register():
     """
     Register a new retailer.

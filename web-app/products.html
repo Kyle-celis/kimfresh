@@ -61,7 +61,11 @@
 
 <script>
 const API = `${window.location.protocol}//${window.location.hostname}`;
-
+const token = localStorage.getItem('token');
+const authHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+};
 const admin = JSON.parse(localStorage.getItem('admin'));
 
 if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
@@ -69,7 +73,7 @@ if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
 let allProducts = [];
 
 function logout() {
-    localStorage.removeItem('admin');
+    localStorage.clear();
     window.location.href = 'login.html';
 }
 
@@ -83,7 +87,7 @@ function addProduct() {
     };
     fetch(`${API}/api/products`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders,
         body: JSON.stringify(body)
     })
     .then(res => res.json())
@@ -135,12 +139,18 @@ function handleFilter() {
 
 function hideProduct(id) {
     if (!confirm('Hide this product?')) return;
-    fetch(`${API}/api/products/${id}/hide`, { method: 'PUT' })
+    fetch(`${API}/api/products/${id}/hide`, {
+        method: 'PUT',
+        headers: authHeaders
+    })
         .then(res => res.json()).then(data => { alert(data.message); loadProducts(); });
 }
 
 function restoreProduct(id) {
-    fetch(`${API}/api/products/${id}/restore`, { method: 'PUT' })
+    fetch(`${API}/api/products/${id}/restore`, {
+        method: 'PUT',
+        headers: authHeaders
+    })
         .then(res => res.json()).then(data => { alert(data.message); loadAllProducts(); });
 }
 

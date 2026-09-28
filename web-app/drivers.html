@@ -53,13 +53,18 @@
 
 <script>
 const API = `${window.location.protocol}//${window.location.hostname}`;
+const token = localStorage.getItem('token');
+const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+};
 
 const admin = JSON.parse(localStorage.getItem('admin'));
 
 if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
 
 function logout() {
-    localStorage.removeItem('admin');
+    localStorage.clear();
     window.location.href = 'login.html';
 }
 
@@ -74,7 +79,7 @@ function addDriver() {
     
     fetch(`${API}/api/drivers`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: JSON.stringify(body)
     })
     .then(res => res.json())
@@ -86,7 +91,7 @@ function addDriver() {
 
 // ---------- LOAD DRIVERS ----------
 function loadDrivers() {
-    fetch(`${API}/api/drivers`)
+    fetch(`${API}/api/drivers`, { headers: headers })
         .then(res => res.json())
         .then(data => {
             const list = document.getElementById('driverList');
@@ -119,7 +124,7 @@ function assignOrderToDriver(driverId) {
     
     fetch(`${API}/api/drivers/${driverId}/assign`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: JSON.stringify({ order_id: parseInt(orderId) })
     })
     .then(res => res.json())

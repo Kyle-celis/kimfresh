@@ -11,6 +11,8 @@ rooms inside, but this is where you enter.
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
+from flask_limiter.errors import RateLimitExceeded
 import os
 
 # Import the shared limiter
@@ -25,9 +27,11 @@ from dashboard import dashboard_bp # Handles summary counts and charts
 from auth import auth_bp           # Handles login and sign up
 from utils.logger import logger
 
+
 # Create the main app. This is our server.
 app = Flask(__name__)
 
+# Allow the app to be accessed from other devices (like the phone app)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Attach the rate limiter to the app
@@ -82,8 +86,6 @@ def add_security_headers(response):
     - "Don't guess what type of file this is" (nosniff)
     - "Don't let anyone put this page inside another page" (X-Frame-Options)
     - "Only trust scripts from these specific places" (Content Security Policy)
-
-    Think of it like adding a security guard at the exit door.
     """
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
@@ -95,6 +97,26 @@ def add_security_headers(response):
         "frame-ancestors 'none';"
     )
     return response
+
+
+# ---------- RATE LIMIT HANDLER ----------
+@app.errorhandler(RateLimitExceeded)
+def handle_rate_limit(e):
+    """Return 429 instead of 500 when rate limit is hit."""
+    return jsonify({
+        "success": False,
+        "message": "Too many requests. Please slow down."
+    }), 429
+
+
+# ---------- HTTP ERROR HANDLER ----------
+@app.errorhandler(HTTPException)
+def handle_http_exception(e):
+    """Return correct status codes for 404, 405, etc."""
+    return jsonify({
+        "success": False,
+        "message": e.description
+    }), e.code
 
 
 # ---------- GLOBAL ERROR HANDLER ----------
@@ -109,6 +131,7 @@ def handle_exception(e):
         "success": False,
         "message": "Internal server error"
     }), 500
+
 
 # ---------- START THE SERVER ----------
 if __name__ == '__main__':

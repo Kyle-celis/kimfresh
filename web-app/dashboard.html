@@ -78,16 +78,21 @@
 <script>
 const API = `${window.location.protocol}//${window.location.hostname}`;
 const admin = JSON.parse(localStorage.getItem('admin'));
+const token = localStorage.getItem('token');
+const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+};
 
 if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
 
 function logout() {
-    localStorage.removeItem('admin');
+    localStorage.clear();
     window.location.href = 'login.html';
 }
 
 // ---------- SUMMARY ----------
-fetch(`${API}/api/dashboard/summary`)
+fetch(`${API}/api/dashboard/summary`, { headers: headers })
     .then(res => res.json())
     .then(d => {
         document.getElementById('c-products').textContent = d.total_products;
@@ -99,9 +104,8 @@ fetch(`${API}/api/dashboard/summary`)
         document.getElementById('c-lowstock').textContent = d.low_stock;
         document.getElementById('c-week').textContent = d.this_week;
     });
+// ---------- CHART ---------
 
-// ---------- CHART ----------
-// ---------- CHART ----------
 let chart = null;
 let currentWeekStart = getMonday(new Date());
 
@@ -119,7 +123,7 @@ function formatDateParam(d) {
 function loadChart() {
     const weekStr = formatDateParam(currentWeekStart);
     
-    fetch(`${API}/api/dashboard/orders-per-week?week_start=${weekStr}`)
+    fetch(`${API}/api/dashboard/orders-per-week?week_start=${weekStr}`, { headers: headers })
         .then(res => res.json())
         .then(d => {
             document.getElementById('weekLabel').textContent = `${d.week_start} to ${d.week_end}`;
@@ -161,7 +165,7 @@ function nextWeek() {
 loadChart();
 
 // ---------- RECENT ORDERS ----------
-fetch(`${API}/api/orders/all`)
+fetch(`${API}/api/orders/all`, { headers: headers })
     .then(res => res.json())
     .then(data => {
         const list = document.getElementById('recentOrders');
