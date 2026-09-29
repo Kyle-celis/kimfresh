@@ -2,16 +2,51 @@
 <html>
 <head>
     <title>KimFresh - Drivers</title>
+    <script src="escape.js"></script>
     <style>
-        body { font-family: Arial; padding: 20px; }
-        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background: #f0f0f0; }
-        input[type="text"] { padding: 8px; margin: 4px; }
-        button { padding: 6px 12px; margin: 2px; cursor: pointer; }
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
         .menu { margin-bottom: 20px; }
         .menu a { margin-right: 15px; text-decoration: none; color: #333; font-weight: bold; }
         .menu a:hover { color: #d32f2f; }
+        input[type="text"], input[type="email"] { padding: 8px; margin: 4px; }
+        button { padding: 6px 12px; margin: 2px; cursor: pointer; }
+        .driver-card {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: box-shadow 0.2s;
+        }
+        .driver-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .driver-header { display: flex; justify-content: space-between; align-items: center; }
+        .driver-name { font-size: 18px; font-weight: bold; color: #333; }
+        .driver-status {
+            padding: 4px 10px; border-radius: 12px; font-size: 12px;
+            font-weight: bold; background: #e8f5e9; color: #2e7d32;
+        }
+        .driver-info { color: #666; margin-top: 5px; font-size: 14px; }
+        .delivered-orders { margin-top: 10px; font-size: 14px; color: #2e7d32; }
+        .dropdown {
+            display: none;
+            background: #fffbe6; border: 1px solid #ccc;
+            padding: 15px; margin-top: 15px; border-radius: 5px;
+        }
+        .dropdown select {
+            padding: 8px; width: 100%; max-width: 500px;
+            font-size: 14px; margin-bottom: 10px;
+        }
+        .dropdown label { font-weight: bold; display: block; margin-bottom: 5px; }
+        .order-history {
+            margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;
+        }
+        .order-history h4 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
+        .order-history-item {
+            padding: 5px 0; font-size: 13px;
+            color: #666; border-bottom: 1px solid #eee;
+        }
+        .msg { margin-left: 10px; color: red; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -26,30 +61,17 @@
 <hr>
 
 <h3>Add Driver</h3>
-<input type="text" id="dName" placeholder="Name">
-<input type="text" id="dEmail" placeholder="Email">
-<input type="text" id="dPhone" placeholder="Phone">
-<input type="text" id="dLicense" placeholder="License Number">
+<input type="text" id="dName" placeholder="Name" maxlength="100" required>
+<input type="email" id="dEmail" placeholder="Email" maxlength="100">
+<input type="text" id="dPhone" placeholder="Phone" maxlength="20">
+<input type="text" id="dLicense" placeholder="License Number" maxlength="50">
 <button onclick="addDriver()">Add</button>
 <p id="addMsg"></p>
 <hr>
 
 <h3>Drivers</h3>
-<table>
-<thead>
-<tr>
-    <th>ID</th>
-    <th>Name</th>
-    <th>Email</th>
-    <th>Phone</th>
-    <th>License</th>
-    <th>Status</th>
-    <th>Assigned Orders</th>
-    <th>Action</th>
-</tr>
-</thead>
-<tbody id="driverList"></tbody>
-</table>
+<p style="color: #666;">Click a driver card to assign an order.</p>
+<div id="driverList"></div>
 
 <script>
 const API = `${window.location.protocol}//${window.location.hostname}`;
@@ -58,7 +80,6 @@ const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`
 };
-
 const admin = JSON.parse(localStorage.getItem('admin'));
 
 if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
@@ -76,7 +97,6 @@ function addDriver() {
         phone: document.getElementById('dPhone').value,
         license_number: document.getElementById('dLicense').value
     };
-    
     fetch(`${API}/api/drivers`, {
         method: 'POST',
         headers: headers,
@@ -91,37 +111,132 @@ function addDriver() {
 
 // ---------- LOAD DRIVERS ----------
 function loadDrivers() {
-    fetch(`${API}/api/drivers`, { headers: headers })
+    fetch(`${API}/api/orders/all`, { headers: headers })
         .then(res => res.json())
-        .then(data => {
-            const list = document.getElementById('driverList');
-            list.innerHTML = '';
-            if (data.length === 0) {
-                list.innerHTML = '<tr><td colspan="8">No drivers</td></tr>';
-                return;
+        .then(orders => {
+            const approvedOrders = orders.filter(o => o.order_status === 'approved');
+            const allOrders = orders;
+
+            fetch(`${API}/api/drivers`, { headers: headers })
+                .then(res => res.json())
+                .then(data => {
+                    const list = document.getElementById('driverList');
+                    list.innerHTML = '';
+                    if (data.length === 0) {
+                        list.innerHTML = '<p>No drivers</p>';
+                        return;
+                    }
+                    data.forEach(d => {
+                        let options = '<option value="">-- Select approved order --</option>';
+                        if (approvedOrders.length === 0) {
+                            options = '<option value="">No approved orders available</option>';
+                        } else {
+                            approvedOrders.forEach(o => {
+                                options += `<option value="${o.order_id}">
+                                    Order #${o.order_id} - ${escapeHtml(o.product_name)} (x${o.quantity}) - ${escapeHtml(o.customer_code)}
+                                </option>`;
+                            });
+                        }
+
+                        // Show only delivered orders in history
+// Track delivered orders for dropdown history
+let history = '';
+let deliveredOrderIds = [];
+
+// Track assigned (active) orders for card header
+let assignedOrderIds = [];
+
+if (d.assigned_orders) {
+    const orderIds = d.assigned_orders.split(',').map(s => s.trim());
+    orderIds.forEach(oStr => {
+        const match = oStr.match(/#(\d+)/);
+        if (match) {
+            const oid = parseInt(match[1]);
+            const order = allOrders.find(o => o.order_id === oid);
+
+            if (order) {
+                if (order.order_status === 'delivered') {
+                    // Delivered → show in dropdown history
+                    deliveredOrderIds.push(oid);
+                    history += `<div class="order-history-item">
+                        Order #${order.order_id} - ${escapeHtml(order.product_name)} (x${order.quantity}) - ${escapeHtml(order.order_status)}
+                    </div>`;
+                } else {
+                    // Active → show in card header
+                    assignedOrderIds.push(oid);
+                }
             }
-            data.forEach(d => {
-                list.innerHTML += `<tr>
-                    <td>${d.driver_id}</td>
-                    <td>${d.name}</td>
-                    <td>${d.email || '-'}</td>
-                    <td>${d.phone || '-'}</td>
-                    <td>${d.license_number || '-'}</td>
-                    <td>${d.status}</td>
-                    <td>${d.assigned_orders || '-'}</td>
-                    <td>
-                        <button onclick="assignOrderToDriver(${d.driver_id})">Assign Order</button>
-                    </td>
-                </tr>`;
-            });
+        }
+    });
+}
+
+// Card header: show active assigned orders
+const assignedText = assignedOrderIds.length > 0
+    ? 'Assigned: ' + assignedOrderIds.map(id => 'Order #' + id).join(', ')
+    : 'No orders assigned';
+
+                        list.innerHTML += `
+                            <div class="driver-card" onclick="toggleDriverDropdown(event, ${d.driver_id})">
+                                <div class="driver-header">
+                                    <div class="driver-name">${escapeHtml(d.name)}</div>
+                                    <div class="driver-status">${escapeHtml(d.status)}</div>
+                                </div>
+                                <div class="driver-info">
+                                    ${escapeHtml(d.email || '-')} | ${escapeHtml(d.phone || '-')}
+                                </div>
+                                <div class="driver-info">
+                                    ${escapeHtml(d.license_number || '-')}
+                                </div>
+                                <div class="delivered-orders">
+                                    ${assignedText}
+                                </div>
+
+                                <div class="dropdown" id="dropdown-${d.driver_id}" onclick="event.stopPropagation()">
+                                    <label>Assign order to ${escapeHtml(d.name)}</label>
+                                    <select id="orderSelect-${d.driver_id}">
+                                        ${options}
+                                    </select>
+                                    <button onclick="assignOrder(${d.driver_id})">Assign</button>
+                                    <span class="msg" id="assignMsg-${d.driver_id}"></span>
+
+                                    ${history ? `
+                                        <div class="order-history">
+                                            <h4>Previous Orders</h4>
+                                            ${history}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                });
         });
 }
 
+// ---------- DROPDOWN TOGGLE ----------
+function toggleDriverDropdown(event, driverId) {
+    const dropdown = document.getElementById(`dropdown-${driverId}`);
+    if (!dropdown) return;
+
+    const isOpen = dropdown.style.display === 'block';
+
+    // Close all other dropdowns
+    document.querySelectorAll('.dropdown').forEach(d => {
+        d.style.display = 'none';
+    });
+
+    // Toggle this one
+    dropdown.style.display = isOpen ? 'none' : 'block';
+}
+
 // ---------- ASSIGN ORDER ----------
-function assignOrderToDriver(driverId) {
-    const orderId = prompt('Enter Order ID:');
-    if (!orderId) return;
-    
+function assignOrder(driverId) {
+    const orderId = document.getElementById(`orderSelect-${driverId}`).value;
+    if (!orderId) {
+        document.getElementById(`assignMsg-${driverId}`).textContent = 'Please select an order';
+        return;
+    }
+
     fetch(`${API}/api/drivers/${driverId}/assign`, {
         method: 'POST',
         headers: headers,
@@ -129,8 +244,8 @@ function assignOrderToDriver(driverId) {
     })
     .then(res => res.json())
     .then(data => {
-        alert(data.message);
-        loadDrivers();
+        document.getElementById(`assignMsg-${driverId}`).textContent = data.message;
+        setTimeout(loadDrivers, 1000);
     });
 }
 

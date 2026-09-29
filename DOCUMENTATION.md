@@ -259,3 +259,11 @@ def add_security_headers(response):
     return response
 
 
+## Stress Testing
+
+Tool: Apache Bench (ab)
+
+### Products Endpoint
+
+```bash
+ab -n 1000 -c 50 http://localhost:5000/api/products

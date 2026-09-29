@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>KimFresh - Orders</title>
+    <script src="escape.js"></script>
     <style>
         body { font-family: Arial; padding: 20px; }
         table { border-collapse: collapse; width: 100%; margin-top: 10px; }
@@ -106,22 +107,22 @@ function renderOrders(orders) {
     orders.forEach(o => {
         const alert = o.is_alert === true || o.is_alert === 1;
         const rowStyle = alert ? 'background-color: #ffcccc;' : '';
-        const tempCell = o.temperature ? `${o.temperature} °C` : '-';
-        const humCell = o.humidity ? `${o.humidity} %` : '-';
+        const tempCell = o.temperature ? `${escapeHtml(o.temperature)} °C` : '-';
+        const humCell = o.humidity ? `${escapeHtml(o.humidity)} %` : '-';
 
         list.innerHTML += `<tr style="${rowStyle}">
-            <td>${o.customer_code || '-'}</td>
-            <td>${o.order_id}</td>
-            <td>${formatDate(o.order_date)}</td>
-            <td>${o.product_name || '-'}</td>
-            <td>${o.sku || '-'}</td>
-            <td>${o.quantity || '-'}</td>
-            <td>${o.unit_price || '-'}</td>
-            <td>${o.subtotal || '-'}</td>
-            <td>${o.total_amount}</td>
+            <td>${escapeHtml(o.customer_code || '-')}</td>
+            <td>${escapeHtml(o.order_id)}</td>
+            <td>${escapeHtml(formatDate(o.order_date))}</td>
+            <td>${escapeHtml(o.product_name || '-')}</td>
+            <td>${escapeHtml(o.sku || '-')}</td>
+            <td>${escapeHtml(o.quantity || '-')}</td>
+            <td>${escapeHtml(o.unit_price || '-')}</td>
+            <td>${escapeHtml(o.subtotal || '-')}</td>
+            <td>${escapeHtml(o.total_amount)}</td>
             <td>${tempCell}</td>
             <td>${humCell}</td>
-            <td>${o.order_status}</td>
+            <td>${escapeHtml(o.order_status)}</td>
             <td>
                 <button onclick="updateStatus(${o.order_id}, 'approved')">Approve</button>
                 <button onclick="updateStatus(${o.order_id}, 'rejected')">Reject</button>
@@ -165,6 +166,9 @@ function updateStatus(orderId, status) {
 }
 
 loadOrders();
+
+// Auto-refresh every 10 seconds
+setInterval(loadOrders, 10000);
 </script>
 </body>
 </html>
