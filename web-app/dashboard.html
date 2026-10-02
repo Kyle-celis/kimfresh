@@ -166,22 +166,65 @@ function nextWeek() {
 loadChart();
 
 // ---------- RECENT ORDERS ----------
-fetch(`${API}/api/orders/all`, { headers: headers })
+fetch(`${API}/api/dashboard/recent-orders`, { headers: headers })
     .then(res => res.json())
     .then(data => {
         const list = document.getElementById('recentOrders');
         list.innerHTML = '';
-        data.slice(0, 10).forEach(o => {
+        if (!Array.isArray(data)) {
+            list.innerHTML = '<tr><td colspan="6">No data</td></tr>';
+            return;
+        }
+        data.forEach(o => {
             list.innerHTML += `<tr>
                 <td>${escapeHtml(o.order_id)}</td>
-                <td>${escapeHtml(o.customer_code || '-')}</td>
-                <td>${escapeHtml(o.product_name || '-')}</td>
-                <td>${escapeHtml(o.quantity || '-')}</td>
+                <td>${escapeHtml(o.customer || '-')}</td>
+                <td>${escapeHtml(o.product || '-')}</td>
+                <td>${escapeHtml(o.qty || 0)}</td>
                 <td>${escapeHtml(o.total_amount)}</td>
                 <td>${escapeHtml(o.order_status)}</td>
             </tr>`;
         });
     });
+
+    // ---------- AUTO-REFRESH ----------
+setInterval(() => {
+    // Summary
+    fetch(`${API}/api/dashboard/summary`, { headers: headers })
+        .then(res => res.json())
+        .then(d => {
+            document.getElementById('c-products').textContent = d.total_products;
+            document.getElementById('c-drivers').textContent = d.total_drivers;
+            document.getElementById('c-orders').textContent = d.total_orders;
+            document.getElementById('c-pending').textContent = d.pending_orders;
+            document.getElementById('c-approved').textContent = d.approved_orders;
+            document.getElementById('c-rejected').textContent = d.rejected_orders;
+            document.getElementById('c-lowstock').textContent = d.low_stock;
+            document.getElementById('c-week').textContent = d.this_week;
+        });
+
+    // Chart
+    loadChart();
+
+    // Recent orders
+    fetch(`${API}/api/dashboard/recent-orders`, { headers: headers })
+        .then(res => res.json())
+        .then(data => {
+            const list = document.getElementById('recentOrders');
+            list.innerHTML = '';
+            if (!Array.isArray(data)) return;
+            data.forEach(o => {
+                list.innerHTML += `<tr>
+                    <td>${escapeHtml(o.order_id)}</td>
+                    <td>${escapeHtml(o.customer || '-')}</td>
+                    <td>${escapeHtml(o.product || '-')}</td>
+                    <td>${escapeHtml(o.qty || 0)}</td>
+                    <td>${escapeHtml(o.total_amount)}</td>
+                    <td>${escapeHtml(o.order_status)}</td>
+                </tr>`;
+            });
+        });
+}, 10000);
 </script>
 </body>
 </html>

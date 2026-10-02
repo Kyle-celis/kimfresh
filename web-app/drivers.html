@@ -11,12 +11,8 @@
         input[type="text"], input[type="email"] { padding: 8px; margin: 4px; }
         button { padding: 6px 12px; margin: 2px; cursor: pointer; }
         .driver-card {
-            background: #fff;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            cursor: pointer;
+            background: #fff; border: 1px solid #ddd; border-radius: 8px;
+            padding: 15px; margin-bottom: 15px; cursor: pointer;
             transition: box-shadow 0.2s;
         }
         .driver-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
@@ -29,8 +25,7 @@
         .driver-info { color: #666; margin-top: 5px; font-size: 14px; }
         .delivered-orders { margin-top: 10px; font-size: 14px; color: #2e7d32; }
         .dropdown {
-            display: none;
-            background: #fffbe6; border: 1px solid #ccc;
+            display: none; background: #fffbe6; border: 1px solid #ccc;
             padding: 15px; margin-top: 15px; border-radius: 5px;
         }
         .dropdown select {
@@ -47,6 +42,9 @@
             color: #666; border-bottom: 1px solid #eee;
         }
         .msg { margin-left: 10px; color: red; font-size: 14px; }
+        #driverPagination button {
+            padding: 6px 12px; margin: 2px; cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -71,7 +69,9 @@
 
 <h3>Drivers</h3>
 <p style="color: #666;">Click a driver card to assign an order.</p>
+
 <div id="driverList"></div>
+<div id="driverPagination" style="margin-top:20px; text-align:center;"></div>
 
 <script>
 const API = `${window.location.protocol}//${window.location.hostname}`;
@@ -84,12 +84,15 @@ const admin = JSON.parse(localStorage.getItem('admin'));
 
 if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
 
+let allDrivers = [];
+let currentDriverPage = 1;
+const DRIVERS_PER_PAGE = 10;
+
 function logout() {
     localStorage.clear();
     window.location.href = 'login.html';
 }
 
-// ---------- ADD DRIVER ----------
 function addDriver() {
     const body = {
         name: document.getElementById('dName').value,
@@ -109,127 +112,185 @@ function addDriver() {
     });
 }
 
-// ---------- LOAD DRIVERS ----------
 function loadDrivers() {
     fetch(`${API}/api/orders/all`, { headers: headers })
         .then(res => res.json())
         .then(orders => {
-            const approvedOrders = orders.filter(o => o.order_status === 'approved');
-            const allOrders = orders;
+            window._allOrders = orders;
 
             fetch(`${API}/api/drivers`, { headers: headers })
                 .then(res => res.json())
                 .then(data => {
-                    const list = document.getElementById('driverList');
-                    list.innerHTML = '';
-                    if (data.length === 0) {
-                        list.innerHTML = '<p>No drivers</p>';
-                        return;
-                    }
-                    data.forEach(d => {
-                        let options = '<option value="">-- Select approved order --</option>';
-                        if (approvedOrders.length === 0) {
-                            options = '<option value="">No approved orders available</option>';
-                        } else {
-                            approvedOrders.forEach(o => {
-                                options += `<option value="${o.order_id}">
-                                    Order #${o.order_id} - ${escapeHtml(o.product_name)} (x${o.quantity}) - ${escapeHtml(o.customer_code)}
-                                </option>`;
-                            });
-                        }
-
-                        // Show only delivered orders in history
-// Track delivered orders for dropdown history
-let history = '';
-let deliveredOrderIds = [];
-
-// Track assigned (active) orders for card header
-let assignedOrderIds = [];
-
-if (d.assigned_orders) {
-    const orderIds = d.assigned_orders.split(',').map(s => s.trim());
-    orderIds.forEach(oStr => {
-        const match = oStr.match(/#(\d+)/);
-        if (match) {
-            const oid = parseInt(match[1]);
-            const order = allOrders.find(o => o.order_id === oid);
-
-            if (order) {
-                if (order.order_status === 'delivered') {
-                    // Delivered → show in dropdown history
-                    deliveredOrderIds.push(oid);
-                    history += `<div class="order-history-item">
-                        Order #${order.order_id} - ${escapeHtml(order.product_name)} (x${order.quantity}) - ${escapeHtml(order.order_status)}
-                    </div>`;
-                } else {
-                    // Active → show in card header
-                    assignedOrderIds.push(oid);
-                }
-            }
-        }
-    });
-}
-
-// Card header: show active assigned orders
-const assignedText = assignedOrderIds.length > 0
-    ? 'Assigned: ' + assignedOrderIds.map(id => 'Order #' + id).join(', ')
-    : 'No orders assigned';
-
-                        list.innerHTML += `
-                            <div class="driver-card" onclick="toggleDriverDropdown(event, ${d.driver_id})">
-                                <div class="driver-header">
-                                    <div class="driver-name">${escapeHtml(d.name)}</div>
-                                    <div class="driver-status">${escapeHtml(d.status)}</div>
-                                </div>
-                                <div class="driver-info">
-                                    ${escapeHtml(d.email || '-')} | ${escapeHtml(d.phone || '-')}
-                                </div>
-                                <div class="driver-info">
-                                    ${escapeHtml(d.license_number || '-')}
-                                </div>
-                                <div class="delivered-orders">
-                                    ${assignedText}
-                                </div>
-
-                                <div class="dropdown" id="dropdown-${d.driver_id}" onclick="event.stopPropagation()">
-                                    <label>Assign order to ${escapeHtml(d.name)}</label>
-                                    <select id="orderSelect-${d.driver_id}">
-                                        ${options}
-                                    </select>
-                                    <button onclick="assignOrder(${d.driver_id})">Assign</button>
-                                    <span class="msg" id="assignMsg-${d.driver_id}"></span>
-
-                                    ${history ? `
-                                        <div class="order-history">
-                                            <h4>Previous Orders</h4>
-                                            ${history}
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        `;
-                    });
+                    allDrivers = data;
+                    renderDriverPage();
                 });
         });
 }
 
-// ---------- DROPDOWN TOGGLE ----------
+function renderDriverPage() {
+    const totalPages = Math.max(1, Math.ceil(allDrivers.length / DRIVERS_PER_PAGE));
+    if (currentDriverPage > totalPages) currentDriverPage = totalPages;
+
+    const start = (currentDriverPage - 1) * DRIVERS_PER_PAGE;
+    const pageItems = allDrivers.slice(start, start + DRIVERS_PER_PAGE);
+
+    renderDrivers(pageItems);
+    renderDriverPagination(totalPages);
+}
+
+function renderDriverPagination(totalPages) {
+    const el = document.getElementById('driverPagination');
+    if (totalPages <= 1) {
+        el.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    if (currentDriverPage > 1) {
+        html += `<button onclick="goToDriverPage(${currentDriverPage - 1})">◀ Prev</button>`;
+    }
+
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === currentDriverPage) {
+            html += `<button style="background:#d32f2f;color:white;font-weight:bold;">${i}</button>`;
+        } else {
+            html += `<button onclick="goToDriverPage(${i})">${i}</button>`;
+        }
+    }
+
+    if (currentDriverPage < totalPages) {
+        html += `<button onclick="goToDriverPage(${currentDriverPage + 1})">Next ▶</button>`;
+    }
+
+    el.innerHTML = html;
+}
+
+function goToDriverPage(page) {
+    currentDriverPage = page;
+    renderDriverPage();
+}
+
+function renderDrivers(data) {
+    const list = document.getElementById('driverList');
+    list.innerHTML = '';
+    if (data.length === 0) {
+        list.innerHTML = '<p>No drivers</p>';
+        return;
+    }
+    const orders = window._allOrders || [];
+    const approvedOrders = orders.filter(o => o.order_status === 'approved');
+
+    data.forEach(d => {
+        let options = '<option value="">-- Select approved order --</option>';
+        if (approvedOrders.length === 0) {
+            options = '<option value="">No approved orders available</option>';
+        } else {
+            approvedOrders.forEach(o => {
+                const productList = (o.items || [])
+                    .map(i => `${i.product_name} (x${i.quantity})`)
+                    .join(', ');
+                options += `<option value="${o.order_id}">
+                    Order #${o.order_id} - ${escapeHtml(productList)} - ${escapeHtml(o.customer_code)}
+                </option>`;
+            });
+        }
+
+        let assignedHtml = '';
+        let assignedOrderIds = [];
+
+        if (d.assigned_orders) {
+            const orderIds = d.assigned_orders.split(',').map(s => s.trim());
+            orderIds.forEach(oStr => {
+                const match = oStr.match(/#(\d+)/);
+                if (match) {
+                    const oid = parseInt(match[1]);
+                    const order = orders.find(o => o.order_id === oid);
+                    if (order && order.order_status !== 'delivered') {
+                        assignedOrderIds.push(oid);
+                        const productList = (order.items || [])
+                            .map(i => `${escapeHtml(i.product_name)} (x${i.quantity})`)
+                            .join(', ');
+                        assignedHtml += `<div class="order-history-item">
+                            <strong>Order #${order.order_id}</strong> - ${productList} - ${escapeHtml(order.order_status)}
+                        </div>`;
+                    }
+                }
+            });
+        }
+
+        let previousHtml = '';
+        if (d.assigned_orders) {
+            const orderIds = d.assigned_orders.split(',').map(s => s.trim());
+            orderIds.forEach(oStr => {
+                const match = oStr.match(/#(\d+)/);
+                if (match) {
+                    const oid = parseInt(match[1]);
+                    const order = orders.find(o => o.order_id === oid);
+                    if (order && order.order_status === 'delivered') {
+                        const productList = (order.items || [])
+                            .map(i => `${escapeHtml(i.product_name)} (x${i.quantity})`)
+                            .join(', ');
+                        previousHtml += `<div class="order-history-item">
+                            <strong>Order #${order.order_id}</strong> - ${productList}
+                        </div>`;
+                    }
+                }
+            });
+        }
+
+        list.innerHTML += `
+            <div class="driver-card" onclick="toggleDriverDropdown(event, ${d.driver_id})">
+                <div class="driver-header">
+                    <div class="driver-name">${escapeHtml(d.name)}</div>
+                    <div class="driver-status">${escapeHtml(d.status)}</div>
+                </div>
+                <div class="driver-info">
+                    ${escapeHtml(d.email || '-')} | ${escapeHtml(d.phone || '-')}
+                </div>
+                <div class="driver-info">
+                    ${escapeHtml(d.license_number || '-')}
+                </div>
+
+                ${assignedOrderIds.length > 0 ? `
+                    <div class="delivered-orders">
+                        <strong>Assigned Orders:</strong>
+                        ${assignedHtml}
+                    </div>
+                ` : '<div class="delivered-orders">No orders assigned</div>'}
+
+                <div class="dropdown" id="dropdown-${d.driver_id}" onclick="event.stopPropagation()">
+                    <label>Assign order to ${escapeHtml(d.name)}</label>
+                    <select id="orderSelect-${d.driver_id}">
+                        ${options}
+                    </select>
+                    <button onclick="assignOrder(${d.driver_id})">Assign</button>
+                    <span class="msg" id="assignMsg-${d.driver_id}"></span>
+
+                    ${previousHtml ? `
+                        <div class="order-history">
+                            <h4>Previous Orders</h4>
+                            ${previousHtml}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    });
+}
+
 function toggleDriverDropdown(event, driverId) {
     const dropdown = document.getElementById(`dropdown-${driverId}`);
     if (!dropdown) return;
 
     const isOpen = dropdown.style.display === 'block';
 
-    // Close all other dropdowns
     document.querySelectorAll('.dropdown').forEach(d => {
         d.style.display = 'none';
     });
 
-    // Toggle this one
     dropdown.style.display = isOpen ? 'none' : 'block';
 }
 
-// ---------- ASSIGN ORDER ----------
 function assignOrder(driverId) {
     const orderId = document.getElementById(`orderSelect-${driverId}`).value;
     if (!orderId) {
@@ -250,6 +311,7 @@ function assignOrder(driverId) {
 }
 
 loadDrivers();
+setInterval(loadDrivers, 10000);
 </script>
 </body>
 </html>

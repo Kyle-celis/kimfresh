@@ -4,15 +4,60 @@
     <title>KimFresh - Orders</title>
     <script src="escape.js"></script>
     <style>
-        body { font-family: Arial; padding: 20px; }
-        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background: #f0f0f0; }
-        button { padding: 6px 12px; margin: 2px; cursor: pointer; }
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
         .menu { margin-bottom: 20px; }
         .menu a { margin-right: 15px; text-decoration: none; color: #333; font-weight: bold; }
         .menu a:hover { color: #d32f2f; }
-        .filters { display: flex; gap: 10px; margin-bottom: 10px; }
+        .filters { display: flex; gap: 10px; margin-bottom: 15px; }
+        .order-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+        .order-card {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            transition: box-shadow 0.2s;
+            min-height: 250px;
+        }
+        .order-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .order-card.alert { background: #ffebee; border-color: #ef5350; }
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        .order-id { font-size: 18px; font-weight: bold; color: #333; }
+        .order-meta { color: #666; font-size: 13px; margin-top: 3px; }
+        .order-total { font-size: 18px; font-weight: bold; color: #d32f2f; }
+        .order-status {
+            padding: 4px 10px; border-radius: 12px; font-size: 12px;
+            font-weight: bold; background: #e8f5e9; color: #2e7d32;
+            display: inline-block; margin-top: 5px;
+        }
+        .order-items {
+            margin-top: 10px; padding-top: 10px;
+            border-top: 1px solid #eee; flex-grow: 1;
+        }
+        .order-item { padding: 3px 0; font-size: 13px; color: #555; }
+        .temp-info {
+            margin-top: 8px; font-size: 12px; color: #666;
+            padding-top: 8px; border-top: 1px solid #eee;
+        }
+        .temp-info.alert-text { color: #d32f2f; font-weight: bold; }
+        .order-actions {
+            margin-top: 10px; padding-top: 10px;
+            border-top: 1px solid #eee; display: flex; gap: 5px;
+        }
+        .order-actions button { padding: 6px 12px; cursor: pointer; flex: 1; }
+        #orderPagination button {
+            padding: 6px 12px; margin: 2px; cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -33,30 +78,13 @@
         <option value="pending">Pending</option>
         <option value="approved">Approved</option>
         <option value="rejected">Rejected</option>
+        <option value="delivered">Delivered</option>
     </select>
-    <input type="text" id="searchBox" placeholder="Search by customer ID, product, or SKU..." oninput="filterOrders()" style="padding: 8px; width: 300px;">
+    <input type="text" id="searchBox" placeholder="Search by customer, product, or SKU..." oninput="filterOrders()" style="padding: 8px; width: 300px;">
 </div>
 
-<table>
-<thead>
-<tr>
-    <th>Customer ID</th>
-    <th>Order ID</th>
-    <th>Date</th>
-    <th>Product</th>
-    <th>SKU</th>
-    <th>Qty</th>
-    <th>Unit Price</th>
-    <th>Subtotal</th>
-    <th>Total</th>
-    <th>Temp</th>
-    <th>Humidity</th>
-    <th>Status</th>
-    <th>Action</th>
-</tr>
-</thead>
-<tbody id="orderList"></tbody>
-</table>
+<div id="orderList" class="order-grid"></div>
+<div id="orderPagination" style="margin-top:20px; text-align:center;"></div>
 
 <script>
 const API = `${window.location.protocol}//${window.location.hostname}`;
@@ -70,20 +98,12 @@ const admin = JSON.parse(localStorage.getItem('admin'));
 if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
 
 let allOrders = [];
+let currentPage = 1;
+const PER_PAGE = 10;
 
 function logout() {
     localStorage.clear();
     window.location.href = 'login.html';
-}
-
-// ---------- LOAD ORDERS ----------
-function loadOrders() {
-    fetch(`${API}/api/orders/all`, { headers: headers })
-        .then(res => res.json())
-        .then(data => {
-            allOrders = data;
-            renderOrders(data);
-        });
 }
 
 function formatDate(dateStr) {
@@ -97,59 +117,149 @@ function formatDate(dateStr) {
     return `${year}-${month}-${day} ${hours}:${mins}`;
 }
 
+function loadOrders(status, query) {
+    fetch(`${API}/api/orders/all`, { headers: headers })
+        .then(res => res.json())
+        .then(data => {
+            allOrders = data;
+            if (status !== undefined && query !== undefined) {
+                applyFilter(status, query);
+            } else {
+                renderOrders(data);
+            }
+        });
+}
+
+function applyFilter(status, query) {
+    let filtered = allOrders;
+
+    if (status && status !== 'all') {
+        filtered = filtered.filter(o => o.order_status === status);
+    }
+
+    if (query) {
+        const q = query.toLowerCase();
+        filtered = filtered.filter(o => {
+            const customerMatch = o.customer_code && o.customer_code.toLowerCase().includes(q);
+            const itemMatch = o.items && o.items.some(i =>
+                (i.product_name && i.product_name.toLowerCase().includes(q)) ||
+                (i.sku && i.sku.toLowerCase().includes(q))
+            );
+            return customerMatch || itemMatch;
+        });
+    }
+
+    window._filteredOrders = filtered;
+    currentPage = 1;
+    renderPage();
+}
+
+function renderPage() {
+    const filtered = window._filteredOrders || [];
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const start = (currentPage - 1) * PER_PAGE;
+    const pageItems = filtered.slice(start, start + PER_PAGE);
+
+    renderOrders(pageItems);
+    renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+    const el = document.getElementById('orderPagination');
+    if (totalPages <= 1) {
+        el.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    if (currentPage > 1) {
+        html += `<button onclick="goToPage(${currentPage - 1})">◀ Prev</button>`;
+    }
+
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === currentPage) {
+            html += `<button style="background:#d32f2f;color:white;font-weight:bold;">${i}</button>`;
+        } else {
+            html += `<button onclick="goToPage(${i})">${i}</button>`;
+        }
+    }
+
+    if (currentPage < totalPages) {
+        html += `<button onclick="goToPage(${currentPage + 1})">Next ▶</button>`;
+    }
+
+    el.innerHTML = html;
+}
+
+function goToPage(page) {
+    currentPage = page;
+    renderPage();
+}
+
 function renderOrders(orders) {
     const list = document.getElementById('orderList');
     list.innerHTML = '';
     if (orders.length === 0) {
-        list.innerHTML = '<tr><td colspan="13">No orders</td></tr>';
+        list.innerHTML = '<p>No orders</p>';
         return;
     }
     orders.forEach(o => {
         const alert = o.is_alert === true || o.is_alert === 1;
-        const rowStyle = alert ? 'background-color: #ffcccc;' : '';
-        const tempCell = o.temperature ? `${escapeHtml(o.temperature)} °C` : '-';
-        const humCell = o.humidity ? `${escapeHtml(o.humidity)} %` : '-';
+        const cardClass = alert ? 'order-card alert' : 'order-card';
 
-        list.innerHTML += `<tr style="${rowStyle}">
-            <td>${escapeHtml(o.customer_code || '-')}</td>
-            <td>${escapeHtml(o.order_id)}</td>
-            <td>${escapeHtml(formatDate(o.order_date))}</td>
-            <td>${escapeHtml(o.product_name || '-')}</td>
-            <td>${escapeHtml(o.sku || '-')}</td>
-            <td>${escapeHtml(o.quantity || '-')}</td>
-            <td>${escapeHtml(o.unit_price || '-')}</td>
-            <td>${escapeHtml(o.subtotal || '-')}</td>
-            <td>${escapeHtml(o.total_amount)}</td>
-            <td>${tempCell}</td>
-            <td>${humCell}</td>
-            <td>${escapeHtml(o.order_status)}</td>
-            <td>
-                <button onclick="updateStatus(${o.order_id}, 'approved')">Approve</button>
-                <button onclick="updateStatus(${o.order_id}, 'rejected')">Reject</button>
-            </td>
-        </tr>`;
+        let itemsHtml = '';
+        if (o.items && o.items.length > 0) {
+            o.items.forEach(item => {
+                itemsHtml += `<div class="order-item">
+                    • ${escapeHtml(item.product_name)} (x${item.quantity}) - ₱${escapeHtml(item.subtotal)}
+                </div>`;
+            });
+        }
+
+        let tempHtml = '';
+        if (o.temperature) {
+            tempHtml = `<div class="temp-info ${alert ? 'alert-text' : ''}">
+                Temp: ${escapeHtml(o.temperature)}°C | Humidity: ${escapeHtml(o.humidity)}%
+            </div>`;
+        }
+
+        list.innerHTML += `
+            <div class="${cardClass}">
+                <div class="order-header">
+                    <div>
+                        <div class="order-id">Order #${escapeHtml(o.order_id)}</div>
+                        <div class="order-meta">Customer: ${escapeHtml(o.customer_code || '-')}</div>
+                        <div class="order-meta">${escapeHtml(formatDate(o.order_date))}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="order-total">₱${escapeHtml(o.total_amount)}</div>
+                        <div class="order-status">${escapeHtml(o.order_status)}</div>
+                    </div>
+                </div>
+
+                <div class="order-items">
+                    ${itemsHtml}
+                </div>
+
+                ${tempHtml}
+
+                <div class="order-actions">
+                    ${o.order_status === 'pending' ? `
+                        <button onclick="updateStatus(${o.order_id}, 'approved')">Approve</button>
+                        <button onclick="updateStatus(${o.order_id}, 'rejected')">Reject</button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
     });
 }
 
 function filterOrders() {
     const status = document.getElementById('statusFilter').value;
-    const query = document.getElementById('searchBox').value.toLowerCase();
-
-    let filtered = allOrders;
-
-    if (status !== 'all') {
-        filtered = filtered.filter(o => o.order_status === status);
-    }
-
-    if (query) {
-        filtered = filtered.filter(o => 
-            (o.customer_code && o.customer_code.toLowerCase().includes(query)) ||
-            (o.product_name && o.product_name.toLowerCase().includes(query)) ||
-            (o.sku && o.sku.toLowerCase().includes(query))
-        );
-    }
-
-    renderOrders(filtered);
+    const query = document.getElementById('searchBox').value;
+    applyFilter(status, query);
 }
 
 function updateStatus(orderId, status) {
@@ -161,14 +271,17 @@ function updateStatus(orderId, status) {
     .then(res => res.json())
     .then(data => {
         alert(data.message);
-        loadOrders();
+        filterOrders();
     });
 }
 
 loadOrders();
 
-// Auto-refresh every 10 seconds
-setInterval(loadOrders, 10000);
+setInterval(() => {
+    const status = document.getElementById('statusFilter').value;
+    const query = document.getElementById('searchBox').value;
+    loadOrders(status, query);
+}, 10000);
 </script>
 </body>
 </html>

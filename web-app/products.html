@@ -13,6 +13,9 @@
         .menu { margin-bottom: 20px; }
         .menu a { margin-right: 15px; text-decoration: none; color: #333; font-weight: bold; }
         .menu a:hover { color: #d32f2f; }
+        #productPagination button {
+            padding: 6px 12px; margin: 2px; cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -59,6 +62,7 @@
 </thead>
 <tbody id="productList"></tbody>
 </table>
+<div id="productPagination" style="margin-top:20px; text-align:center;"></div>
 
 <script>
 const API = `${window.location.protocol}//${window.location.hostname}`;
@@ -72,6 +76,8 @@ const admin = JSON.parse(localStorage.getItem('admin'));
 if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
 
 let allProducts = [];
+let currentProductPage = 1;
+const PRODUCTS_PER_PAGE = 10;
 
 function logout() {
     localStorage.clear();
@@ -101,40 +107,82 @@ function addProduct() {
 function loadProducts() {
     fetch(`${API}/api/products`)
         .then(res => res.json())
-        .then(data => { allProducts = data; renderProducts(data); });
+        .then(data => { allProducts = data; currentProductPage = 1; renderProducts(data); });
 }
 
 function loadAllProducts() {
     fetch(`${API}/api/products/all`)
         .then(res => res.json())
-        .then(data => { allProducts = data; renderProducts(data); });
+        .then(data => { allProducts = data; currentProductPage = 1; renderProducts(data); });
 }
 
 function renderProducts(products) {
+    const totalPages = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE));
+    if (currentProductPage > totalPages) currentProductPage = totalPages;
+
+    const start = (currentProductPage - 1) * PRODUCTS_PER_PAGE;
+    const pageItems = products.slice(start, start + PRODUCTS_PER_PAGE);
+
     const list = document.getElementById('productList');
     list.innerHTML = '';
-    if (products.length === 0) {
+    if (pageItems.length === 0) {
         list.innerHTML = '<tr><td colspan="8">No products found</td></tr>';
+    } else {
+        pageItems.forEach(p => {
+            let action = p.status === 'available'
+                ? `<button onclick="hideProduct(${p.product_id})">Hide</button>`
+                : `<button onclick="restoreProduct(${p.product_id})">Restore</button>`;
+            list.innerHTML += `<tr>
+                <td>${escapeHtml(p.product_id)}</td>
+                <td>${escapeHtml(p.name)}</td>
+                <td>${escapeHtml(p.sku)}</td>
+                <td>${escapeHtml(p.unit_price)}</td>
+                <td>${escapeHtml(p.stock_quantity || 0)}</td>
+                <td>${escapeHtml(p.reorder_level)}</td>
+                <td>${escapeHtml(p.status)}</td>
+                <td>${action}</td>
+            </tr>`;
+        });
+    }
+
+    renderProductPagination(totalPages);
+    window._currentProducts = products;
+}
+
+function renderProductPagination(totalPages) {
+    const el = document.getElementById('productPagination');
+    if (totalPages <= 1) {
+        el.innerHTML = '';
         return;
     }
-    products.forEach(p => {
-        let action = p.status === 'available'
-            ? `<button onclick="hideProduct(${p.product_id})">Hide</button>`
-            : `<button onclick="restoreProduct(${p.product_id})">Restore</button>`;
-        list.innerHTML += `<tr>
-            <td>${escapeHtml(p.product_id)}</td>
-            <td>${escapeHtml(p.name)}</td>
-            <td>${escapeHtml(p.sku)}</td>
-            <td>${escapeHtml(p.unit_price)}</td>
-            <td>${escapeHtml(p.stock_quantity || 0)}</td>
-            <td>${escapeHtml(p.reorder_level)}</td>
-            <td>${escapeHtml(p.status)}</td>
-            <td>${action}</td>
-        </tr>`;
-    });
+
+    let html = '';
+    if (currentProductPage > 1) {
+        html += `<button onclick="goToProductPage(${currentProductPage - 1})">◀ Prev</button>`;
+    }
+
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === currentProductPage) {
+            html += `<button style="background:#d32f2f;color:white;font-weight:bold;">${i}</button>`;
+        } else {
+            html += `<button onclick="goToProductPage(${i})">${i}</button>`;
+        }
+    }
+
+    if (currentProductPage < totalPages) {
+        html += `<button onclick="goToProductPage(${currentProductPage + 1})">Next ▶</button>`;
+    }
+
+    el.innerHTML = html;
+}
+
+function goToProductPage(page) {
+    currentProductPage = page;
+    renderProducts(window._currentProducts || []);
 }
 
 function handleFilter() {
+    currentProductPage = 1;
     document.getElementById('productFilter').value === 'all' ? loadAllProducts() : loadProducts();
 }
 
@@ -157,14 +205,24 @@ function restoreProduct(id) {
 
 function searchProducts() {
     const q = document.getElementById('searchBox').value.toLowerCase();
-    renderProducts(allProducts.filter(p =>
+    const filtered = allProducts.filter(p =>
         p.name.toLowerCase().includes(q) ||
         p.sku.toLowerCase().includes(q) ||
         p.status.toLowerCase().includes(q)
-    ));
+    );
+    currentProductPage = 1;
+    renderProducts(filtered);
 }
 
 loadProducts();
+setInterval(() => {
+    const filter = document.getElementById('productFilter').value;
+    if (filter === 'all') {
+        loadAllProducts();
+    } else {
+        loadProducts();
+    }
+}, 10000);
 </script>
 </body>
 </html>
