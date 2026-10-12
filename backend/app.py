@@ -64,7 +64,7 @@ def add_security_headers(response):
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
-        "connect-src 'self' https://cdn.jsdelivr.net; "
+        "connect-src 'self' http://localhost:5000 https://*.trycloudflare.com https://cdn.jsdelivr.net; "
         "frame-ancestors 'none';"
     )
     return response

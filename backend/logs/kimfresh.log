@@ -2956,3 +2956,4 @@ werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on 
 [2026-10-12 17:33:54,284] INFO in order_controller: Order #5 placed by retailer 1 total ₱175.00
 [2026-10-12 17:33:54,611] INFO in order_controller: Order #6 placed by retailer 1 total ₱350.00
 [2026-10-12 17:33:55,100] INFO in order_controller: Order #7 placed by retailer 1 total ₱175.00
+[2026-10-12 18:11:44,810] INFO in auth_controller: Login success: admin@kimfresh.com as admin
