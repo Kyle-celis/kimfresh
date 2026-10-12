@@ -2934,3 +2934,25 @@ werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on 
 [2026-10-02 17:25:20,340] INFO in auth: Login success: driver@kimfresh.com as driver
 [2026-10-02 17:27:10,618] INFO in auth: Login success: driver@kimfresh.com as driver
 [2026-10-02 17:29:01,913] INFO in auth: Login success: driver@kimfresh.com as driver
+[2026-10-02 18:20:21,882] INFO in auth: Login success: driver@kimfresh.com as driver
+[2026-10-03 16:56:55,273] INFO in auth: Login success: driver@kimfresh.com as driver
+[2026-10-03 16:59:02,863] INFO in auth: Login success: driver@kimfresh.com as driver
+[2026-10-03 17:19:33,390] WARNING in auth: Login failed: wrong password for driver@kimfresh.com
+[2026-10-03 17:20:10,085] INFO in auth: Login success: driver@kimfresh.com as driver
+[2026-10-12 17:32:44,212] INFO in auth_controller: Login success: admin@kimfresh.com as admin
+[2026-10-12 17:33:14,575] INFO in auth_controller: Login success: admin@kimfresh.com as admin
+[2026-10-12 17:33:14,813] INFO in auth_controller: Login success: retailer@kimfresh.com as retailer
+[2026-10-12 17:33:15,099] INFO in auth_controller: Login success: driver@kimfresh.com as driver
+[2026-10-12 17:33:15,323] WARNING in auth_controller: Login failed: wrong password for retailer@kimfresh.com
+[2026-10-12 17:33:15,513] WARNING in auth_controller: Login failed: unknown email nobody@kimfresh.com
+[2026-10-12 17:33:16,759] INFO in order_controller: Order #2 placed by retailer 1 total ₱175.00
+[2026-10-12 17:33:17,067] INFO in order_controller: Order #3 placed by retailer 1 total ₱350.00
+[2026-10-12 17:33:17,532] INFO in order_controller: Order #4 placed by retailer 1 total ₱175.00
+[2026-10-12 17:33:52,068] INFO in auth_controller: Login success: admin@kimfresh.com as admin
+[2026-10-12 17:33:52,298] INFO in auth_controller: Login success: retailer@kimfresh.com as retailer
+[2026-10-12 17:33:52,595] INFO in auth_controller: Login success: driver@kimfresh.com as driver
+[2026-10-12 17:33:52,825] WARNING in auth_controller: Login failed: wrong password for retailer@kimfresh.com
+[2026-10-12 17:33:53,008] WARNING in auth_controller: Login failed: unknown email nobody@kimfresh.com
+[2026-10-12 17:33:54,284] INFO in order_controller: Order #5 placed by retailer 1 total ₱175.00
+[2026-10-12 17:33:54,611] INFO in order_controller: Order #6 placed by retailer 1 total ₱350.00
+[2026-10-12 17:33:55,100] INFO in order_controller: Order #7 placed by retailer 1 total ₱175.00
