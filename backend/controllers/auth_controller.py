@@ -8,8 +8,8 @@ from utils.auth_token import create_token
 from utils.logger import logger
 from utils.security import hash_password, verify_password
 from utils.validators import validate_email, validate_password, validate_name
-from models import user_model
 import random
+from models import user_model, driver_model
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -49,6 +49,13 @@ def login():
     if not verify_password(password, stored_hash):
         logger.warning(f"Login failed: wrong password for {email}")
         return jsonify({"success": False, "message": "Invalid email or password"}), 401
+        # Check account status for drivers
+    if role == 'driver':
+        account_status = user.get('account_status', 'approved')
+        if account_status == 'pending':
+            return jsonify({"success": False, "message": "Your account is pending approval"}), 403
+        if account_status == 'rejected':
+            return jsonify({"success": False, "message": "Your account was rejected. Please re-apply."}), 403
 
     user_id = user['admin_id'] if role == 'admin' else user['user_id']
     token = create_token(user_id=user_id, role=role, email=user['email'])
@@ -111,4 +118,45 @@ def retailer_register():
         })
     except Exception as e:
         logger.error(f"Retailer registration failed: {e}", exc_info=True)
+        return jsonify({"success": False, "message": str(e)}), 400
+
+
+@auth_bp.route('/api/driver/register', methods=['POST'])
+@limiter.limit("10 per hour")
+def driver_register():
+    """Driver sign up — creates pending account."""
+    data = request.get_json()
+    name = data.get('name')
+    email = data.get('email')
+    password = data.get('password')
+    phone = data.get('phone', '')
+    license_number = data.get('license_number', '')
+
+    is_valid, err = validate_name(name, "Name")
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
+
+    is_valid, err = validate_email(email)
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
+
+    is_valid, err = validate_password(password)
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
+
+    if user_model.driver_email_exists(email):
+        return jsonify({"success": False, "message": "Email already registered"}), 400
+
+    password_hash = hash_password(password)
+
+    try:
+        driver_id = user_model.create_driver_signup(name, email, phone, license_number, password_hash)
+        logger.info(f"New driver signup: {email}")
+        return jsonify({
+            "success": True,
+            "driver_id": driver_id,
+            "message": "Account created! Wait for admin approval."
+        })
+    except Exception as e:
+        logger.error(f"Driver signup failed: {e}", exc_info=True)
         return jsonify({"success": False, "message": str(e)}), 400

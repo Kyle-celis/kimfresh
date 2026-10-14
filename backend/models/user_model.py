@@ -36,7 +36,7 @@ def find_driver_by_email(email):
     """Return driver row by email, or None."""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT driver_id as user_id, name, email, password_hash FROM driver WHERE email = %s", (email,))
+    cursor.execute("SELECT driver_id as user_id, name, email, password_hash, account_status FROM driver WHERE email = %s", (email,))
     row = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -80,3 +80,41 @@ def create_retailer(name, email, phone, password_hash, address, customer_code):
     cursor.close()
     conn.close()
     return retailer_id
+
+def create_driver_signup(name, email, phone, license_number, password_hash):
+    """Create new driver with pending account_status."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO driver 
+           (name, email, phone, license_number, password_hash, status, account_status) 
+           VALUES (%s, %s, %s, %s, %s, 'available', 'pending')""",
+        (name, email, phone, license_number, password_hash)
+    )
+    conn.commit()
+    driver_id = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return driver_id
+
+
+def driver_email_exists(email):
+    """Check if email exists in driver table."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT driver_id FROM driver WHERE email = %s", (email,))
+    exists = cursor.fetchone() is not None
+    cursor.close()
+    conn.close()
+    return exists
+
+
+def get_driver_account_status(driver_id):
+    """Return account_status for a driver."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT account_status FROM driver WHERE driver_id = %s", (driver_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return row[0] if row else None

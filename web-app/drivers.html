@@ -16,19 +16,11 @@
 </div>
 <hr>
 
-<h3>Add Driver</h3>
-<input type="text" id="dName" placeholder="Name" maxlength="100" required>
-<input type="email" id="dEmail" placeholder="Email" maxlength="100">
-<input type="text" id="dPhone" placeholder="Phone" maxlength="20">
-<input type="text" id="dLicense" placeholder="License Number" maxlength="50">
-<button class="primary" onclick="addDriver()">Add</button>
-<p id="addMsg" class="msg"></p>
-<hr>
 
 <h3>Drivers</h3>
 <p style="color: #666;">Click a driver card to assign an order.</p>
 
-<div id="driverList"></div>
+<div id="driverList" class="order-grid"></div>
 <div id="driverPagination" class="pagination"></div>
 
 <script src="js/escape.js"></script>

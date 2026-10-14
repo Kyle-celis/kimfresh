@@ -17,6 +17,7 @@ def get_all_drivers():
             d.phone,
             d.license_number,
             d.status,
+            d.account_status,
             GROUP_CONCAT(CONCAT('Order #', dl.order_id) SEPARATOR ', ') AS assigned_orders
         FROM driver d
         LEFT JOIN delivery dl ON d.driver_id = dl.driver_id
@@ -181,3 +182,99 @@ def get_driver_sensor_history(driver_id):
     cursor.close()
     conn.close()
     return rows
+
+
+def get_available_drivers():
+    """Return drivers with status='available', ordered by ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM driver WHERE status = 'available' AND account_status = 'approved' ORDER BY driver_id ASC")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+
+def get_last_assigned_driver_id():
+    """Return driver_id of the most recent delivery, or 0."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT driver_id FROM delivery ORDER BY delivery_id DESC LIMIT 1")
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return row[0] if row else 0
+
+
+def auto_pick_driver():
+    """
+    Round-robin: pick next available driver after the last assigned one.
+
+    Returns driver_id or None.
+    """
+    available = get_available_drivers()
+    if not available:
+        return None
+
+    last_id = get_last_assigned_driver_id()
+
+    # Find next driver with id > last_id
+    for d in available:
+        if d['driver_id'] > last_id:
+            return d['driver_id']
+
+    # Wrap around to first available
+    return available[0]['driver_id']
+
+
+def assign_delivery(order_id, driver_id):
+    """Create delivery and mark driver on_delivery."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "INSERT INTO delivery (order_id, driver_id, delivery_status) VALUES (%s, %s, 'assigned')",
+        (order_id, driver_id)
+    )
+    cursor.execute("UPDATE driver SET status = 'on_delivery' WHERE driver_id = %s", (driver_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def approve_driver(driver_id):
+    """Set account_status to approved."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE driver SET account_status = 'approved' WHERE driver_id = %s",
+        (driver_id,)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def reject_driver(driver_id):
+    """Set account_status to rejected and record time."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE driver SET account_status = 'rejected', rejected_at = NOW() WHERE driver_id = %s",
+        (driver_id,)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def delete_old_rejected_drivers():
+    """Delete rejected drivers older than 7 days."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM driver WHERE account_status = 'rejected' AND rejected_at < DATE_SUB(NOW(), INTERVAL 7 DAY)"
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()

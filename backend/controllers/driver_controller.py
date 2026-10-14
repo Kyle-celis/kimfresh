@@ -6,6 +6,10 @@ from flask import Blueprint, request, jsonify
 from extensions import require_auth
 from utils.validators import validate_name, validate_positive_int, validate_email
 from models import driver_model, order_model
+from utils.logger import logger
+from db_config import get_db_connection
+from models import driver_model, order_model
+from utils.logger import logger
 
 drivers_bp = Blueprint('drivers', __name__)
 
@@ -46,7 +50,7 @@ def add_driver():
 @drivers_bp.route('/api/drivers/<int:driver_id>/assign', methods=['POST'])
 @require_auth(['admin'])
 def assign_order_to_driver(driver_id):
-    """Assign order to driver."""
+    """Assign order to driver. Marks driver on_delivery."""
     data = request.get_json()
     order_id = data.get('order_id')
 
@@ -59,15 +63,14 @@ def assign_order_to_driver(driver_id):
         return jsonify({"success": False, "message": f"Order #{order_id} does not exist"}), 400
 
     if order['order_status'] != 'approved':
-        return jsonify({"success": False, "message": f"Order #{order_id} is not approved yet. Current status: {order['order_status']}"}), 400
+        return jsonify({"success": False, "message": f"Order #{order_id} is not approved yet."}), 400
 
     existing = driver_model.get_delivery_by_order(order_id)
     if existing:
         return jsonify({"success": False, "message": f"Order #{order_id} already assigned"}), 400
 
-    driver_model.create_delivery(order_id, driver_id)
+    driver_model.assign_delivery(order_id, driver_id)
     return jsonify({"success": True, "message": f"Order #{order_id} assigned to driver {driver_id}"})
-
 
 @drivers_bp.route('/api/driver/<int:driver_id>/deliveries', methods=['GET'])
 @require_auth(['admin', 'driver'])
@@ -79,7 +82,7 @@ def get_driver_deliveries(driver_id):
 @drivers_bp.route('/api/deliveries/<int:delivery_id>/status', methods=['PUT'])
 @require_auth(['driver'])
 def update_delivery_status(delivery_id):
-    """Update delivery status."""
+    """Update delivery status. Free driver when delivered."""
     data = request.get_json()
     new_status = data.get('delivery_status')
 
@@ -88,6 +91,7 @@ def update_delivery_status(delivery_id):
         return jsonify({"success": False, "message": "Delivery not found"}), 404
 
     order_id = row['order_id']
+    driver_id = row['driver_id']
     driver_model.update_delivery_status(delivery_id, new_status)
 
     order_status_map = {
@@ -99,11 +103,97 @@ def update_delivery_status(delivery_id):
     new_order_status = order_status_map.get(new_status, 'approved')
     order_model.update_order_status(order_id, new_order_status)
 
-    return jsonify({"success": True, "message": f"Delivery {delivery_id} set to {new_status}, order set to {new_order_status}"})
+    # Free driver when delivered
+    if new_status == 'delivered':
+        driver_model.update_driver_status(driver_id, 'available')
+        logger.info(f"Driver {driver_id} is now available")
 
+    return jsonify({"success": True, "message": f"Delivery {delivery_id} set to {new_status}, order set to {new_order_status}"})
 
 @drivers_bp.route('/api/driver/<int:driver_id>/sensor-history', methods=['GET'])
 @require_auth(['driver', 'admin'])
 def get_driver_sensor_history(driver_id):
     """Return sensor history."""
     return jsonify(driver_model.get_driver_sensor_history(driver_id))
+
+@drivers_bp.route('/api/orders/<int:order_id>/reassign', methods=['POST'])
+@require_auth(['admin'])
+def reassign_driver(order_id):
+    """Change driver for an existing delivery. Frees old driver."""
+    data = request.get_json()
+    new_driver_id = data.get('driver_id')
+
+    is_valid, err = validate_positive_int(new_driver_id, "Driver ID")
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
+
+    existing = driver_model.get_delivery_by_order(order_id)
+    if not existing:
+        return jsonify({"success": False, "message": f"Order #{order_id} is not assigned yet"}), 400
+
+    old_driver_id = existing['driver_id']
+
+    # Update delivery to new driver
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE delivery SET driver_id = %s WHERE order_id = %s",
+        (new_driver_id, order_id)
+    )
+    cursor.execute("UPDATE driver SET status = 'available' WHERE driver_id = %s", (old_driver_id,))
+    cursor.execute("UPDATE driver SET status = 'on_delivery' WHERE driver_id = %s", (new_driver_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    logger.info(f"Order #{order_id} reassigned from driver {old_driver_id} to {new_driver_id}")
+
+    return jsonify({"success": True, "message": f"Order #{order_id} reassigned to driver {new_driver_id}"})
+
+@drivers_bp.route('/api/orders/<int:order_id>/delivery', methods=['GET'])
+@require_auth(['admin'])
+def get_order_delivery(order_id):
+    """Return delivery info + driver name for an order."""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT 
+            d.delivery_id,
+            d.driver_id,
+            d.delivery_status,
+            dr.name AS driver_name
+        FROM delivery d
+        LEFT JOIN driver dr ON d.driver_id = dr.driver_id
+        WHERE d.order_id = %s
+    """, (order_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return jsonify(row or {})
+
+@drivers_bp.route('/api/drivers/<int:driver_id>/approve', methods=['POST'])
+@require_auth(['admin'])
+def approve_driver(driver_id):
+    """Approve a pending driver account."""
+    driver_model.approve_driver(driver_id)
+    logger.info(f"Driver {driver_id} approved")
+    return jsonify({"success": True, "message": f"Driver {driver_id} approved"})
+
+
+@drivers_bp.route('/api/drivers/<int:driver_id>/reject', methods=['POST'])
+@require_auth(['admin'])
+def reject_driver(driver_id):
+    """Reject a pending driver account."""
+    driver_model.reject_driver(driver_id)
+    logger.info(f"Driver {driver_id} rejected")
+    return jsonify({"success": True, "message": f"Driver {driver_id} rejected"})
+
+
+@drivers_bp.route('/api/driver/<int:driver_id>/account-status', methods=['GET'])
+def get_driver_account_status(driver_id):
+    """Return account_status for a driver (no auth — driver checks own)."""
+    from models.user_model import get_driver_account_status
+    status = get_driver_account_status(driver_id)
+    if status is None:
+        return jsonify({"success": False, "message": "Driver not found"}), 404
+    return jsonify({"success": True, "account_status": status})

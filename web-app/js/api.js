@@ -111,3 +111,35 @@ async function apiAssignOrder(driverId, orderId) {
     });
     return res.json();
 }
+
+async function apiReassignOrder(orderId, driverId) {
+    const res = await fetch(`${API}/api/orders/${orderId}/reassign`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({driver_id: driverId})
+    });
+    return res.json();
+}
+
+async function apiGetOrderDelivery(orderId) {
+    const res = await fetch(`${API}/api/orders/${orderId}/delivery`, {
+        headers: authHeaders()
+    });
+    return res.json();
+}
+
+async function apiApproveDriver(driverId) {
+    const res = await fetch(`${API}/api/drivers/${driverId}/approve`, {
+        method: 'POST',
+        headers: authHeaders()
+    });
+    return res.json();
+}
+
+async function apiRejectDriver(driverId) {
+    const res = await fetch(`${API}/api/drivers/${driverId}/reject`, {
+        method: 'POST',
+        headers: authHeaders()
+    });
+    return res.json();
+}

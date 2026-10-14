@@ -22,3 +22,7 @@ Thumbs.db
 
 web-app-design/
 web-app-design.zip
+
+# Logs
+*.log
+backend/logs/

@@ -115,17 +115,51 @@ function renderOrders(orders) {
                         <div class="order-status">${escapeHtml(o.order_status)}</div>
                     </div>
                 </div>
-                <div class="order-items">${itemsHtml}</div>
+
+                <div class="order-items">
+                    ${itemsHtml}
+                </div>
+
                 ${tempHtml}
+
+                <div class="order-meta" style="margin-top:8px;">
+                    Driver: <strong id="driver-${o.order_id}">-</strong>
+                </div>
+
                 <div class="order-actions">
                     ${o.order_status === 'pending' ? `
                         <button onclick="updateStatus(${o.order_id}, 'approved')">Approve</button>
                         <button onclick="updateStatus(${o.order_id}, 'rejected')">Reject</button>
                     ` : ''}
+                    ${o.order_status === 'approved' ? `
+                        <button onclick="changeDriver(${o.order_id})">Change Driver</button>
+                    ` : ''}
                 </div>
             </div>
         `;
+
+        loadDeliveryForOrder(o.order_id);
     });
+}
+
+async function changeDriver(orderId) {
+    const driverId = prompt('Enter new driver ID:');
+    if (!driverId) return;
+    const data = await apiReassignOrder(orderId, parseInt(driverId));
+    alert(data.message);
+    filterOrders();
+    // Reload driver name after short delay
+    setTimeout(() => loadDeliveryForOrder(orderId), 500);
+}
+
+async function loadDeliveryForOrder(orderId) {
+    try {
+        const d = await apiGetOrderDelivery(orderId);
+        const cell = document.getElementById(`driver-${orderId}`);
+        if (cell && d && d.driver_name) {
+            cell.textContent = d.driver_name;
+        }
+    } catch (e) {}
 }
 
 function filterOrders() {

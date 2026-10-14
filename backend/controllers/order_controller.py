@@ -7,6 +7,8 @@ from extensions import require_auth
 from utils.logger import logger
 from utils.validators import validate_positive_int, validate_items_list
 from models import order_model
+from models import order_model, driver_model
+from utils.logger import logger
 
 orders_bp = Blueprint('orders', __name__)
 
@@ -94,8 +96,31 @@ def get_all_orders():
 @orders_bp.route('/api/orders/<int:order_id>/status', methods=['PUT'])
 @require_auth(['admin'])
 def update_order_status(order_id):
-    """Update order status."""
+    """Update order status. Auto-assigns driver when approved."""
     data = request.get_json()
     new_status = data.get('status')
+
     order_model.update_order_status(order_id, new_status)
-    return jsonify({"success": True, "message": f"Order {order_id} set to {new_status}"})
+
+    assigned_driver = None
+    auto_assigned = False
+
+    if new_status == 'approved':
+        # Check if already assigned
+        existing = driver_model.get_delivery_by_order(order_id)
+        if not existing:
+            driver_id = driver_model.auto_pick_driver()
+            if driver_id:
+                driver_model.assign_delivery(order_id, driver_id)
+                assigned_driver = driver_id
+                auto_assigned = True
+                logger.info(f"Order #{order_id} auto-assigned to driver {driver_id}")
+            else:
+                logger.warning(f"Order #{order_id} approved but no driver available")
+
+    return jsonify({
+        "success": True,
+        "message": f"Order {order_id} set to {new_status}",
+        "auto_assigned": auto_assigned,
+        "assigned_driver": assigned_driver
+    })

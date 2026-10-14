@@ -9,18 +9,6 @@ let allDrivers = [];
 let currentDriverPage = 1;
 const DRIVERS_PER_PAGE = 10;
 
-async function addDriver() {
-    const body = {
-        name: document.getElementById('dName').value,
-        email: document.getElementById('dEmail').value,
-        phone: document.getElementById('dPhone').value,
-        license_number: document.getElementById('dLicense').value
-    };
-    const data = await apiAddDriver(body);
-    document.getElementById('addMsg').textContent = data.message;
-    loadDrivers();
-}
-
 async function loadDrivers() {
     const orders = await apiGetAllOrders();
     window._allOrders = orders;
@@ -65,23 +53,8 @@ function renderDrivers(data) {
         return;
     }
     const orders = window._allOrders || [];
-    const approvedOrders = orders.filter(o => o.order_status === 'approved');
 
     data.forEach(d => {
-        let options = '<option value="">-- Select approved order --</option>';
-        if (approvedOrders.length === 0) {
-            options = '<option value="">No approved orders available</option>';
-        } else {
-            approvedOrders.forEach(o => {
-                const productList = (o.items || [])
-                    .map(i => `${i.product_name} (x${i.quantity})`)
-                    .join(', ');
-                options += `<option value="${o.order_id}">
-                    Order #${o.order_id} - ${escapeHtml(productList)} - ${escapeHtml(o.customer_code)}
-                </option>`;
-            });
-        }
-
         let assignedHtml = '';
         let assignedOrderIds = [];
         let previousHtml = '';
@@ -107,49 +80,54 @@ function renderDrivers(data) {
             });
         }
 
+        const isPending = d.account_status === 'pending';
+        const isRejected = d.account_status === 'rejected';
+
+        let actionHtml = '';
+        if (isPending) {
+            actionHtml = `
+                <div class="driver-actions">
+                    <button class="primary" onclick="approveDriver(${d.driver_id})">Approve</button>
+                    <button onclick="rejectDriver(${d.driver_id})">Reject</button>
+                </div>
+            `;
+        } else if (isRejected) {
+            actionHtml = `<div class="driver-actions"><em>Rejected — hidden after 7 days</em></div>`;
+        }
+
         list.innerHTML += `
-            <div class="driver-card" onclick="toggleDriverDropdown(event, ${d.driver_id})">
+            <div class="driver-card ${escapeHtml(d.account_status || '')}">
                 <div class="driver-header">
                     <div class="driver-name">${escapeHtml(d.name)}</div>
-                    <div class="driver-status">${escapeHtml(d.status)}</div>
+                    <div class="driver-status ${escapeHtml(d.account_status || '')}">${escapeHtml(d.account_status || d.status)}</div>
                 </div>
                 <div class="driver-info">${escapeHtml(d.email || '-')} | ${escapeHtml(d.phone || '-')}</div>
                 <div class="driver-info">${escapeHtml(d.license_number || '-')}</div>
 
-                ${assignedOrderIds.length > 0
+                ${actionHtml}
+
+                ${!isPending && assignedOrderIds.length > 0
                     ? `<div class="delivered-orders"><strong>Assigned Orders:</strong>${assignedHtml}</div>`
-                    : '<div class="delivered-orders">No orders assigned</div>'}
+                    : (isPending ? '' : '<div class="delivered-orders">No orders assigned</div>')}
 
-                <div class="dropdown" id="dropdown-${d.driver_id}" onclick="event.stopPropagation()">
-                    <label>Assign order to ${escapeHtml(d.name)}</label>
-                    <select id="orderSelect-${d.driver_id}">${options}</select>
-                    <button onclick="assignOrder(${d.driver_id})">Assign</button>
-                    <span class="msg" id="assignMsg-${d.driver_id}"></span>
-
-                    ${previousHtml ? `<div class="order-history"><h4>Previous Orders</h4>${previousHtml}</div>` : ''}
-                </div>
+                ${previousHtml ? `<div class="order-history"><h4>Previous Orders</h4>${previousHtml}</div>` : ''}
             </div>
         `;
     });
 }
 
-function toggleDriverDropdown(event, driverId) {
-    const dropdown = document.getElementById(`dropdown-${driverId}`);
-    if (!dropdown) return;
-    const isOpen = dropdown.style.display === 'block';
-    document.querySelectorAll('.dropdown').forEach(d => d.style.display = 'none');
-    dropdown.style.display = isOpen ? 'none' : 'block';
+async function approveDriver(driverId) {
+    if (!confirm('Approve this driver?')) return;
+    const data = await apiApproveDriver(driverId);
+    alert(data.message);
+    loadDrivers();
 }
 
-async function assignOrder(driverId) {
-    const orderId = document.getElementById(`orderSelect-${driverId}`).value;
-    if (!orderId) {
-        document.getElementById(`assignMsg-${driverId}`).textContent = 'Please select an order';
-        return;
-    }
-    const data = await apiAssignOrder(driverId, parseInt(orderId));
-    document.getElementById(`assignMsg-${driverId}`).textContent = data.message;
-    setTimeout(loadDrivers, 1000);
+async function rejectDriver(driverId) {
+    if (!confirm('Reject this driver? They will be hidden after 7 days.')) return;
+    const data = await apiRejectDriver(driverId);
+    alert(data.message);
+    loadDrivers();
 }
 
 loadDrivers();
