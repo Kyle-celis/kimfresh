@@ -278,3 +278,62 @@ def delete_old_rejected_drivers():
     conn.commit()
     cursor.close()
     conn.close()
+
+def get_driver_by_id(driver_id):
+    """Return single driver row by ID (for profile view)."""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT driver_id, name, email, phone, license_number, status
+        FROM driver WHERE driver_id = %s
+    """, (driver_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return row
+
+
+def reassign_delivery(order_id, old_driver_id, new_driver_id):
+    """Reassign a delivery to a new driver. Frees old, marks new on_delivery."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE delivery SET driver_id = %s WHERE order_id = %s",
+            (new_driver_id, order_id)
+        )
+        cursor.execute(
+            "UPDATE driver SET status = 'available' WHERE driver_id = %s",
+            (old_driver_id,)
+        )
+        cursor.execute(
+            "UPDATE driver SET status = 'on_delivery' WHERE driver_id = %s",
+            (new_driver_id,)
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_order_delivery_with_driver(order_id):
+    """Return delivery + driver name for an order."""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT 
+            d.delivery_id,
+            d.driver_id,
+            d.delivery_status,
+            dr.name AS driver_name
+        FROM delivery d
+        LEFT JOIN driver dr ON d.driver_id = dr.driver_id
+        WHERE d.order_id = %s
+    """, (order_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return row or {}

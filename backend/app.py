@@ -20,6 +20,7 @@ from controllers.order_controller import orders_bp
 from controllers.driver_controller import drivers_bp
 from controllers.sensor_controller import sensor_bp
 from controllers.dashboard_controller import dashboard_bp
+from controllers.retailer_controller import retailer_bp   # ← NEW
 
 # Logger
 from utils.logger import logger
@@ -37,6 +38,7 @@ app.register_blueprint(orders_bp)
 app.register_blueprint(drivers_bp)
 app.register_blueprint(sensor_bp)
 app.register_blueprint(dashboard_bp)
+app.register_blueprint(retailer_bp)   # ← NEW
 
 
 # ---------- HOME ----------
