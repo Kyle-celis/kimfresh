@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/api.dart';
-import '../services/foreground_service.dart';
 import 'deliveries_screen.dart';
-import 'signup_screen.dart';
+import '../services/foreground_service.dart';
+
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -27,7 +27,6 @@ class _LoginScreenState extends State<LoginScreen> {
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
       Permission.location,
-      Permission.notification,
     ].request();
   }
 
@@ -53,9 +52,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() => _loading = false);
 
-    if (result['success'] == true && result['role'] == 'driver') {
-      await ForegroundService.start();
-      if (!mounted) return;
+    if (result != null &&
+        result['success'] == true &&
+        result['role'] == 'driver') {
+      // Token is already saved inside ApiService.login()
+ForegroundService.start();
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -67,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } else {
       ApiService.clearToken();
-      setState(() => message = result['message'] ?? 'Invalid credentials');
+      setState(() => message = result?['message'] ?? 'Invalid credentials');
     }
   }
 
@@ -82,14 +83,14 @@ class _LoginScreenState extends State<LoginScreen> {
             TextField(
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(labelText: 'Email'),
               maxLength: 100,
+              decoration: InputDecoration(labelText: 'Email'),
             ),
             TextField(
               controller: passwordController,
+              maxLength: 100,
               decoration: InputDecoration(labelText: 'Password'),
               obscureText: true,
-              maxLength: 100,
             ),
             SizedBox(height: 20),
             ElevatedButton(
@@ -107,16 +108,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             SizedBox(height: 10),
             Text(message, style: TextStyle(color: Colors.red)),
-            SizedBox(height: 20),
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => SignupScreen()),
-                );
-              },
-              child: Text('No account? Sign Up'),
-            ),
           ],
         ),
       ),

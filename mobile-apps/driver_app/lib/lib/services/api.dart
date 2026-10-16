@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
-const String API = 'https://gotta-marilyn-rhythm-picked.trycloudflare.com/';
+const String API = 'https://fax-northwest-subscribe-eng.trycloudflare.com/';
 
 class ApiService {
   static const Duration _timeout = Duration(seconds: 15);
@@ -133,4 +133,37 @@ class ApiService {
       return [];
     }
   }
+
+  // ---------- GET DRIVER PROFILE ----------
+  static Future<Map<String, dynamic>> getDriverProfile(int driverId) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$API/api/driver/$driverId/profile'),
+        headers: _authHeaders(),
+      ).timeout(_timeout);
+      return jsonDecode(res.body);
+    } catch (e) {
+      return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
+// ---------- UPDATE DRIVER PROFILE ----------
+  static Future<Map<String, dynamic>> updateDriverProfile(
+      int driverId, String name, String phone, String license) async {
+    try {
+      final res = await http.put(
+        Uri.parse('$API/api/driver/$driverId/profile'),
+        headers: _authHeaders(),
+        body: jsonEncode({
+          'name': name,
+          'phone': phone,
+          'license_number': license,
+        }),
+      ).timeout(_timeout);
+      return jsonDecode(res.body);
+    } catch (e) {
+      return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
 }

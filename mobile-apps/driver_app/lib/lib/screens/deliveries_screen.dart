@@ -4,6 +4,7 @@ import '../services/api.dart';
 import '../services/ble_service.dart';
 import '../services/foreground_service.dart';
 import 'sensor_history_screen.dart';
+import 'profile_screen.dart';
 
 class DeliveriesScreen extends StatefulWidget {
   final int driverId;
@@ -209,10 +210,28 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
               );
             },
           ),
+
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: loadDeliveries,
           ),
+
+          IconButton(
+            icon: Icon(Icons.person),
+            tooltip: 'Profile',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProfileScreen(
+                    driverId: widget.driverId,
+                    driverName: widget.driverName,
+                  ),
+                ),
+              );
+            },
+          ),
+
         ],
       ),
       body: Column(
