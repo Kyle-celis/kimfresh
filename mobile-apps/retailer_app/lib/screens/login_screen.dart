@@ -12,18 +12,42 @@ class _LoginScreenState extends State<LoginScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   String message = '';
+  bool _loading = false;
 
-  void login() async {
-    final result = await ApiService.login(emailController.text, passwordController.text);
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> login() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      message = '';
+    });
+
+    final result = await ApiService.login(
+      emailController.text.trim(),
+      passwordController.text,
+    );
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+
     if (result != null && result['success'] == true) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => ProductsScreen(
-          retailerId: result['user_id'],
-          retailerName: result['name'],
-        )),
+        MaterialPageRoute(
+          builder: (_) => ProductsScreen(
+            retailerId: result['user_id'],
+            retailerName: result['name'],
+          ),
+        ),
       );
     } else {
+      ApiService.clearToken();
       setState(() => message = result?['message'] ?? 'Invalid credentials');
     }
   }
@@ -38,6 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             TextField(
               controller: emailController,
+              keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(labelText: 'Email'),
             ),
             TextField(
@@ -47,8 +72,17 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             SizedBox(height: 20),
             ElevatedButton(
-              onPressed: login,
-              child: Text('Login'),
+              onPressed: _loading ? null : login,
+              child: _loading
+                  ? SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+                  : Text('Login'),
             ),
             SizedBox(height: 10),
             Text(message, style: TextStyle(color: Colors.red)),

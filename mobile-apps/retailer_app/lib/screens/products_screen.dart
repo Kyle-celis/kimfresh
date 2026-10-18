@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api.dart';
 import 'orders_screen.dart';
+import 'profile_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   final int retailerId;
@@ -56,6 +57,23 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ));
             },
           ),
+
+          IconButton(
+            icon: Icon(Icons.person),
+            tooltip: 'Profile',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProfileScreen(
+                    retailerId: widget.retailerId,
+                    retailerName: widget.retailerName,
+                  ),
+                ),
+              );
+            },
+          ),
+
         ],
       ),
       body: ListView.builder(
