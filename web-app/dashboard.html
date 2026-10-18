@@ -2,31 +2,8 @@
 <html>
 <head>
     <title>KimFresh - Dashboard</title>
-    <style>
-        body { font-family: Arial; padding: 20px; }
-        .menu { margin-bottom: 20px; }
-        .menu a { margin-right: 15px; text-decoration: none; color: #333; font-weight: bold; }
-        .menu a:hover { color: #d32f2f; }
-        .cards {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        .card {
-            background: #f9f9f9;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-        }
-        .card h3 { margin: 0 0 10px 0; color: #666; font-size: 14px; }
-        .card .value { font-size: 32px; font-weight: bold; color: #d32f2f; }
-        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background: #f0f0f0; }
-        canvas { max-height: 300px; }
-    </style>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -75,112 +52,9 @@
 <tbody id="recentOrders"></tbody>
 </table>
 
-<script>
-const API = `${window.location.protocol}//${window.location.hostname}`;
-const admin = JSON.parse(localStorage.getItem('admin'));
-const token = localStorage.getItem('token');
-const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-};
-
-if (!admin || admin.role !== 'admin') window.location.href = 'login.html';
-
-function logout() {
-    localStorage.clear();
-    window.location.href = 'login.html';
-}
-
-// ---------- SUMMARY ----------
-fetch(`${API}/api/dashboard/summary`, { headers: headers })
-    .then(res => res.json())
-    .then(d => {
-        document.getElementById('c-products').textContent = d.total_products;
-        document.getElementById('c-drivers').textContent = d.total_drivers;
-        document.getElementById('c-orders').textContent = d.total_orders;
-        document.getElementById('c-pending').textContent = d.pending_orders;
-        document.getElementById('c-approved').textContent = d.approved_orders;
-        document.getElementById('c-rejected').textContent = d.rejected_orders;
-        document.getElementById('c-lowstock').textContent = d.low_stock;
-        document.getElementById('c-week').textContent = d.this_week;
-    });
-// ---------- CHART ---------
-
-let chart = null;
-let currentWeekStart = getMonday(new Date());
-
-function getMonday(d) {
-    const date = new Date(d);
-    const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(date.setDate(diff));
-}
-
-function formatDateParam(d) {
-    return d.toISOString().split('T')[0];
-}
-
-function loadChart() {
-    const weekStr = formatDateParam(currentWeekStart);
-    
-    fetch(`${API}/api/dashboard/orders-per-week?week_start=${weekStr}`, { headers: headers })
-        .then(res => res.json())
-        .then(d => {
-            document.getElementById('weekLabel').textContent = `${d.week_start} to ${d.week_end}`;
-            
-            const today = new Date();
-            const currentMonday = getMonday(today);
-            document.getElementById('nextBtn').disabled = currentWeekStart >= currentMonday;
-            
-            if (chart) chart.destroy();
-            
-            chart = new Chart(document.getElementById('ordersChart'), {
-                type: 'bar',
-                data: {
-                    labels: d.days,
-                    datasets: [{
-                        label: 'Orders',
-                        data: d.counts,
-                        backgroundColor: '#d32f2f'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { display: false } }
-                }
-            });
-        });
-}
-
-function prevWeek() {
-    currentWeekStart.setDate(currentWeekStart.getDate() - 7);
-    loadChart();
-}
-
-function nextWeek() {
-    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
-    loadChart();
-}
-
-loadChart();
-
-// ---------- RECENT ORDERS ----------
-fetch(`${API}/api/orders/all`, { headers: headers })
-    .then(res => res.json())
-    .then(data => {
-        const list = document.getElementById('recentOrders');
-        list.innerHTML = '';
-        data.slice(0, 10).forEach(o => {
-            list.innerHTML += `<tr>
-                <td>${o.order_id}</td>
-                <td>${o.customer_code || '-'}</td>
-                <td>${o.product_name || '-'}</td>
-                <td>${o.quantity || '-'}</td>
-                <td>${o.total_amount}</td>
-                <td>${o.order_status}</td>
-            </tr>`;
-        });
-    });
-</script>
+<script src="js/escape.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/dashboard.js"></script>
 </body>
 </html>

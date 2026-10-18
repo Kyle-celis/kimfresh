@@ -96,3 +96,32 @@ def orders_per_week():
         "week_start": week_start,
         "week_end": end_date.strftime('%Y-%m-%d')
     })
+
+@dashboard_bp.route('/api/dashboard/recent-orders', methods=['GET'])
+def recent_orders():
+    """
+    Return the last 10 orders with product name and quantity.
+    If an order has multiple items, they are joined into one string.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT 
+            o.order_id,
+            COALESCE(r.customer_code, o.retailer_id) AS customer,
+            COALESCE(GROUP_CONCAT(p.name SEPARATOR ', '), '-') AS product,
+            COALESCE(SUM(oi.quantity), 0) AS qty,
+            o.total_amount,
+            o.order_status
+        FROM `order` o
+        LEFT JOIN retailer r ON o.retailer_id = r.retailer_id
+        LEFT JOIN order_item oi ON o.order_id = oi.order_id
+        LEFT JOIN product p ON oi.product_id = p.product_id
+        GROUP BY o.order_id
+        ORDER BY o.order_id DESC
+        LIMIT 10
+    """)
+    orders = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(orders)

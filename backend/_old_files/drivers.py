@@ -7,6 +7,35 @@ import mysql.connector
 
 drivers_bp = Blueprint('drivers', __name__)
 
+# ---------- GET SENSOR HISTORY FOR DRIVER ----------
+@drivers_bp.route('/api/driver/<int:driver_id>/sensor-history', methods=['GET'])
+@require_auth(['driver', 'admin'])
+def get_driver_sensor_history(driver_id):
+    """
+    Return all sensor readings from all deliveries assigned to this driver.
+    
+    Newest first. Limited to last 100 readings.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT 
+            sd.sensor_id,
+            sd.delivery_id,
+            sd.temperature,
+            sd.humidity,
+            sd.is_alert,
+            sd.reading_timestamp
+        FROM sensor_data sd
+        JOIN delivery d ON sd.delivery_id = d.delivery_id
+        WHERE d.driver_id = %s
+        ORDER BY sd.reading_timestamp DESC
+        LIMIT 100
+    """, (driver_id,))
+    readings = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(readings)
 
 @drivers_bp.route('/api/drivers', methods=['GET'])
 @require_auth(['admin'])
@@ -152,9 +181,11 @@ def assign_order_to_driver(driver_id):
 @drivers_bp.route('/api/driver/<int:driver_id>/deliveries', methods=['GET'])
 @require_auth(['admin', 'driver'])
 def get_driver_deliveries(driver_id):
-    """Return all deliveries assigned to a specific driver."""
+    """Return all deliveries assigned to a driver, grouped by delivery."""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
+
+    # Get deliveries
     cursor.execute("""
         SELECT 
             dl.delivery_id,
@@ -162,18 +193,28 @@ def get_driver_deliveries(driver_id):
             dl.delivery_status,
             r.name AS retailer_name,
             r.address AS retailer_address,
-            r.phone AS retailer_phone,
-            p.name AS product_name,
-            oi.quantity
+            r.phone AS retailer_phone
         FROM delivery dl
         LEFT JOIN `order` o ON dl.order_id = o.order_id
         LEFT JOIN retailer r ON o.retailer_id = r.retailer_id
-        LEFT JOIN order_item oi ON o.order_id = oi.order_id
-        LEFT JOIN product p ON oi.product_id = p.product_id
         WHERE dl.driver_id = %s
         ORDER BY dl.delivery_id DESC
     """, (driver_id,))
     deliveries = cursor.fetchall()
+
+    # Get items for each delivery
+    for d in deliveries:
+        cursor.execute("""
+            SELECT 
+                oi.quantity,
+                p.name AS product_name,
+                p.sku
+            FROM order_item oi
+            LEFT JOIN product p ON oi.product_id = p.product_id
+            WHERE oi.order_id = %s
+        """, (d['order_id'],))
+        d['items'] = cursor.fetchall()
+
     cursor.close()
     conn.close()
     return jsonify(deliveries)

@@ -169,9 +169,15 @@ def get_orders(retailer_id):
 @orders_bp.route('/api/orders/all', methods=['GET'])
 @require_auth(['admin'])
 def get_all_orders():
-    """Return all orders with sensor data for admin dashboard."""
+    """
+    Return all orders grouped by order ID.
+    
+    Each order includes a list of items and sensor data.
+    """
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
+
+    # First, get all orders with sensor data
     cursor.execute("""
         SELECT 
             r.customer_code,
@@ -179,17 +185,10 @@ def get_all_orders():
             o.order_date,
             o.total_amount,
             o.order_status,
-            oi.quantity,
-            oi.unit_price,
-            oi.subtotal,
-            p.name AS product_name,
-            p.sku,
             sd.temperature,
             sd.humidity,
             sd.is_alert
         FROM `order` o
-        LEFT JOIN order_item oi ON o.order_id = oi.order_id
-        LEFT JOIN product p ON oi.product_id = p.product_id
         LEFT JOIN retailer r ON o.retailer_id = r.retailer_id
         LEFT JOIN delivery d ON o.order_id = d.order_id
         LEFT JOIN (
@@ -201,6 +200,22 @@ def get_all_orders():
         ORDER BY o.order_date DESC
     """)
     orders = cursor.fetchall()
+
+    # Then get items for each order
+    for order in orders:
+        cursor.execute("""
+            SELECT 
+                oi.quantity,
+                oi.unit_price,
+                oi.subtotal,
+                p.name AS product_name,
+                p.sku
+            FROM order_item oi
+            LEFT JOIN product p ON oi.product_id = p.product_id
+            WHERE oi.order_id = %s
+        """, (order['order_id'],))
+        order['items'] = cursor.fetchall()
+
     cursor.close()
     conn.close()
     return jsonify(orders)

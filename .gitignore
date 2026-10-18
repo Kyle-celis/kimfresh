@@ -19,3 +19,10 @@ mobile-apps/**/.flutter-plugins
 .DS_Store
 Thumbs.db
 .env
+
+web-app-design/
+web-app-design.zip
+
+# Logs
+*.log
+backend/logs/

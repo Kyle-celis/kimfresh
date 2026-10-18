@@ -271,3 +271,13 @@ All API errors return consistent JSON:
 | 405 | Wrong HTTP method | `{"success": false, "message": "..."}` |
 | 429 | Rate limit hit | `{"success": false, "message": "Too many requests..."}` |
 | 500 | Unhandled error | `{"success": false, "message": "Internal server error"}` |
+
+## Stress Testing
+
+Tool: Apache Bench (ab)
+
+### Products Endpoint
+
+```bash
+ab -n 1000 -c 50 http://localhost:5000/api/products
+>>>>>>> security-updates
