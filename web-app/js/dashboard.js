@@ -1,103 +1,164 @@
-/**
- * Dashboard Controller.
- */
-
-const admin = requireAdmin();
-if (!admin) throw new Error('Not logged in');
-
 let chart = null;
 let currentWeekStart = getMonday(new Date());
 
 function getMonday(d) {
     const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
     const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(date.setDate(diff));
+    date.setDate(date.getDate() - day + (day === 0 ? -6 : 1));
+    return date;
 }
 
-function formatDateParam(d) {
-    return d.toISOString().split('T')[0];
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
 }
 
-async function loadSummary() {
-    const d = await apiGetSummary();
-    document.getElementById('c-products').textContent = d.total_products;
-    document.getElementById('c-drivers').textContent = d.total_drivers;
-    document.getElementById('c-orders').textContent = d.total_orders;
-    document.getElementById('c-pending').textContent = d.pending_orders;
-    document.getElementById('c-approved').textContent = d.approved_orders;
-    document.getElementById('c-rejected').textContent = d.rejected_orders;
-    document.getElementById('c-lowstock').textContent = d.low_stock;
-    document.getElementById('c-week').textContent = d.this_week;
+async function refreshPage() {
+    // 1. Fetch real data from your Flask backend
+    const orders = await getOrders();
+    const products = await getProducts();
+    const drivers = await getDrivers();
+
+    if (!orders || !products || !drivers) return;
+
+    // 2. Calculate the numbers based on YOUR database structure
+    const count = status => orders.filter(o => o.order_status === status).length;
+    
+    // Map your backend data to the dashboard cards
+    setText('c-pending', count('pending'));
+    setText('c-rejected', count('rejected'));
+    
+    // Note: Your backend might use slightly different status names. 
+    // If the numbers are 0, check the exact string (e.g., 'in_transit' vs 'out')
+    const waiting = orders.filter(o => o.order_status === 'approved' && !o.driver_id).length;
+    setText('c-waiting', waiting);
+
+    const active = orders.filter(o => o.order_status === 'in_transit' || o.order_status === 'waiting_for_pickup').length;
+    setText('c-active', active);
+
+    const delivered = orders.filter(o => o.order_status === 'delivered');
+    setText('c-delivered', delivered.length);
+    
+    // Calculate revenue
+    const revenue = delivered.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+    setText('c-revenue', '₱' + revenue.toFixed(2) + ' fulfilled');
+
+    // Products & Stock
+    const lowStock = products.filter(p => Number(p.stock_quantity) <= Number(p.reorder_level)).length;
+    setText('c-lowstock', lowStock);
+    setText('c-products', products.length + ' active products');
+
+    // Drivers
+    const available = drivers.filter(d => d.status === 'available').length;
+    setText('c-available', available);
+    setText('c-drivers', 'of ' + drivers.length + ' drivers');
+
+    // This Week
+    const weekStart = currentWeekStart.getTime();
+    const weekEnd = weekStart + (7 * 24 * 60 * 60 * 1000);
+    const thisWeek = orders.filter(o => {
+        const orderTime = new Date(o.order_date).getTime();
+        return orderTime >= weekStart && orderTime < weekEnd;
+    });
+    setText('c-week', thisWeek.length);
+
+    // 3. Update the Chart with real order dates
+    loadChart(orders);
+    
+    // 4. Update Recent Orders Table
+    showRecentOrders(orders, drivers);
 }
 
-async function loadChart() {
-    const weekStr = formatDateParam(currentWeekStart);
-    const d = await apiGetOrdersPerWeek(weekStr);
+function loadChart(orders) {
+    const days = [];
+    const counts = [];
 
-    document.getElementById('weekLabel').textContent = `${d.week_start} to ${d.week_end}`;
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(currentWeekStart);
+        d.setDate(d.getDate() + i);
+        days.push(d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }));
+        
+        // Count orders for this specific day
+        const count = orders.filter(o => {
+            if (!o.order_date) return false;
+            const oDate = new Date(o.order_date);
+            return oDate.getDate() === d.getDate() && oDate.getMonth() === d.getMonth();
+        }).length;
+        
+        counts.push(count);
+    }
 
-    const today = new Date();
-    const currentMonday = getMonday(today);
-    document.getElementById('nextBtn').disabled = currentWeekStart >= currentMonday;
+    // Update Week Text
+    const end = new Date(currentWeekStart);
+    end.setDate(end.getDate() + 6);
+    document.getElementById('weekRange').textContent =
+        currentWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' - ' +
+        end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    document.getElementById('nextBtn').disabled = currentWeekStart >= getMonday(new Date());
 
     if (chart) chart.destroy();
 
-    chart = new Chart(document.getElementById('ordersChart'), {
-        type: 'bar',
+    const canvas = document.getElementById('ordersChart');
+    if (!canvas) return;
+
+    const gradient = canvas.getContext('2d').createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(128, 0, 32, 0.35)');
+    gradient.addColorStop(1, 'rgba(128, 0, 32, 0)');
+
+    chart = new Chart(canvas, {
+        type: 'line',
         data: {
-            labels: d.days,
+            labels: days,
             datasets: [{
                 label: 'Orders',
-                data: d.counts,
-                backgroundColor: '#d32f2f'
+                data: counts,
+                borderColor: '#800020',
+                backgroundColor: gradient,
+                pointBackgroundColor: '#800020',
+                pointRadius: 4,
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true
             }]
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: false } }
+            animation: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
         }
     });
 }
 
-async function loadRecentOrders() {
-    const data = await apiGetRecentOrders();
-    const list = document.getElementById('recentOrders');
-    list.innerHTML = '';
-    if (!Array.isArray(data)) {
-        list.innerHTML = '<tr><td colspan="6">No data</td></tr>';
-        return;
-    }
-    data.forEach(o => {
-        list.innerHTML += `<tr>
-            <td>${escapeHtml(o.order_id)}</td>
-            <td>${escapeHtml(o.customer || '-')}</td>
-            <td>${escapeHtml(o.product || '-')}</td>
-            <td>${escapeHtml(o.qty || 0)}</td>
-            <td>${escapeHtml(o.total_amount)}</td>
-            <td>${escapeHtml(o.order_status)}</td>
-        </tr>`;
-    });
+function showRecentOrders(orders, drivers) {
+    const recent = [...orders].sort((a, b) => new Date(b.order_date) - new Date(a.order_date)).slice(0, 6);
+    
+    document.getElementById('recentOrders').innerHTML = recent.map(o => {
+        const driver = drivers.find(d => d.driver_id === o.driver_id);
+        const driverName = driver ? driver.name : '-';
+        
+        return `
+            <tr>
+                <td>#${escapeHtml(o.order_id)}</td>
+                <td>${escapeHtml(o.customer_code || 'Retailer')}</td>
+                <td>${escapeHtml(o.items ? o.items.length : 0)} items</td>
+                <td>₱${Number(o.total_amount || 0).toFixed(2)}</td>
+                <td>${escapeHtml(driverName)}</td>
+                <td><span class="status ${o.order_status}">${escapeHtml(o.order_status)}</span></td>
+            </tr>
+        `;
+    }).join('') || '<tr><td colspan="6">No orders yet</td></tr>';
 }
 
 function prevWeek() {
     currentWeekStart.setDate(currentWeekStart.getDate() - 7);
-    loadChart();
+    refreshPage();
 }
 
 function nextWeek() {
     currentWeekStart.setDate(currentWeekStart.getDate() + 7);
-    loadChart();
+    refreshPage();
 }
 
-// Load all
-loadSummary();
-loadChart();
-loadRecentOrders();
-
-// Auto-refresh
-setInterval(() => {
-    loadSummary();
-    loadChart();
-    loadRecentOrders();
-}, 10000);

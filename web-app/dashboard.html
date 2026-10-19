@@ -1,60 +1,168 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>KimFresh - Dashboard</title>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KimFresh - Admin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/flow.css">
+    <script src="js/escape.js"></script>
+    <script src="js/chart.umd.js"></script>
 </head>
 <body>
-<h2>KimFresh Admin</h2>
-<div class="menu">
-    <a href="dashboard.html">Dashboard</a>
-    <a href="orders.html">Orders</a>
-    <a href="drivers.html">Drivers</a>
-    <a href="products.html">Products</a>
-    <a href="#" onclick="logout()">Logout</a>
-</div>
-<hr>
+    <div class="dashboard-layout">
 
-<h3>Summary</h3>
-<div class="cards">
-    <div class="card"><h3>Products</h3><div class="value" id="c-products">-</div></div>
-    <div class="card"><h3>Drivers</h3><div class="value" id="c-drivers">-</div></div>
-    <div class="card"><h3>Total Orders</h3><div class="value" id="c-orders">-</div></div>
-    <div class="card"><h3>Pending</h3><div class="value" id="c-pending">-</div></div>
-    <div class="card"><h3>Approved</h3><div class="value" id="c-approved">-</div></div>
-    <div class="card"><h3>Rejected</h3><div class="value" id="c-rejected">-</div></div>
-    <div class="card"><h3>Low Stock</h3><div class="value" id="c-lowstock">-</div></div>
-    <div class="card"><h3>This Week</h3><div class="value" id="c-week">-</div></div>
-</div>
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <img src="logo.png" alt="KimFresh" class="logo">
+                <p>Administration</p>
+            </div>
 
-<h3>Orders Per Week</h3>
-<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-    <button onclick="prevWeek()">◀ Previous Week</button>
-    <span id="weekLabel" style="font-weight: bold;"></span>
-    <button onclick="nextWeek()" id="nextBtn">Next Week ▶</button>
-</div>
-<canvas id="ordersChart"></canvas>
+            <nav class="menu">
+                <a href="dashboard.html" class="active">Dashboard</a>
+                <a href="orders.html">Orders</a>
+                <a href="products.html">Products</a>
+                <a href="drivers.html">Drivers</a>
+            </nav>
+        </aside>
 
-<h3>Recent Orders (Last 10)</h3>
-<table>
-<thead>
-<tr>
-    <th>Order ID</th>
-    <th>Customer</th>
-    <th>Product</th>
-    <th>Qty</th>
-    <th>Total</th>
-    <th>Status</th>
-</tr>
-</thead>
-<tbody id="recentOrders"></tbody>
-</table>
+        <div class="main-area">
 
-<script src="js/escape.js"></script>
-<script src="js/api.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/dashboard.js"></script>
+            <header class="top-header">
+                <div class="profile-menu" id="profileMenu">
+                    <button type="button" class="user-profile profile-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="profileDropdown" onclick="toggleProfileMenu(event)">
+                        <div class="avatar" id="avatar">A</div>
+                        <div class="user-info">
+                            <p class="user-name" id="userName">Admin</p>
+                            <p class="user-role">Administrator</p>
+                        </div>
+                        <span class="profile-chevron" aria-hidden="true">⌄</span>
+                    </button>
+                    <div class="profile-dropdown" id="profileDropdown" hidden>
+                        <div class="dropdown-account">
+                            <span class="dropdown-account-label">SIGNED IN AS</span>
+                            <strong id="dropdownUserName">Admin</strong>
+                        </div>
+                        <button type="button" class="logout-btn" onclick="logout()"><span aria-hidden="true">↪</span> Log out</button>
+                    </div>
+                </div>
+            </header>
+
+            <main class="main-content">
+                <p class="overview-label">Overview</p>
+                <h1>Distribution Dashboard</h1>
+
+                <section class="cards-section">
+                    <a class="card" href="orders.html">
+                        <h3>Pending Orders</h3>
+                        <div class="value" id="c-pending">-</div>
+                        <p class="hint">Waiting for approval</p>
+                    </a>
+                    <a class="card" href="drivers.html">
+                        <h3>Awaiting Driver</h3>
+                        <div class="value" id="c-waiting">-</div>
+                        <p class="hint">Approved, no driver yet</p>
+                    </a>
+                    <a class="card" href="orders.html">
+                        <h3>Active Deliveries</h3>
+                        <div class="value" id="c-active">-</div>
+                        <p class="hint">Pickup + on the way</p>
+                    </a>
+                    <a class="card" href="orders.html">
+                        <h3>Delivered</h3>
+                        <div class="value" id="c-delivered">-</div>
+                        <p class="hint" id="c-revenue">&nbsp;</p>
+                    </a>
+                    <a class="card" href="products.html">
+                        <h3>Low / Out of Stock</h3>
+                        <div class="value" id="c-lowstock">-</div>
+                        <p class="hint" id="c-products">&nbsp;</p>
+                    </a>
+                    <a class="card" href="drivers.html">
+                        <h3>Available Drivers</h3>
+                        <div class="value" id="c-available">-</div>
+                        <p class="hint" id="c-drivers">&nbsp;</p>
+                    </a>
+                    <a class="card" href="orders.html">
+                        <h3>Orders This Week</h3>
+                        <div class="value" id="c-week">-</div>
+                        <p class="hint">Monday to Sunday</p>
+                    </a>
+                    <a class="card" href="orders.html">
+                        <h3>Rejected</h3>
+                        <div class="value" id="c-rejected">-</div>
+                        <p class="hint">All time</p>
+                    </a>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-head">
+                        <h3>Order Flow</h3>
+                        <span class="panel-note">Driver updates appear here automatically</span>
+                    </div>
+                    <div class="pipeline" id="pipeline"></div>
+                </section>
+
+                <section class="two-col">
+                    <div class="panel">
+                        <div class="panel-head">
+                            <h3>Delivery Monitoring</h3>
+                            <a href="drivers.html" class="panel-link">Drivers &rsaquo;</a>
+                        </div>
+                        <div id="deliveryList"></div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-head">
+                            <h3>Inventory Alerts</h3>
+                            <a href="products.html" class="panel-link">Products &rsaquo;</a>
+                        </div>
+                        <div id="stockList"></div>
+                    </div>
+                </section>
+
+                <section class="analytics-section">
+                    <div class="week-controls">
+                        <button onclick="prevWeek()">&#8249;</button>
+                        <h3>Orders Per Week</h3>
+                        <button onclick="nextWeek()" id="nextBtn">&#8250;</button>
+                        <span class="week-range" id="weekRange"></span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="ordersChart"></canvas>
+                    </div>
+                </section>
+
+                <section class="table-section">
+                    <h3>Recent Orders</h3>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Retailer</th>
+                                    <th>Items</th>
+                                    <th>Total</th>
+                                    <th>Driver</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentOrders"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
+
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- YOUR BACKEND SCRIPTS -->
+    <script src="js/store.js"></script>
+    <script src="js/dashboard.js"></script>
 </body>
 </html>

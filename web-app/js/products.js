@@ -1,123 +1,90 @@
-/**
- * Products Controller.
- */
-
-const admin = requireAdmin();
-if (!admin) throw new Error('Not logged in');
-
 let allProducts = [];
-let currentProductPage = 1;
-const PRODUCTS_PER_PAGE = 10;
-
-async function addProduct() {
-    const body = {
-        name: document.getElementById('pName').value,
-        sku: document.getElementById('pSku').value,
-        unit_price: document.getElementById('pPrice').value,
-        stock_quantity: document.getElementById('pStock').value,
-        reorder_level: document.getElementById('pReorder').value
-    };
-    const data = await apiAddProduct(body);
-    document.getElementById('addMsg').textContent = data.message;
-    loadProducts();
-}
 
 async function loadProducts() {
-    const data = await apiGetProducts();
+    const data = await getProducts();
+    if (!data) return;
+
     allProducts = data;
-    currentProductPage = 1;
-    renderProducts(data);
+    updateStats();
+    applyFilter();
 }
 
-async function loadAllProducts() {
-    const data = await apiGetAllProducts();
-    allProducts = data;
-    currentProductPage = 1;
-    renderProducts(data);
+function updateStats() {
+    const total = allProducts.length;
+    const low = allProducts.filter(p => Number(p.stock_quantity) <= Number(p.reorder_level)).length;
+    // If your backend has a status field for hidden products
+    const hidden = allProducts.filter(p => p.status === 'hidden').length;
+
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statLow').textContent = low;
+    document.getElementById('statHidden').textContent = hidden;
 }
 
-function renderProducts(products) {
-    const totalPages = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE));
-    if (currentProductPage > totalPages) currentProductPage = totalPages;
-    const start = (currentProductPage - 1) * PRODUCTS_PER_PAGE;
-    const pageItems = products.slice(start, start + PRODUCTS_PER_PAGE);
-
-    const list = document.getElementById('productList');
-    list.innerHTML = '';
-    if (pageItems.length === 0) {
-        list.innerHTML = '<tr><td colspan="8">No products found</td></tr>';
-    } else {
-        pageItems.forEach(p => {
-            const action = p.status === 'available'
-                ? `<button onclick="hideProduct(${p.product_id})">Hide</button>`
-                : `<button onclick="restoreProduct(${p.product_id})">Restore</button>`;
-            list.innerHTML += `<tr>
-                <td>${escapeHtml(p.product_id)}</td>
-                <td>${escapeHtml(p.name)}</td>
-                <td>${escapeHtml(p.sku)}</td>
-                <td>${escapeHtml(p.unit_price)}</td>
-                <td>${escapeHtml(p.stock_quantity || 0)}</td>
-                <td>${escapeHtml(p.reorder_level)}</td>
-                <td>${escapeHtml(p.status)}</td>
-                <td>${action}</td>
-            </tr>`;
-        });
-    }
-
-    renderProductPagination(totalPages);
-    window._currentProducts = products;
-}
-
-function renderProductPagination(totalPages) {
-    const el = document.getElementById('productPagination');
-    if (totalPages <= 1) { el.innerHTML = ''; return; }
-    let html = '';
-    if (currentProductPage > 1) html += `<button onclick="goToProductPage(${currentProductPage - 1})">◀ Prev</button>`;
-    for (let i = 1; i <= totalPages; i++) {
-        html += i === currentProductPage
-            ? `<button class="active">${i}</button>`
-            : `<button onclick="goToProductPage(${i})">${i}</button>`;
-    }
-    if (currentProductPage < totalPages) html += `<button onclick="goToProductPage(${currentProductPage + 1})">Next ▶</button>`;
-    el.innerHTML = html;
-}
-
-function goToProductPage(page) {
-    currentProductPage = page;
-    renderProducts(window._currentProducts || []);
-}
-
-function handleFilter() {
-    currentProductPage = 1;
-    document.getElementById('productFilter').value === 'all' ? loadAllProducts() : loadProducts();
-}
-
-async function hideProduct(id) {
-    if (!confirm('Hide this product?')) return;
-    const data = await apiHideProduct(id);
-    alert(data.message);
-    loadProducts();
-}
-
-async function restoreProduct(id) {
-    const data = await apiRestoreProduct(id);
-    alert(data.message);
-    loadAllProducts();
-}
-
-function searchProducts() {
-    const q = document.getElementById('searchBox').value.toLowerCase();
-    const filtered = allProducts.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        p.status.toLowerCase().includes(q)
-    );
-    currentProductPage = 1;
-    renderProducts(filtered);
-}
-
-loadProducts();
-setInterval(() => {
+function applyFilter() {
     const filter = document.getElementById('productFilter').value;
-    filter === 'all' ? loadAllProducts() : loadProducts();
-}, 10000);
+    const query = document.getElementById('searchBox').value.toLowerCase();
+    
+    let filtered = allProducts;
+
+    if (filter === 'active') {
+        filtered = filtered.filter(p => p.status !== 'hidden');
+    } else if (filter === 'low') {
+        filtered = filtered.filter(p => Number(p.stock_quantity) <= Number(p.reorder_level));
+    }
+
+    if (query) {
+        filtered = filtered.filter(p => 
+            p.name.toLowerCase().includes(query) || 
+            (p.sku && p.sku.toLowerCase().includes(query))
+        );
+    }
+
+    renderTable(filtered);
+}
+
+function renderTable(products) {
+    const list = document.getElementById('productList');
+    if (!list) return;
+
+    if (products.length === 0) {
+        list.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 30px;">No products found</td></tr>';
+        return;
+    }
+
+    list.innerHTML = products.map(p => {
+        const isLow = Number(p.stock_quantity) <= Number(p.reorder_level);
+        const stockLabel = isLow ? 'Low Stock' : 'In Stock';
+        const stockClass = isLow ? 'low-stock' : 'in-stock';
+        
+        return `
+            <tr>
+                <td>
+                    <div class="product-name">${escapeHtml(p.name)}</div>
+                    <div class="product-sku">${escapeHtml(p.sku || 'N/A')}</div>
+                </td>
+                <td class="price">₱${Number(p.unit_price).toFixed(2)}</td>
+                <td>${p.stock_quantity} <span class="status ${stockClass}">${stockLabel}</span></td>
+                <td>${p.reorder_level}</td>
+                <td><span class="status ${p.status || 'available'}">${p.status || 'Available'}</span></td>
+                <td>
+                    <div class="actions">
+                        <button class="edit-btn" onclick="editProduct(${p.product_id})">Edit</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function editProduct(id) {
+    alert('Edit feature coming soon for product: ' + id);
+}
+
+// Search listener
+document.getElementById('searchBox')?.addEventListener('input', applyFilter);
+document.getElementById('productFilter')?.addEventListener('change', applyFilter);
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadProducts();
+    setInterval(loadProducts, 5000);
+});

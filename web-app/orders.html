@@ -1,39 +1,116 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>KimFresh - Orders</title>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="css/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KimFresh - Orders</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FIXED: Removed the 'css/' folder path -->
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/orders.css">
+    <link rel="stylesheet" href="css/flow.css">
+    <script src="js/escape.js"></script>
 </head>
 <body>
-<h2>KimFresh Admin</h2>
-<div class="menu">
-    <a href="dashboard.html">Dashboard</a>
-    <a href="orders.html">Orders</a>
-    <a href="drivers.html">Drivers</a>
-    <a href="products.html">Products</a>
-    <a href="#" onclick="logout()">Logout</a>
-</div>
-<hr>
+    <div class="dashboard-layout">
 
-<h3>Orders</h3>
-<div class="filters">
-    <select id="statusFilter" onchange="filterOrders()">
-        <option value="all">All Status</option>
-        <option value="pending">Pending</option>
-        <option value="approved">Approved</option>
-        <option value="rejected">Rejected</option>
-        <option value="delivered">Delivered</option>
-    </select>
-    <input type="text" id="searchBox" placeholder="Search by customer, product, or SKU..." oninput="filterOrders()">
-</div>
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <img src="logo.png" alt="KimFresh" class="logo">
+                <p>Administration</p>
+            </div>
 
-<div id="orderList" class="order-grid"></div>
-<div id="orderPagination" class="pagination"></div>
+            <nav class="menu">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="orders.html" class="active">Orders</a>
+                <a href="products.html">Products</a>
+                <a href="drivers.html">Drivers</a>
+            </nav>
+        </aside>
 
-<script src="js/escape.js"></script>
-<script src="js/api.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/orders.js"></script>
+        <div class="main-area">
+
+            <header class="top-header">
+                <div class="profile-menu" id="profileMenu">
+                    <button type="button" class="user-profile profile-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="profileDropdown" onclick="toggleProfileMenu(event)">
+                        <div class="avatar" id="avatar">A</div>
+                        <div class="user-info">
+                            <p class="user-name" id="userName">Admin</p>
+                            <p class="user-role">Administrator</p>
+                        </div>
+                        <span class="profile-chevron" aria-hidden="true">⌄</span>
+                    </button>
+                    <div class="profile-dropdown" id="profileDropdown" hidden>
+                        <div class="dropdown-account">
+                            <span class="dropdown-account-label">SIGNED IN AS</span>
+                            <strong id="dropdownUserName">Admin</strong>
+                        </div>
+                        <button type="button" class="logout-btn" onclick="logout()"><span aria-hidden="true">↪</span> Log out</button>
+                    </div>
+                </div>
+            </header>
+
+            <main class="main-content">
+                <p class="overview-label">Manage</p>
+                <h1>Orders</h1>
+                <p class="page-sub">Review retailer orders. Approve or reject pending requests; delivery progress and cold-chain readings are monitored here.</p>
+
+                <div class="toolbar">
+                    <div class="tabs">
+                        <button class="tab active" id="tab-all" onclick="setStatus('all')">All <span id="count-all">0</span></button>
+                        <button class="tab" id="tab-pending" onclick="setStatus('pending')">Pending <span id="count-pending">0</span></button>
+                        <button class="tab" id="tab-approved" onclick="setStatus('approved')">Approved <span id="count-approved">0</span></button>
+                        <button class="tab" id="tab-waiting_for_pickup" onclick="setStatus('waiting_for_pickup')">In Pickup <span id="count-waiting_for_pickup">0</span></button>
+                        <button class="tab" id="tab-in_transit" onclick="setStatus('in_transit')">Out for Delivery <span id="count-in_transit">0</span></button>
+                        <button class="tab" id="tab-delivered" onclick="setStatus('delivered')">Delivered <span id="count-delivered">0</span></button>
+                        <button class="tab" id="tab-rejected" onclick="setStatus('rejected')">Rejected <span id="count-rejected">0</span></button>
+                    </div>
+
+                    <input type="text" id="searchBox"
+                           placeholder="Search retailer, order #..."
+                           oninput="filterOrders()">
+                </div>
+
+                <div class="orders-box">
+                    <table class="orders-table">
+                        <thead>
+                            <tr>
+                                <th>Order</th>
+                                <th>Retailer</th>
+                                <th>Date</th>
+                                <th>Items</th>
+                                <th class="num">Total</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="orderList"></tbody>
+                    </table>
+                </div>
+
+                <div id="orderPagination"></div>
+            </main>
+
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- Drawer for Viewing Orders -->
+    <div class="overlay" id="overlay" onclick="closeOrder()"></div>
+    <aside class="drawer" id="drawer">
+        <div class="drawer-head">
+            <h2 id="drawerTitle">Order</h2>
+            <button class="drawer-close" onclick="closeOrder()">&times;</button>
+        </div>
+        <div class="drawer-body" id="drawerBody"></div>
+        <div class="drawer-foot" id="drawerFoot"></div>
+    </aside>
+
+    <!-- FIXED: Removed the 'js/' folder path -->
+    <script src="js/store.js"></script>
+    <script src="js/orders.js"></script>
 </body>
 </html>

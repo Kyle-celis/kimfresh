@@ -1,134 +1,71 @@
-/**
- * Drivers Controller.
- */
-
-const admin = requireAdmin();
-if (!admin) throw new Error('Not logged in');
-
-let allDrivers = [];
-let currentDriverPage = 1;
-const DRIVERS_PER_PAGE = 10;
-
 async function loadDrivers() {
-    const orders = await apiGetAllOrders();
-    window._allOrders = orders;
+    const drivers = await getDrivers();
+    const orders = await getOrders();
+    
+    if (!drivers || !orders) return;
 
-    const data = await apiGetDrivers();
-    allDrivers = data;
-    renderDriverPage();
+    // Update Stats
+    const total = drivers.length;
+    const available = drivers.filter(d => d.status === 'available').length;
+    const onDelivery = drivers.filter(d => d.status === 'on_delivery').length;
+    // Note: If your database doesn't have an 'in_pickup' status, we just calculate it from assigned orders
+    const inPickup = drivers.filter(d => d.status === 'on_delivery').length; 
+
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statAvailable').textContent = available;
+    document.getElementById('statPickup').textContent = inPickup;
+    document.getElementById('statDelivery').textContent = onDelivery;
+
+    renderDrivers(drivers, orders);
 }
 
-function renderDriverPage() {
-    const totalPages = Math.max(1, Math.ceil(allDrivers.length / DRIVERS_PER_PAGE));
-    if (currentDriverPage > totalPages) currentDriverPage = totalPages;
-    const start = (currentDriverPage - 1) * DRIVERS_PER_PAGE;
-    renderDrivers(allDrivers.slice(start, start + DRIVERS_PER_PAGE));
-    renderDriverPagination(totalPages);
-}
-
-function renderDriverPagination(totalPages) {
-    const el = document.getElementById('driverPagination');
-    if (totalPages <= 1) { el.innerHTML = ''; return; }
-    let html = '';
-    if (currentDriverPage > 1) html += `<button onclick="goToDriverPage(${currentDriverPage - 1})">◀ Prev</button>`;
-    for (let i = 1; i <= totalPages; i++) {
-        html += i === currentDriverPage
-            ? `<button class="active">${i}</button>`
-            : `<button onclick="goToDriverPage(${i})">${i}</button>`;
-    }
-    if (currentDriverPage < totalPages) html += `<button onclick="goToDriverPage(${currentDriverPage + 1})">Next ▶</button>`;
-    el.innerHTML = html;
-}
-
-function goToDriverPage(page) {
-    currentDriverPage = page;
-    renderDriverPage();
-}
-
-function renderDrivers(data) {
+function renderDrivers(drivers, orders) {
     const list = document.getElementById('driverList');
-    list.innerHTML = '';
-    if (data.length === 0) {
-        list.innerHTML = '<p>No drivers</p>';
-        return;
-    }
-    const orders = window._allOrders || [];
+    if (!list) return;
 
-    data.forEach(d => {
-        let assignedHtml = '';
-        let assignedOrderIds = [];
-        let previousHtml = '';
-
-        if (d.assigned_orders) {
-            d.assigned_orders.split(',').map(s => s.trim()).forEach(oStr => {
-                const match = oStr.match(/#(\d+)/);
-                if (!match) return;
-                const oid = parseInt(match[1]);
-                const order = orders.find(o => o.order_id === oid);
-                if (!order) return;
-
-                const productList = (order.items || [])
-                    .map(i => `${escapeHtml(i.product_name)} (x${i.quantity})`)
-                    .join(', ');
-
-                if (order.order_status !== 'delivered') {
-                    assignedOrderIds.push(oid);
-                    assignedHtml += `<div class="order-history-item"><strong>Order #${order.order_id}</strong> - ${productList} - ${escapeHtml(order.order_status)}</div>`;
-                } else {
-                    previousHtml += `<div class="order-history-item"><strong>Order #${order.order_id}</strong> - ${productList}</div>`;
-                }
-            });
+    list.innerHTML = drivers.map(d => {
+        // Find if this driver has an active order
+        const activeOrder = orders.find(o => o.driver_id === d.driver_id && ['approved', 'waiting_for_pickup', 'in_transit'].includes(o.order_status));
+        
+        let statusClass = 'available';
+        let statusLabel = 'Available';
+        
+        if (d.status === 'on_delivery') {
+            statusClass = 'on-delivery';
+            statusLabel = 'On Delivery';
         }
 
-        const isPending = d.account_status === 'pending';
-        const isRejected = d.account_status === 'rejected';
-
-        let actionHtml = '';
-        if (isPending) {
-            actionHtml = `
-                <div class="driver-actions">
-                    <button class="primary" onclick="approveDriver(${d.driver_id})">Approve</button>
-                    <button onclick="rejectDriver(${d.driver_id})">Reject</button>
+        return `
+            <div class="driver-card">
+                <div class="driver-top">
+                    <div class="driver-avatar">${escapeHtml(d.name.charAt(0))}</div>
+                    <div class="driver-title">
+                        <div class="driver-name">${escapeHtml(d.name)}</div>
+                        <div class="driver-license">${escapeHtml(d.license_number || 'No license')}</div>
+                    </div>
+                    <span class="status ${statusClass}">${statusLabel}</span>
                 </div>
-            `;
-        } else if (isRejected) {
-            actionHtml = `<div class="driver-actions"><em>Rejected — hidden after 7 days</em></div>`;
-        }
-
-        list.innerHTML += `
-            <div class="driver-card ${escapeHtml(d.account_status || '')}">
-                <div class="driver-header">
-                    <div class="driver-name">${escapeHtml(d.name)}</div>
-                    <div class="driver-status ${escapeHtml(d.account_status || '')}">${escapeHtml(d.account_status || d.status)}</div>
+                <div class="driver-contact">
+                    <p>${escapeHtml(d.email || 'No email')}</p>
+                    <p>${escapeHtml(d.phone)}</p>
                 </div>
-                <div class="driver-info">${escapeHtml(d.email || '-')} | ${escapeHtml(d.phone || '-')}</div>
-                <div class="driver-info">${escapeHtml(d.license_number || '-')}</div>
-
-                ${actionHtml}
-
-                ${!isPending && assignedOrderIds.length > 0
-                    ? `<div class="delivered-orders"><strong>Assigned Orders:</strong>${assignedHtml}</div>`
-                    : (isPending ? '' : '<div class="delivered-orders">No orders assigned</div>')}
-
-                ${previousHtml ? `<div class="order-history"><h4>Previous Orders</h4>${previousHtml}</div>` : ''}
+                <div class="driver-section">
+                    <h4>Current Order</h4>
+                    ${activeOrder ? `
+                        <div class="order-item">
+                            <div>
+                                <strong>Order #${activeOrder.order_id}</strong>
+                                <small>₱${Number(activeOrder.total_amount).toFixed(2)}</small>
+                            </div>
+                        </div>
+                    ` : '<p class="empty-text">No active order</p>'}
+                </div>
             </div>
         `;
-    });
+    }).join('');
 }
 
-async function approveDriver(driverId) {
-    if (!confirm('Approve this driver?')) return;
-    const data = await apiApproveDriver(driverId);
-    alert(data.message);
+document.addEventListener('DOMContentLoaded', () => {
     loadDrivers();
-}
-
-async function rejectDriver(driverId) {
-    if (!confirm('Reject this driver? They will be hidden after 7 days.')) return;
-    const data = await apiRejectDriver(driverId);
-    alert(data.message);
-    loadDrivers();
-}
-
-loadDrivers();
-setInterval(loadDrivers, 10000);
+    setInterval(loadDrivers, 5000);
+});

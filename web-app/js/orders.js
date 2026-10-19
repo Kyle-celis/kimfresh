@@ -1,181 +1,237 @@
-/**
- * Orders Controller.
- */
-
-const admin = requireAdmin();
-if (!admin) throw new Error('Not logged in');
+// --- XSS PROTECTION ---
+function escapeHtml(unsafe) {
+    if (unsafe === null || unsafe === undefined) return '';
+    return String(unsafe)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 let allOrders = [];
-let currentPage = 1;
-const PER_PAGE = 10;
+let currentStatus = 'all';
 
-function formatDate(dateStr) {
-    if (!dateStr) return '-';
-    const d = new Date(dateStr);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const hours = String(d.getHours()).padStart(2, '0');
-    const mins = String(d.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day} ${hours}:${mins}`;
+const STATUSES = ['all', 'pending', 'approved', 'waiting_for_pickup', 'in_transit', 'delivered', 'rejected'];
+
+function getToken() {
+    return localStorage.getItem('token');
 }
 
-async function loadOrders(status, query) {
-    const data = await apiGetAllOrders();
-    allOrders = data;
-    if (status !== undefined && query !== undefined) {
-        applyFilter(status, query);
-    } else {
-        renderOrders(data);
-    }
+async function loadOrders() {
+    const data = await getOrders();
+    if (!data) return;
+
+    allOrders = data.sort((a, b) => new Date(b.order_date) - new Date(a.order_date));
+    updateCounts();
+    filterOrders();
 }
 
-function applyFilter(status, query) {
+function updateCounts() {
+    STATUSES.forEach(status => {
+        const count = status === 'all' ? allOrders.length : allOrders.filter(o => (o.order_status || '').toLowerCase() === status).length;
+        const el = document.getElementById('count-' + status);
+        if (el) el.textContent = count;
+    });
+}
+
+function setStatus(status) {
+    currentStatus = status;
+    STATUSES.forEach(s => {
+        const tab = document.getElementById('tab-' + s);
+        if (tab) tab.classList.toggle('active', s === status);
+    });
+    filterOrders();
+}
+
+function filterOrders() {
+    const searchBox = document.getElementById('searchBox');
+    const query = searchBox ? searchBox.value.toLowerCase().trim() : '';
+    
     let filtered = allOrders;
-    if (status && status !== 'all') {
-        filtered = filtered.filter(o => o.order_status === status);
+
+    if (currentStatus !== 'all') {
+        filtered = filtered.filter(o => (o.order_status || '').toLowerCase() === currentStatus.toLowerCase());
     }
+
     if (query) {
-        const q = query.toLowerCase();
         filtered = filtered.filter(o => {
-            const customerMatch = o.customer_code && o.customer_code.toLowerCase().includes(q);
-            const itemMatch = o.items && o.items.some(i =>
-                (i.product_name && i.product_name.toLowerCase().includes(q)) ||
-                (i.sku && i.sku.toLowerCase().includes(q))
-            );
-            return customerMatch || itemMatch;
+            return (o.customer_code && o.customer_code.toLowerCase().includes(query)) ||
+                   (o.order_id.toString().includes(query));
         });
     }
-    window._filteredOrders = filtered;
-    currentPage = 1;
-    renderPage();
-}
 
-function renderPage() {
-    const filtered = window._filteredOrders || [];
-    const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
-    if (currentPage > totalPages) currentPage = totalPages;
-    const start = (currentPage - 1) * PER_PAGE;
-    renderOrders(filtered.slice(start, start + PER_PAGE));
-    renderPagination(totalPages);
-}
-
-function renderPagination(totalPages) {
-    const el = document.getElementById('orderPagination');
-    if (totalPages <= 1) { el.innerHTML = ''; return; }
-    let html = '';
-    if (currentPage > 1) html += `<button onclick="goToPage(${currentPage - 1})">◀ Prev</button>`;
-    for (let i = 1; i <= totalPages; i++) {
-        html += i === currentPage
-            ? `<button class="active">${i}</button>`
-            : `<button onclick="goToPage(${i})">${i}</button>`;
-    }
-    if (currentPage < totalPages) html += `<button onclick="goToPage(${currentPage + 1})">Next ▶</button>`;
-    el.innerHTML = html;
-}
-
-function goToPage(page) {
-    currentPage = page;
-    renderPage();
+    renderOrders(filtered);
 }
 
 function renderOrders(orders) {
     const list = document.getElementById('orderList');
-    list.innerHTML = '';
+    if (!list) return;
+
     if (orders.length === 0) {
-        list.innerHTML = '<p>No orders</p>';
+        list.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 30px;">No orders found</td></tr>';
         return;
     }
-    orders.forEach(o => {
-        const alert = o.is_alert === true || o.is_alert === 1;
-        const cardClass = alert ? 'order-card alert' : 'order-card';
 
-        let itemsHtml = '';
-        if (o.items && o.items.length > 0) {
-            o.items.forEach(item => {
-                itemsHtml += `<div class="order-item">• ${escapeHtml(item.product_name)} (x${item.quantity}) - ₱${escapeHtml(item.subtotal)}</div>`;
-            });
+    list.innerHTML = orders.map(o => {
+        const orderId = o.order_id || o.id || 'N/A';
+        const customer = o.customer_code || o.retailer_name || o.customer || 'Retailer';
+        
+        let itemsCount = 0;
+        if (Array.isArray(o.items)) {
+            itemsCount = o.items.reduce((sum, i) => sum + Number(i.quantity || i.qty || 0), 0);
+        } else if (o.items) {
+            itemsCount = Number(o.items);
         }
 
-        let tempHtml = '';
-        if (o.temperature) {
-            tempHtml = `<div class="temp-info ${alert ? 'alert-text' : ''}">Temp: ${escapeHtml(o.temperature)}°C | Humidity: ${escapeHtml(o.humidity)}%</div>`;
+        const total = Number(o.total_amount || o.total || 0).toFixed(2);
+        const displayStatus = (o.order_status || 'Unknown').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+        return `
+            <tr>
+                <td><span class="order-no">#${escapeHtml(orderId)}</span></td>
+                <td>${escapeHtml(customer)}</td>
+                <td>${formatDate(o.order_date || o.date, true)}</td>
+                <td>${itemsCount} items</td>
+                <td class="num">₱${total}</td>
+                <td><span class="status-pill ${o.order_status}">${displayStatus}</span></td>
+                <td><button class="view-btn" onclick="viewOrder(${orderId})">View</button></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function viewOrder(id) {
+    document.getElementById('overlay').classList.add('show');
+    document.getElementById('drawer').classList.add('show');
+    document.getElementById('drawerTitle').textContent = `Order #${id}`;
+    document.getElementById('drawerBody').innerHTML = '<p style="text-align:center; padding: 20px;">Loading...</p>';
+    document.getElementById('drawerFoot').innerHTML = '';
+
+    try {
+        const token = getToken();
+        if (!token) {
+            window.location.href = 'login.html';
+            return;
         }
 
-        list.innerHTML += `
-            <div class="${cardClass}">
-                <div class="order-header">
-                    <div>
-                        <div class="order-id">Order #${escapeHtml(o.order_id)}</div>
-                        <div class="order-meta">Customer: ${escapeHtml(o.customer_code || '-')}</div>
-                        <div class="order-meta">${escapeHtml(formatDate(o.order_date))}</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <div class="order-total">₱${escapeHtml(o.total_amount)}</div>
-                        <div class="order-status">${escapeHtml(o.order_status)}</div>
-                    </div>
-                </div>
+        // FIXED: Added /single/ to the route
+        const res = await fetch(`/api/orders/single/${id}`, {
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (res.status === 401 || res.status === 403) {
+            window.location.href = 'login.html';
+            return;
+        }
 
-                <div class="order-items">
-                    ${itemsHtml}
-                </div>
+        const order = await res.json();
+        if (!res.ok) throw new Error(order.message || 'Failed to load');
 
-                ${tempHtml}
+        const date = formatDate(order.order_date, true);
+        const items = order.items || [];
+        
+        let itemsHtml = items.map(item => `
+            <tr>
+                <td>${escapeHtml(item.product_name)}</td>
+                <td class="num">${item.quantity}</td>
+                <td class="num">₱${Number(item.unit_price || 0).toFixed(2)}</td>
+                <td class="num">₱${Number(item.subtotal || 0).toFixed(2)}</td>
+            </tr>
+        `).join('');
 
-                <div class="order-meta" style="margin-top:8px;">
-                    Driver: <strong id="driver-${o.order_id}">-</strong>
-                </div>
-
-                <div class="order-actions">
-                    ${o.order_status === 'pending' ? `
-                        <button onclick="updateStatus(${o.order_id}, 'approved')">Approve</button>
-                        <button onclick="updateStatus(${o.order_id}, 'rejected')">Reject</button>
-                    ` : ''}
-                    ${o.order_status === 'approved' ? `
-                        <button onclick="changeDriver(${o.order_id})">Change Driver</button>
-                    ` : ''}
+        let bodyHtml = `
+            <div class="d-section">
+                <p class="d-title">Order Information</p>
+                <div class="info-grid">
+                    <div><label>Order ID</label><p>#${order.order_id || id}</p></div>
+                    <div><label>Retailer</label><p>${escapeHtml(order.customer_code || 'N/A')}</p></div>
+                    <div><label>Date</label><p>${escapeHtml(date)}</p></div>
+                    <div><label>Status</label><p><span class="status-pill ${order.order_status || 'pending'}">${(order.order_status || 'pending').replace(/_/g, ' ').toUpperCase()}</span></p></div>
                 </div>
             </div>
+
+            <div class="d-section">
+                <p class="d-title">Items Ordered</p>
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th class="num">Qty</th>
+                            <th class="num">Price</th>
+                            <th class="num">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>${itemsHtml || '<tr><td colspan="4">No items found</td></tr>'}</tbody>
+                </table>
+                <div class="sum-row total"><span>Total Amount</span><strong>₱${Number(order.total_amount || 0).toFixed(2)}</strong></div>
+            </div>
         `;
+        document.getElementById('drawerBody').innerHTML = bodyHtml;
 
-        loadDeliveryForOrder(o.order_id);
-    });
-}
-
-async function changeDriver(orderId) {
-    const driverId = prompt('Enter new driver ID:');
-    if (!driverId) return;
-    const data = await apiReassignOrder(orderId, parseInt(driverId));
-    alert(data.message);
-    filterOrders();
-    // Reload driver name after short delay
-    setTimeout(() => loadDeliveryForOrder(orderId), 500);
-}
-
-async function loadDeliveryForOrder(orderId) {
-    try {
-        const d = await apiGetOrderDelivery(orderId);
-        const cell = document.getElementById(`driver-${orderId}`);
-        if (cell && d && d.driver_name) {
-            cell.textContent = d.driver_name;
+        const foot = document.getElementById('drawerFoot');
+        if (order.order_status === 'pending') {
+            foot.innerHTML = `
+                <button class="reject-btn" onclick="rejectIt(${id})">&times; Reject</button>
+                <button class="approve-btn" onclick="approveIt(${id})">&#10003; Approve</button>
+            `;
+            foot.style.display = 'flex';
+        } else {
+            foot.style.display = 'none';
         }
-    } catch (e) {}
+
+    } catch (err) {
+        document.getElementById('drawerBody').innerHTML = `<p style="color: red; padding: 20px;">Error: ${err.message}</p>`;
+    }
 }
 
-function filterOrders() {
-    applyFilter(
-        document.getElementById('statusFilter').value,
-        document.getElementById('searchBox').value
-    );
+function closeOrder() {
+    document.getElementById('overlay').classList.remove('show');
+    document.getElementById('drawer').classList.remove('show');
 }
 
-async function updateStatus(orderId, status) {
-    const data = await apiUpdateOrderStatus(orderId, status);
-    alert(data.message);
-    filterOrders();
+async function approveIt(id) {
+    // FIXED: Using /api/orders/single/<id>/approve
+    const res = await fetch(`/api/orders/single/${id}/approve`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+    });
+    if (res.ok) {
+        closeOrder();
+        loadOrders(); 
+        showToast("Order Approved!");
+    } else {
+        alert("Failed to approve order.");
+    }
 }
 
-loadOrders();
-setInterval(() => {
-    filterOrders();
-}, 10000);
+async function rejectIt(id) {
+    if(!confirm('Are you sure you want to reject this order?')) return;
+    // FIXED: Using /api/orders/single/<id>/reject
+    const res = await fetch(`/api/orders/single/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+    });
+    if (res.ok) {
+        closeOrder();
+        loadOrders();
+        showToast("Order Rejected!");
+    } else {
+        alert("Failed to reject order.");
+    }
+}
+
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    if(!toast) return;
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadOrders();
+});

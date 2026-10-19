@@ -124,3 +124,23 @@ def update_order_status(order_id):
         "auto_assigned": auto_assigned,
         "assigned_driver": assigned_driver
     })
+
+@orders_bp.route('/api/orders/single/<int:order_id>', methods=['GET'])
+@require_auth(['admin'])
+def get_single_order(order_id):
+    order = order_model.get_order_by_id(order_id)
+    if not order:
+        return jsonify({"success": False, "message": "Order not found"}), 404
+    return jsonify(order)
+
+@orders_bp.route('/api/orders/single/<int:order_id>/approve', methods=['POST'])
+@require_auth(['admin'])
+def approve_single_order(order_id):
+    order_model.update_order_status(order_id, 'approved')
+    return jsonify({"success": True, "message": "Order approved"})
+
+@orders_bp.route('/api/orders/single/<int:order_id>/reject', methods=['POST'])
+@require_auth(['admin'])
+def reject_single_order(order_id):
+    order_model.update_order_status(order_id, 'rejected')
+    return jsonify({"success": True, "message": "Order rejected"})
