@@ -24,7 +24,7 @@ async function loadDrivers() {
         allOrders = await ordersRes.json();
 
         updateStats();
-        renderDrivers(); // Call the render function directly
+        renderDrivers(); 
 
     } catch (err) {
         console.error("Error loading drivers:", err);
@@ -56,12 +56,12 @@ function renderDrivers() {
 
     let filtered = allDrivers;
 
-    // 1. Apply Status Filter
+    
     if (filter !== 'all') {
         filtered = filtered.filter(d => d.status === filter);
     }
 
-    // 2. Apply Search Text
+    
     if (query) {
         filtered = filtered.filter(d => 
             (d.name || '').toLowerCase().includes(query) ||
@@ -128,7 +128,7 @@ function renderDrivers() {
     }).join('');
 }
 
-// --- EVENT LISTENERS ---
+
 document.getElementById('searchBox')?.addEventListener('input', renderDrivers);
 document.getElementById('statusFilter')?.addEventListener('change', renderDrivers);
 

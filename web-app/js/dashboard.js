@@ -15,22 +15,22 @@ function setText(id, value) {
 }
 
 async function refreshPage() {
-    // 1. Fetch real data from your Flask backend
+    
     const orders = await getOrders();
     const products = await getProducts();
     const drivers = await getDrivers();
 
     if (!orders || !products || !drivers) return;
 
-    // 2. Calculate the numbers based on YOUR database structure
+    
     const count = status => orders.filter(o => o.order_status === status).length;
     
-    // Map your backend data to the dashboard cards
+    
     setText('c-pending', count('pending'));
     setText('c-rejected', count('rejected'));
     
-    // Note: Your backend might use slightly different status names. 
-    // If the numbers are 0, check the exact string (e.g., 'in_transit' vs 'out')
+    
+    
     const waiting = orders.filter(o => o.order_status === 'approved' && !o.driver_id).length;
     setText('c-waiting', waiting);
 
@@ -40,21 +40,21 @@ async function refreshPage() {
     const delivered = orders.filter(o => o.order_status === 'delivered');
     setText('c-delivered', delivered.length);
     
-    // Calculate revenue
+    
     const revenue = delivered.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
     setText('c-revenue', '₱' + revenue.toFixed(2) + ' fulfilled');
 
-    // Products & Stock
+    
     const lowStock = products.filter(p => Number(p.stock_quantity) <= Number(p.reorder_level)).length;
     setText('c-lowstock', lowStock);
     setText('c-products', products.length + ' active products');
 
-    // Drivers
+    
     const available = drivers.filter(d => d.status === 'available').length;
     setText('c-available', available);
     setText('c-drivers', 'of ' + drivers.length + ' drivers');
 
-    // This Week
+    
     const weekStart = currentWeekStart.getTime();
     const weekEnd = weekStart + (7 * 24 * 60 * 60 * 1000);
     const thisWeek = orders.filter(o => {
@@ -63,10 +63,10 @@ async function refreshPage() {
     });
     setText('c-week', thisWeek.length);
 
-    // 3. Update the Chart with real order dates
+    
     loadChart(orders);
     
-    // 4. Update Recent Orders Table
+    
     showRecentOrders(orders, drivers);
 }
 
@@ -79,7 +79,7 @@ function loadChart(orders) {
         d.setDate(d.getDate() + i);
         days.push(d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }));
         
-        // Count orders for this specific day
+        
         const count = orders.filter(o => {
             if (!o.order_date) return false;
             const oDate = new Date(o.order_date);
@@ -89,7 +89,7 @@ function loadChart(orders) {
         counts.push(count);
     }
 
-    // Update Week Text
+    
     const end = new Date(currentWeekStart);
     end.setDate(end.getDate() + 6);
     document.getElementById('weekRange').textContent =

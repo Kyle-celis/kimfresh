@@ -158,16 +158,14 @@ def reduce_stock(product_id, new_quantity):
     conn.close()
 
 def get_order_by_id(order_id):
-    """Fetch a single order by ID (including items and retailer code)."""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
-    # 1. Get the order
     cursor.execute("SELECT * FROM `order` WHERE order_id = %s", (order_id,))
     order = cursor.fetchone()
     
     if order:
-        # 2. Get the items
+        # 1. Get the items
         cursor.execute("""
             SELECT oi.quantity, oi.unit_price, oi.subtotal, p.name AS product_name 
             FROM order_item oi
@@ -176,14 +174,21 @@ def get_order_by_id(order_id):
         """, (order_id,))
         order['items'] = cursor.fetchall()
         
-        # 3. Get the customer code explicitly using the retailer_id
+        # 2. Get customer code
         cursor.execute("SELECT customer_code FROM retailer WHERE retailer_id = %s", (order['retailer_id'],))
         retailer = cursor.fetchone()
-        
         if retailer:
             order['customer_code'] = retailer['customer_code']
-        else:
-            order['customer_code'] = 'N/A'
+            
+        # 3. Get Temperature History (NEW)
+        cursor.execute("""
+            SELECT sd.temperature, sd.humidity, sd.reading_timestamp, sd.is_alert
+            FROM sensor_data sd
+            JOIN delivery d ON sd.delivery_id = d.delivery_id
+            WHERE d.order_id = %s
+            ORDER BY sd.reading_timestamp DESC
+        """, (order_id,))
+        order['sensor_data'] = cursor.fetchall()
             
     cursor.close()
     conn.close()

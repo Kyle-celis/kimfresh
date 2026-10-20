@@ -45,18 +45,18 @@ function renderTable() {
 
     let filtered = allProducts;
 
-    // 1. Filter by Dropdown
+    
     if (filter === 'active') {
         filtered = filtered.filter(p => p.status === 'available');
     } else if (filter === 'low') {
-        // Show only active products where stock is <= reorder level
+        
         filtered = filtered.filter(p => 
             p.status === 'available' && 
             Number(p.stock_quantity) <= Number(p.reorder_level)
         );
     }
 
-    // 2. Filter by Search Box
+    
     if (query) {
         filtered = filtered.filter(p => 
             (p.name || '').toLowerCase().includes(query) || 
@@ -74,7 +74,7 @@ function renderTable() {
         const stockLabel = isLow ? 'Low Stock' : 'In Stock';
         const stockClass = isLow ? 'low-stock' : 'in-stock';
         
-        // YOUR DB USES 'inactive' FOR HIDDEN
+        
         const isHidden = p.status === 'inactive';
         const statusLabel = isHidden ? 'Hidden' : 'Available';
         const statusClass = isHidden ? 'hidden' : 'available';
@@ -104,7 +104,7 @@ function renderTable() {
     }).join('');
 }
 
-// --- ADD / EDIT DIALOG LOGIC ---
+
 function openForm(id) {
     editingId = id || null;
     
@@ -217,7 +217,7 @@ function showToast(msg) {
     setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
-// --- EVENT LISTENERS ---
+
 document.getElementById('searchBox')?.addEventListener('input', renderTable);
 document.getElementById('productFilter')?.addEventListener('change', renderTable);
 

@@ -1,4 +1,4 @@
-// --- XSS PROTECTION ---
+
 function escapeHtml(unsafe) {
     if (unsafe === null || unsafe === undefined) return '';
     return String(unsafe)
@@ -50,20 +50,20 @@ function filterOrders() {
     
     let filtered = allOrders;
 
-    // 1. Filter by Status Tabs
+    
     if (currentStatus !== 'all') {
         filtered = filtered.filter(o => (o.order_status || '').toLowerCase() === currentStatus.toLowerCase());
     }
 
-    // 2. Filter by Search Query
+    
     if (query) {
         filtered = filtered.filter(o => {
-            // If they typed '#6', only look at the ID
+            
             if (query.startsWith('#')) {
                 return o.order_id.toString() === query.replace('#', '');
             }
 
-            // Otherwise, search ID, Retailer, Product Names, and Driver Name
+            
             const matchesId = o.order_id.toString().includes(query);
             const matchesRetailer = o.customer_code && o.customer_code.toLowerCase().includes(query);
             const matchesDriver = o.driver_name && o.driver_name.toLowerCase().includes(query);
@@ -130,7 +130,7 @@ async function viewOrder(id) {
             return;
         }
 
-        // FIXED: Added /single/ to the route
+        
         const res = await fetch(`/api/orders/single/${id}`, {
             headers: { 
                 'Authorization': `Bearer ${token}`,
@@ -209,7 +209,7 @@ function closeOrder() {
 }
 
 async function approveIt(id) {
-    // FIXED: Using /api/orders/single/<id>/approve
+    
     const res = await fetch(`/api/orders/single/${id}/approve`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${getToken()}` }
@@ -225,7 +225,7 @@ async function approveIt(id) {
 
 async function rejectIt(id) {
     if(!confirm('Are you sure you want to reject this order?')) return;
-    // FIXED: Using /api/orders/single/<id>/reject
+    
     const res = await fetch(`/api/orders/single/${id}/reject`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${getToken()}` }

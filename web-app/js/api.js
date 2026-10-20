@@ -2,7 +2,7 @@
  * API Model — all backend calls in one place.
  */
 
-const API = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+const API = `${window.location.protocol}
 
 function authHeaders() {
     return {
@@ -11,7 +11,7 @@ function authHeaders() {
     };
 }
 
-// ---------- AUTH ----------
+
 async function apiLogin(email, password) {
     const res = await fetch(`${API}/api/login`, {
         method: 'POST',
@@ -21,7 +21,7 @@ async function apiLogin(email, password) {
     return res.json();
 }
 
-// ---------- DASHBOARD ----------
+
 async function apiGetSummary() {
     const res = await fetch(`${API}/api/dashboard/summary`, { headers: authHeaders() });
     return res.json();
@@ -37,7 +37,7 @@ async function apiGetRecentOrders() {
     return res.json();
 }
 
-// ---------- ORDERS ----------
+
 async function apiGetAllOrders() {
     const res = await fetch(`${API}/api/orders/all`, { headers: authHeaders() });
     return res.json();
@@ -52,7 +52,7 @@ async function apiUpdateOrderStatus(orderId, status) {
     return res.json();
 }
 
-// ---------- PRODUCTS ----------
+
 async function apiGetProducts() {
     const res = await fetch(`${API}/api/products`);
     return res.json();
@@ -88,7 +88,7 @@ async function apiRestoreProduct(id) {
     return res.json();
 }
 
-// ---------- DRIVERS ----------
+
 async function apiGetDrivers() {
     const res = await fetch(`${API}/api/drivers`, { headers: authHeaders() });
     return res.json();
