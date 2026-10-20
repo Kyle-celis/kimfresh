@@ -57,9 +57,6 @@
                         <h1>Drivers</h1>
                         <p>Monitor driver availability and live order progress. Drivers control pickup and delivery updates; admins do not change delivery status.</p>
                     </div>
-                    <div class="head-actions">
-                        <button class="primary-btn" onclick="openForm()">+ Add Driver</button>
-                    </div>
                 </div>
 
                 <div class="stats">
@@ -75,12 +72,11 @@
                     <input type="text" id="searchBox"
                            placeholder="Search by name, email, phone or license..."
                            oninput="goToPage(1)">
-                    <select id="statusFilter" onchange="goToPage(1)">
-                        <option value="all">All drivers</option>
-                        <option value="available">Available</option>
-                        <option value="in-pickup">In pickup</option>
-                        <option value="on-delivery">On delivery</option>
-                    </select>
+                        <select id="statusFilter" onchange="renderDrivers()">
+                            <option value="all">All drivers</option>
+                            <option value="available">Available</option>
+                            <option value="on_delivery">On delivery</option>
+                        </select>
                 </div>
 
                 <div id="driverList" class="driver-grid"></div>
@@ -91,35 +87,6 @@
         </div>
     </div>
 
-    <!-- Dialog for Add Driver -->
-    <dialog id="addDialog">
-        <h2 id="dTitle">Add Driver</h2>
-        <p class="dialog-sub">Fill in the details of the driver.</p>
-
-        <label for="dName">Full name</label>
-        <input type="text" id="dName" placeholder="e.g. Juan Dela Cruz" maxlength="100">
-
-        <label for="dEmail">Email <span style="font-weight:400;color:#999">(optional)</span></label>
-        <input type="email" id="dEmail" placeholder="driver@kimfresh.com" maxlength="100">
-
-        <div class="row">
-            <div>
-                <label for="dPhone">Phone</label>
-                <input type="text" id="dPhone" placeholder="09123456789" maxlength="20">
-            </div>
-            <div>
-                <label for="dLicense">License number</label>
-                <input type="text" id="dLicense" placeholder="LIC-004" maxlength="50">
-            </div>
-        </div>
-
-        <p id="addMsg"></p>
-
-        <div class="dialog-buttons">
-            <button class="cancel-btn" onclick="closeAddForm()">Cancel</button>
-            <button class="primary-btn" id="dSave" onclick="saveDriver()">Add Driver</button>
-        </div>
-    </dialog>
 
     <div id="toast"></div>
 

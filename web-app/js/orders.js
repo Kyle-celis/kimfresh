@@ -50,14 +50,29 @@ function filterOrders() {
     
     let filtered = allOrders;
 
+    // 1. Filter by Status Tabs
     if (currentStatus !== 'all') {
         filtered = filtered.filter(o => (o.order_status || '').toLowerCase() === currentStatus.toLowerCase());
     }
 
+    // 2. Filter by Search Query
     if (query) {
         filtered = filtered.filter(o => {
-            return (o.customer_code && o.customer_code.toLowerCase().includes(query)) ||
-                   (o.order_id.toString().includes(query));
+            // If they typed '#6', only look at the ID
+            if (query.startsWith('#')) {
+                return o.order_id.toString() === query.replace('#', '');
+            }
+
+            // Otherwise, search ID, Retailer, Product Names, and Driver Name
+            const matchesId = o.order_id.toString().includes(query);
+            const matchesRetailer = o.customer_code && o.customer_code.toLowerCase().includes(query);
+            const matchesDriver = o.driver_name && o.driver_name.toLowerCase().includes(query);
+            
+            const matchesItem = o.items && o.items.some(item => 
+                (item.product_name || '').toLowerCase().includes(query)
+            );
+
+            return matchesId || matchesRetailer || matchesDriver || matchesItem;
         });
     }
 
