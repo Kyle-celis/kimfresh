@@ -46,14 +46,13 @@ def get_orders_by_retailer(retailer_id):
     return rows
 
 def get_all_orders():
-    """Return all orders with items + latest sensor data."""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
-    # NOTICE: dr.driver_id and dr.name are explicitly selected here
     cursor.execute("""
         SELECT 
             r.customer_code,
+            r.name AS retailer_name,
+            r.address AS retailer_address,
             o.order_id,
             o.order_date,
             o.total_amount,

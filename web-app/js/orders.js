@@ -1,4 +1,3 @@
-
 function escapeHtml(unsafe) {
     if (unsafe === null || unsafe === undefined) return '';
     return String(unsafe)
@@ -11,6 +10,8 @@ function escapeHtml(unsafe) {
 
 let allOrders = [];
 let currentStatus = 'all';
+let liveUpdateInterval = null;
+let currentOpenOrderId = null;
 
 const STATUSES = ['all', 'pending', 'approved', 'waiting_for_pickup', 'in_transit', 'delivered', 'rejected'];
 
@@ -50,20 +51,16 @@ function filterOrders() {
     
     let filtered = allOrders;
 
-    
     if (currentStatus !== 'all') {
         filtered = filtered.filter(o => (o.order_status || '').toLowerCase() === currentStatus.toLowerCase());
     }
 
-    
     if (query) {
         filtered = filtered.filter(o => {
-            
             if (query.startsWith('#')) {
                 return o.order_id.toString() === query.replace('#', '');
             }
 
-            
             const matchesId = o.order_id.toString().includes(query);
             const matchesRetailer = o.customer_code && o.customer_code.toLowerCase().includes(query);
             const matchesDriver = o.driver_name && o.driver_name.toLowerCase().includes(query);
@@ -91,6 +88,7 @@ function renderOrders(orders) {
     list.innerHTML = orders.map(o => {
         const orderId = o.order_id || o.id || 'N/A';
         const customer = o.customer_code || o.retailer_name || o.customer || 'Retailer';
+        const address = o.retailer_address || '';
         
         let itemsCount = 0;
         if (Array.isArray(o.items)) {
@@ -105,7 +103,10 @@ function renderOrders(orders) {
         return `
             <tr>
                 <td><span class="order-no">#${escapeHtml(orderId)}</span></td>
-                <td>${escapeHtml(customer)}</td>
+                <td>
+                    ${escapeHtml(customer)}
+                    ${address ? `<br><small style="color: #777;">${escapeHtml(address)}</small>` : ''}
+                </td>
                 <td>${formatDate(o.order_date || o.date, true)}</td>
                 <td>${itemsCount} items</td>
                 <td class="num">₱${total}</td>
@@ -117,12 +118,24 @@ function renderOrders(orders) {
 }
 
 async function viewOrder(id) {
+    currentOpenOrderId = id;
     document.getElementById('overlay').classList.add('show');
     document.getElementById('drawer').classList.add('show');
     document.getElementById('drawerTitle').textContent = `Order #${id}`;
     document.getElementById('drawerBody').innerHTML = '<p style="text-align:center; padding: 20px;">Loading...</p>';
     document.getElementById('drawerFoot').innerHTML = '';
 
+    // Fetch data for the first time
+    await fetchOrderData(id, true);
+
+    // Start the 20-second timer
+    if (liveUpdateInterval) clearInterval(liveUpdateInterval);
+    liveUpdateInterval = setInterval(() => {
+        if (currentOpenOrderId) fetchOrderData(currentOpenOrderId, false);
+    }, 20000);
+}
+
+async function fetchOrderData(id, isInitialLoad) {
     try {
         const token = getToken();
         if (!token) {
@@ -130,7 +143,6 @@ async function viewOrder(id) {
             return;
         }
 
-        
         const res = await fetch(`/api/orders/single/${id}`, {
             headers: { 
                 'Authorization': `Bearer ${token}`,
@@ -146,70 +158,108 @@ async function viewOrder(id) {
         const order = await res.json();
         if (!res.ok) throw new Error(order.message || 'Failed to load');
 
-        const date = formatDate(order.order_date, true);
-        const items = order.items || [];
-        
-        let itemsHtml = items.map(item => `
+        // Only build the HTML (we don't flash the loading screen if it's a background update)
+        renderDrawerContent(order, id);
+
+    } catch (err) {
+        if (isInitialLoad) {
+            document.getElementById('drawerBody').innerHTML = `<p style="color: red; padding: 20px;">Error: ${err.message}</p>`;
+        }
+    }
+}
+
+function renderDrawerContent(order, id) {
+    const date = formatDate(order.order_date, true);
+    const items = order.items || [];
+    
+    let itemsHtml = items.map(item => `
+        <tr>
+            <td>${escapeHtml(item.product_name)}</td>
+            <td class="num">${item.quantity}</td>
+            <td class="num">₱${Number(item.unit_price || 0).toFixed(2)}</td>
+            <td class="num">₱${Number(item.subtotal || 0).toFixed(2)}</td>
+        </tr>
+    `).join('');
+
+    let bodyHtml = `
+        <div class="d-section">
+            <p class="d-title">Order Information</p>
+            <div class="info-grid">
+                <div><label>Order ID</label><p>#${order.order_id || id}</p></div>
+                <div><label>Retailer</label><p>${escapeHtml(order.customer_code || 'N/A')}</p></div>
+                <div><label>Date</label><p>${escapeHtml(date)}</p></div>
+                <div><label>Status</label><p><span class="status-pill ${order.order_status || 'pending'}">${(order.order_status || 'pending').replace(/_/g, ' ').toUpperCase()}</span></p></div>
+            </div>
+        </div>
+
+        <div class="d-section">
+            <p class="d-title">Items Ordered</p>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th class="num">Qty</th>
+                        <th class="num">Price</th>
+                        <th class="num">Total</th>
+                    </tr>
+                </thead>
+                <tbody>${itemsHtml || '<tr><td colspan="4">No items found</td></tr>'}</tbody>
+            </table>
+            <div class="sum-row total"><span>Total Amount</span><strong>₱${Number(order.total_amount || 0).toFixed(2)}</strong></div>
+        </div>
+    `;
+
+    if (order.sensor_data && order.sensor_data.length > 0) {
+        let sensorHtml = order.sensor_data.map(s => `
             <tr>
-                <td>${escapeHtml(item.product_name)}</td>
-                <td class="num">${item.quantity}</td>
-                <td class="num">₱${Number(item.unit_price || 0).toFixed(2)}</td>
-                <td class="num">₱${Number(item.subtotal || 0).toFixed(2)}</td>
+                <td>${formatDate(s.reading_timestamp, true)}</td>
+                <td style="color: ${s.is_alert ? 'red' : 'green'}; font-weight: bold;">
+                    ${Number(s.temperature).toFixed(1)}°C
+                </td>
+                <td>${Number(s.humidity).toFixed(1)}%</td>
             </tr>
         `).join('');
 
-        let bodyHtml = `
-            <div class="d-section">
-                <p class="d-title">Order Information</p>
-                <div class="info-grid">
-                    <div><label>Order ID</label><p>#${order.order_id || id}</p></div>
-                    <div><label>Retailer</label><p>${escapeHtml(order.customer_code || 'N/A')}</p></div>
-                    <div><label>Date</label><p>${escapeHtml(date)}</p></div>
-                    <div><label>Status</label><p><span class="status-pill ${order.order_status || 'pending'}">${(order.order_status || 'pending').replace(/_/g, ' ').toUpperCase()}</span></p></div>
-                </div>
-            </div>
-
-            <div class="d-section">
-                <p class="d-title">Items Ordered</p>
+        bodyHtml += `
+            <div class="d-section cold-chain">
+                <p class="d-title">Cold-chain History</p>
+                <p class="history-note">IoT temperature readings recorded during this delivery.</p>
                 <table class="items-table">
                     <thead>
                         <tr>
-                            <th>Product</th>
-                            <th class="num">Qty</th>
-                            <th class="num">Price</th>
-                            <th class="num">Total</th>
+                            <th>Recorded At</th>
+                            <th>Temperature</th>
+                            <th>Humidity</th>
                         </tr>
                     </thead>
-                    <tbody>${itemsHtml || '<tr><td colspan="4">No items found</td></tr>'}</tbody>
+                    <tbody>${sensorHtml}</tbody>
                 </table>
-                <div class="sum-row total"><span>Total Amount</span><strong>₱${Number(order.total_amount || 0).toFixed(2)}</strong></div>
             </div>
         `;
-        document.getElementById('drawerBody').innerHTML = bodyHtml;
+    }
+    
+    document.getElementById('drawerBody').innerHTML = bodyHtml;
 
-        const foot = document.getElementById('drawerFoot');
-        if (order.order_status === 'pending') {
-            foot.innerHTML = `
-                <button class="reject-btn" onclick="rejectIt(${id})">&times; Reject</button>
-                <button class="approve-btn" onclick="approveIt(${id})">&#10003; Approve</button>
-            `;
-            foot.style.display = 'flex';
-        } else {
-            foot.style.display = 'none';
-        }
-
-    } catch (err) {
-        document.getElementById('drawerBody').innerHTML = `<p style="color: red; padding: 20px;">Error: ${err.message}</p>`;
+    const foot = document.getElementById('drawerFoot');
+    if (order.order_status === 'pending') {
+        foot.innerHTML = `
+            <button class="reject-btn" onclick="rejectIt(${id})">&times; Reject</button>
+            <button class="approve-btn" onclick="approveIt(${id})">&#10003; Approve</button>
+        `;
+        foot.style.display = 'flex';
+    } else {
+        foot.style.display = 'none';
     }
 }
 
 function closeOrder() {
+    currentOpenOrderId = null;
     document.getElementById('overlay').classList.remove('show');
     document.getElementById('drawer').classList.remove('show');
+    if (liveUpdateInterval) clearInterval(liveUpdateInterval);
 }
 
 async function approveIt(id) {
-    
     const res = await fetch(`/api/orders/single/${id}/approve`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${getToken()}` }
@@ -219,7 +269,7 @@ async function approveIt(id) {
         loadOrders(); 
         showToast("Order Approved!");
     } else {
-        alert("Failed to approve order.");
+        showToast("Failed to approve order.");
     }
 }
 
@@ -235,7 +285,7 @@ async function rejectIt(id) {
         loadOrders();
         showToast("Order Rejected!");
     } else {
-        alert("Failed to reject order.");
+        showToast("Failed to reject order.");
     }
 }
 

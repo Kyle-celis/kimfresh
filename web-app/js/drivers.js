@@ -115,11 +115,19 @@ function renderDrivers() {
                 <div class="driver-section">
                     <h4>Current Order</h4>
                     ${activeOrder ? `
-                        <div class="order-item">
-                            <div>
+                        <div class="order-item" style="display: block;">
+                            <div style="margin-bottom: 6px;">
                                 <strong>Order #${activeOrder.order_id}</strong>
-                                <small>₱${Number(activeOrder.total_amount).toFixed(2)}</small>
+                                <span class="status-pill ${activeOrder.order_status}" style="float: right;">
+                                    ${activeOrder.order_status.replace('_', ' ').toUpperCase()}
+                                </span>
                             </div>
+                            <small style="display: block; margin-bottom: 4px; color: #800020;">
+                                Retailer: ${escapeHtml(activeOrder.retailer_name || activeOrder.customer_code)}
+                            </small>
+                            <small style="display: block; color: #666;">
+                                Items: ${activeOrder.items.map(i => `${i.quantity}x ${i.product_name}`).join(', ')}
+                            </small>
                         </div>
                     ` : '<p class="empty-text">No active order</p>'}
                 </div>
