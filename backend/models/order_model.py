@@ -179,13 +179,14 @@ def get_order_by_id(order_id):
         if retailer:
             order['customer_code'] = retailer['customer_code']
             
-        # 3. Get Temperature History (NEW)
+        # 3. Get Temperature History (LIMITED TO 10)
         cursor.execute("""
             SELECT sd.temperature, sd.humidity, sd.reading_timestamp, sd.is_alert
             FROM sensor_data sd
             JOIN delivery d ON sd.delivery_id = d.delivery_id
             WHERE d.order_id = %s
             ORDER BY sd.reading_timestamp DESC
+            LIMIT 10
         """, (order_id,))
         order['sensor_data'] = cursor.fetchall()
             
