@@ -45,12 +45,12 @@ def get_orders_by_retailer(retailer_id):
     conn.close()
     return rows
 
-
 def get_all_orders():
     """Return all orders with items + latest sensor data."""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
+    # NOTICE: dr.driver_id and dr.name are explicitly selected here
     cursor.execute("""
         SELECT 
             r.customer_code,
@@ -58,12 +58,15 @@ def get_all_orders():
             o.order_date,
             o.total_amount,
             o.order_status,
+            dr.driver_id,
+            dr.name AS driver_name,
             sd.temperature,
             sd.humidity,
             sd.is_alert
         FROM `order` o
         LEFT JOIN retailer r ON o.retailer_id = r.retailer_id
         LEFT JOIN delivery d ON o.order_id = d.order_id
+        LEFT JOIN driver dr ON d.driver_id = dr.driver_id
         LEFT JOIN (
             SELECT delivery_id, MAX(sensor_id) AS latest_id
             FROM sensor_data
@@ -78,8 +81,6 @@ def get_all_orders():
         cursor.execute("""
             SELECT 
                 oi.quantity,
-                oi.unit_price,
-                oi.subtotal,
                 p.name AS product_name,
                 p.sku
             FROM order_item oi
@@ -91,7 +92,6 @@ def get_all_orders():
     cursor.close()
     conn.close()
     return orders
-
 
 def create_order(retailer_id, total):
     """Insert order header, return order_id."""

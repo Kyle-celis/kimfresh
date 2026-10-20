@@ -64,7 +64,8 @@ def add_security_headers(response):
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " # <--- ADDED HERE
+        "font-src 'self' https://fonts.gstatic.com; "                     # <--- ADDED HERE
         "img-src 'self' data:; "
         "connect-src 'self' http://localhost:5000 https://*.trycloudflare.com https://cdn.jsdelivr.net; "
         "frame-ancestors 'none';"

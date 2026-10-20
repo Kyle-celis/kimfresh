@@ -86,19 +86,23 @@ def create_product(name, sku, description, unit_price, reorder_level, stock_quan
     conn.close()
 
 
-def update_product(product_id, name, sku, unit_price, reorder_level):
-    """Update product fields."""
+def update_product(product_id, name, sku, unit_price, stock_quantity, reorder_level):
+    """Update an existing product."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        """UPDATE product 
-           SET name = %s, sku = %s, unit_price = %s, reorder_level = %s, status = 'available' 
-           WHERE product_id = %s""",
-        (name, sku, unit_price, reorder_level, product_id)
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        cursor.execute("""
+            UPDATE product 
+            SET name = %s, sku = %s, unit_price = %s, stock_quantity = %s, reorder_level = %s 
+            WHERE product_id = %s
+        """, (name, sku, unit_price, stock_quantity, reorder_level, product_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def hide_product(product_id):

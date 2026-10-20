@@ -33,55 +33,53 @@ def get_product(product_id):
 
 @products_bp.route('/api/products', methods=['POST'])
 @require_auth(['admin'])
-def add_or_update_product():
-    """Add new product or update existing."""
-    data = request.get_json()
+def add_product():
+    """Add a new product."""
+    data = request.get_json() or {}
     name = data.get('name')
     sku = data.get('sku')
+    price = data.get('unit_price')
+    stock = data.get('stock_quantity')
+    reorder = data.get('reorder_level')
 
-    if not name and not sku:
-        return jsonify({"success": False, "message": "Name or SKU required"}), 400
+    if not name or price is None or stock is None:
+        return jsonify({"success": False, "message": "Missing required fields"}), 400
 
-    if name:
-        is_valid, err = validate_name(name, "Product name")
-        if not is_valid:
-            return jsonify({"success": False, "message": err}), 400
+    is_valid, err = validate_name(name, "Product name")
+    if not is_valid:
+        return jsonify({"success": False, "message": err}), 400
 
-    if data.get('unit_price') not in [None, '']:
-        is_valid, err = validate_positive_float(data['unit_price'], "Unit price")
-        if not is_valid:
-            return jsonify({"success": False, "message": err}), 400
+    try:
+        # Auto-generate SKU if blank
+        if not sku:
+            count = product_model.count_products() + 1
+            sku = f"KIM-{count:03d}"
 
-    if data.get('reorder_level') not in [None, '']:
-        is_valid, err = validate_positive_int(data['reorder_level'], "Reorder level")
-        if not is_valid:
-            return jsonify({"success": False, "message": err}), 400
+        product_model.create_product(name, sku, '', price, stock, reorder)
+        return jsonify({"success": True, "message": "Product added successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
-    # Find existing by SKU then name
-    existing = None
-    if sku:
-        existing = product_model.get_product_by_sku(sku)
-    if not existing and name:
-        existing = product_model.get_product_by_name(name)
 
-    if existing:
-        new_name = name or existing['name']
-        new_sku = sku or existing['sku']
-        new_price = data.get('unit_price') if data.get('unit_price') not in [None, ''] else existing['unit_price']
-        new_stock = data.get('reorder_level') if data.get('reorder_level') not in [None, ''] else existing['reorder_level']
-        product_model.update_product(existing['product_id'], new_name, new_sku, new_price, new_stock)
-        return jsonify({"success": True, "message": f"Product '{new_name}' updated"})
+@products_bp.route('/api/products/<int:product_id>', methods=['PUT'])
+@require_auth(['admin'])
+def update_product_details(product_id):
+    """Update an existing product."""
+    data = request.get_json() or {}
+    name = data.get('name')
+    sku = data.get('sku')
+    price = data.get('unit_price')
+    stock = data.get('stock_quantity')
+    reorder = data.get('reorder_level')
 
-    # New product
-    if not sku:
-        count = product_model.count_products() + 1
-        sku = f"KIM-{count:03d}"
+    if not name or price is None or stock is None:
+        return jsonify({"success": False, "message": "Missing required fields"}), 400
 
-    price = data.get('unit_price') if data.get('unit_price') not in [None, ''] else 0
-    stock = data.get('reorder_level') if data.get('reorder_level') not in [None, ''] else 5
-
-    product_model.create_product(name, sku, '', price, stock, stock)
-    return jsonify({"success": True, "message": f"Product added with SKU {sku}"})
+    try:
+        product_model.update_product(product_id, name, sku, price, stock, reorder)
+        return jsonify({"success": True, "message": "Product updated successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @products_bp.route('/api/products/<int:product_id>/hide', methods=['PUT'])

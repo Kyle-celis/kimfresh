@@ -89,8 +89,10 @@ def get_orders(retailer_id):
 @orders_bp.route('/api/orders/all', methods=['GET'])
 @require_auth(['admin'])
 def get_all_orders():
-    """Return all orders."""
-    return jsonify(order_model.get_all_orders())
+    """Return all orders with items + latest sensor data."""
+    # STRICT MVC: The controller asks the model for the data. No SQL here!
+    orders = order_model.get_all_orders()
+    return jsonify(orders)
 
 
 @orders_bp.route('/api/orders/<int:order_id>/status', methods=['PUT'])
@@ -136,8 +138,31 @@ def get_single_order(order_id):
 @orders_bp.route('/api/orders/single/<int:order_id>/approve', methods=['POST'])
 @require_auth(['admin'])
 def approve_single_order(order_id):
+    """Approve a pending order AND auto-assign a driver."""
+    
+    # 1. Update order status
     order_model.update_order_status(order_id, 'approved')
-    return jsonify({"success": True, "message": "Order approved"})
+    logger.info(f"Admin approved order #{order_id}")
+    
+    # 2. Trigger the round-robin auto-assign logic
+    from models import driver_model
+    assigned_driver_id = driver_model.auto_pick_driver()
+    
+    if assigned_driver_id:
+        # 3. Create the delivery record and mark driver as on_delivery
+        driver_model.assign_delivery(order_id, assigned_driver_id)
+        logger.info(f"Auto-assigned Order #{order_id} to Driver {assigned_driver_id}")
+        return jsonify({
+            "success": True, 
+            "message": f"Order approved and assigned to driver {assigned_driver_id}"
+        })
+    else:
+        # If no drivers are available, just leave it approved.
+        logger.warning(f"Order #{order_id} approved but no drivers available.")
+        return jsonify({
+            "success": True, 
+            "message": "Order approved. Waiting for an available driver."
+        })
 
 @orders_bp.route('/api/orders/single/<int:order_id>/reject', methods=['POST'])
 @require_auth(['admin'])
