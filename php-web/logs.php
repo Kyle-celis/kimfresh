@@ -62,6 +62,8 @@ $logs = $conn->query("
     <title>Activity Logs</title>
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    
     <style>
         :root { --primary: #C34200; }
         .table-section { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 20px; }

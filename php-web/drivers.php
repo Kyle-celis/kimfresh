@@ -83,6 +83,7 @@ if ($histRes) {
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/drivers.css">
+    <link rel="stylesheet" href="css/responsive.css">
     
     <style>
         :root { --primary: #C34200; --primary-dark: #9a3400; }
@@ -125,7 +126,7 @@ if ($histRes) {
     <div class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <img src="../logo.png" class="logo" alt="KimFresh">
+                <img src="logo.png" class="logo" alt="KimFresh">
                 <p>Administration</p>
             </div>
             <nav class="menu">

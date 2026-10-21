@@ -1,0 +1,157 @@
+/* =========================================
+   KIMFRESH RESPONSIVE OVERRIDES
+   ========================================= */
+
+/* Tablet (max-width: 900px) */
+@media (max-width: 900px) {
+    .cards-section {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    .stats {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    .two-col {
+        grid-template-columns: 1fr !important;
+    }
+    .chart-box {
+        height: 250px !important;
+    }
+}
+
+/* Mobile (max-width: 700px) */
+@media (max-width: 700px) {
+    /* Sidebar turns into a top bar */
+    .dashboard-layout {
+        flex-direction: column !important;
+    }
+    
+    .sidebar {
+        position: relative !important;
+        width: 100% !important;
+        height: auto !important;
+        padding: 15px !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1) !important;
+    }
+    
+    .sidebar-brand {
+        margin-bottom: 15px !important;
+        padding-bottom: 15px !important;
+    }
+    
+    .menu {
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 5px !important;
+    }
+    
+    .menu a {
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        font-size: 12px !important;
+    }
+    
+    /* Main content area */
+    .main-area {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    
+    .main-content {
+        padding: 15px !important;
+    }
+    
+    .top-header {
+        padding: 0 15px !important;
+        height: 60px !important;
+    }
+    
+    /* Grids collapse to 1 column */
+    .cards-section {
+        grid-template-columns: 1fr !important;
+    }
+    .stats {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* Tables become scrollable horizontally */
+    .table-responsive {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .orders-table, .table-section table {
+        min-width: 600px; /* Forces scroll instead of squishing */
+    }
+    
+    /* Tabs wrap and scroll */
+    .toolbar {
+        flex-direction: column !important;
+    }
+    
+    .tabs {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        padding-bottom: 10px;
+    }
+    
+    .tab {
+        white-space: nowrap;
+    }
+
+    /* Filters stack */
+    .filters {
+        flex-direction: column !important;
+    }
+    
+    .filters input, .filters select {
+        width: 100% !important;
+    }
+
+    /* Driver grid */
+    .driver-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Pipeline */
+    .pipeline {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    
+    .pipe-step, .pipe-step:first-child, .pipe-step:last-child {
+        margin-left: 0 !important;
+        clip-path: none !important;
+        border-radius: 10px !important;
+        padding: 10px !important;
+    }
+
+    /* Modals */
+    .modal {
+        width: 95% !important;
+        padding: 15px !important;
+    }
+    
+    /* Login page split screen */
+    .page {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    
+    .left {
+        min-height: auto !important;
+        padding: 20px !important;
+    }
+    
+    .left-text h1 {
+        font-size: 28px !important;
+    }
+    
+    .left-text p {
+        font-size: 14px !important;
+    }
+    
+    .boxes {
+        grid-template-columns: 1fr !important;
+    }
+}

@@ -49,6 +49,8 @@ $admin = $stmt->get_result()->fetch_assoc();
     <title>Admin Settings</title>
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    
     <style>
         :root { --primary: #C34200; --primary-dark: #9a3400; }
         .settings-box { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); max-width: 500px; margin-top: 20px; }
@@ -65,7 +67,7 @@ $admin = $stmt->get_result()->fetch_assoc();
     <div class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <img src="/logo.png" alt="KimFresh" class="logo">
+                <img src="logo.png" alt="KimFresh" class="logo">
                 <p>Administration</p>
             </div>
             <nav class="menu">

@@ -70,6 +70,7 @@ $orders = $conn->query($sql);
 <head>
     <title>KimFresh - PHP Orders</title>
     <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/orders.css">
     <link rel="stylesheet" href="css/flow.css">
     <style>

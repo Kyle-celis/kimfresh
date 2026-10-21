@@ -125,6 +125,7 @@ $recentOrders = $conn->query("
     <!-- FIXED CSS PATHS -->
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/flow.css">
     
     <style>
@@ -141,7 +142,7 @@ $recentOrders = $conn->query("
     <div class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <img src="../logo.png" alt="KimFresh" class="logo">
+                <img src="logo.png" alt="KimFresh" class="logo">
                 <p>Administration</p>
             </div>
             <nav class="menu">

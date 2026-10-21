@@ -75,6 +75,7 @@ if (isset($_POST['signup_submit'])) {
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" href="css/responsive.css">
     <style>
         /* A tiny bit of CSS to hide/show the panels */
         .hidden { display: none; }

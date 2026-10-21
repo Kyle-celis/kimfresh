@@ -62,6 +62,7 @@ $driver_name = $driver ? $driver['driver_name'] : 'No driver assigned yet';
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/orders.css">
+    <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/flow.css">
 </head>
 <body>
