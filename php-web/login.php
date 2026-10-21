@@ -84,7 +84,7 @@ if (isset($_POST['signup_submit'])) {
 
     <div class="page">
         <div class="left">
-            <img src="../logo.png" alt="KimFresh" class="logo">
+            <img src="logo.png" alt="KimFresh" class="logo">
             <div class="left-text">
                 <h1>Control everything</h1>
                 <h1 class="pink">from one dashboard.</h1>

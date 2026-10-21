@@ -88,7 +88,7 @@ $logs = $conn->query("
     <div class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <img src="../logo.png" alt="KimFresh" class="logo">
+                <img src="logo.png" alt="KimFresh" class="logo">
                 <p>Administration</p>
             </div>
             <nav class="menu">
