@@ -42,8 +42,9 @@
             <div class="login-box">
 
                 <div class="tabs">
-                    <a href="#login" id="tabLogin" class="tab active" onclick="switchTab('login')">Login</a>
-                    <a href="#signup" id="tabSignup" class="tab" onclick="switchTab('signup')">Sign up</a>
+                    <!-- Using javascript:void(0) prevents the # from appearing in the URL -->
+                    <a href="javascript:void(0);" id="tabLogin" class="tab active" onclick="switchTab('login')">Login</a>
+                    <a href="javascript:void(0);" id="tabSignup" class="tab" onclick="switchTab('signup')">Sign up</a>
                 </div>
 
                 <!-- LOGIN PANEL -->
@@ -116,6 +117,9 @@
             document.getElementById('tabSignup').classList.toggle('active', !isLogin);
             document.getElementById('msg').textContent = '';
             document.getElementById('suMsg').textContent = '';
+
+            // THIS REMOVES THE #SIGNUP FROM THE URL BAR
+            history.replaceState(null, null, ' ');
         }
 
         // --- LOGIN LOGIC ---
@@ -190,6 +194,8 @@
                     msg.className = 'alert-box success';
                     msg.textContent = 'Account created! You can now log in.';
                     document.getElementById('signupForm').reset();
+                    
+                    // Switch back to login after 2 seconds
                     setTimeout(() => switchTab('login'), 2000);
                 } else {
                     msg.textContent = data.message || 'Signup failed.';
@@ -203,4 +209,4 @@
         });
     </script>
 </body>
-</html>s
+</html>
