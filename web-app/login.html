@@ -6,8 +6,8 @@
     <title>KimFresh - Admin Portal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/theme.css">
-    <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" href="theme.css">
+    <link rel="stylesheet" href="login.css">
 </head>
 <body>
 
@@ -42,10 +42,11 @@
             <div class="login-box">
 
                 <div class="tabs">
-                    <a href="#login" id="tabLogin" class="tab active">Login</a>
-                    <!-- Note: Your backend doesn't have admin signup yet, so we hide this tab -->
+                    <a href="#login" id="tabLogin" class="tab active" onclick="switchTab('login')">Login</a>
+                    <a href="#signup" id="tabSignup" class="tab" onclick="switchTab('signup')">Sign up</a>
                 </div>
 
+                <!-- LOGIN PANEL -->
                 <div id="loginPanel" class="panel">
                     <h1>Login to your account</h1>
                     <p class="subtitle">Sign in to your KimFresh admin account to continue.</p>
@@ -73,12 +74,51 @@
                     </form>
                 </div>
 
+                <!-- SIGNUP PANEL (Hidden by default) -->
+                <div id="signupPanel" class="panel" style="display: none;">
+                    <h1>Create an account</h1>
+                    <p class="subtitle">Set up your KimFresh admin access.</p>
+
+                    <p id="suMsg" class="alert-box"></p>
+
+                    <form id="signupForm">
+                        <label for="suName">Full name</label>
+                        <div class="input-box">
+                            <input type="text" id="suName" placeholder="Juan Dela Cruz" required>
+                        </div>
+
+                        <label for="suEmail">Email</label>
+                        <div class="input-box">
+                            <input type="email" id="suEmail" placeholder="admin@kimfresh.com" required>
+                        </div>
+
+                        <label for="suPassword">Password</label>
+                        <div class="input-box">
+                            <input type="password" id="suPassword" placeholder="Create a strong password" required>
+                        </div>
+
+                        <button type="submit" id="signupButton" class="btn">Sign Up</button>
+                    </form>
+                </div>
+
             </div>
         </div>
 
     </div>
 
     <script>
+        // --- TAB SWITCHING ---
+        function switchTab(tab) {
+            const isLogin = tab === 'login';
+            document.getElementById('loginPanel').style.display = isLogin ? 'block' : 'none';
+            document.getElementById('signupPanel').style.display = isLogin ? 'none' : 'block';
+            document.getElementById('tabLogin').classList.toggle('active', isLogin);
+            document.getElementById('tabSignup').classList.toggle('active', !isLogin);
+            document.getElementById('msg').textContent = '';
+            document.getElementById('suMsg').textContent = '';
+        }
+
+        // --- LOGIN LOGIC ---
         const loginForm = document.getElementById('loginForm');
         const loginButton = document.getElementById('loginButton');
         const message = document.getElementById('msg');
@@ -109,14 +149,9 @@
                 const data = await res.json();
 
                 if (res.ok && data.success) {
-                    // Clear old data to prevent conflicts
                     localStorage.clear();
-                    
-                    // Save fresh token
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('admin', JSON.stringify(data));
-                    
-                    // Redirect to dashboard
                     window.location.href = 'dashboard.html';
                 } else {
                     message.textContent = data.message || 'Invalid credentials.';
@@ -128,6 +163,44 @@
                 loginButton.textContent = 'Login';
             }
         });
+
+        // --- SIGNUP LOGIC ---
+        document.getElementById('signupForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('signupButton');
+            const msg = document.getElementById('suMsg');
+            
+            btn.disabled = true;
+            btn.textContent = 'Creating account...';
+            msg.textContent = '';
+
+            const name = document.getElementById('suName').value.trim();
+            const email = document.getElementById('suEmail').value.trim();
+            const password = document.getElementById('suPassword').value;
+
+            try {
+                const res = await fetch('/api/admin/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, password })
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                    msg.className = 'alert-box success';
+                    msg.textContent = 'Account created! You can now log in.';
+                    document.getElementById('signupForm').reset();
+                    setTimeout(() => switchTab('login'), 2000);
+                } else {
+                    msg.textContent = data.message || 'Signup failed.';
+                }
+            } catch (err) {
+                msg.textContent = 'Connection error.';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Sign Up';
+            }
+        });
     </script>
 </body>
-</html>
+</html>s
