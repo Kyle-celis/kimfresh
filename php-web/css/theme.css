@@ -1,0 +1,10 @@
+:root {
+    --primary: #C34200;        /* <--- CHANGED TO TERRACOTTA */
+    --primary-dark: #9a3400;   /* A slightly darker shade for hover effects */
+    --primary-soft: #fdf0e6;   /* A soft peach background for status pills */
+    --bg: #F5F6FA;             
+    --surface: #FFFFFF;        
+    --line: #E4E7EF;           
+    --text: #252733;
+    --muted: #737887;
+}

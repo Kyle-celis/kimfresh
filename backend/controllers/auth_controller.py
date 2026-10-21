@@ -160,3 +160,27 @@ def driver_register():
     except Exception as e:
         logger.error(f"Driver signup failed: {e}", exc_info=True)
         return jsonify({"success": False, "message": str(e)}), 400
+
+@auth_bp.route('/api/admin/signup', methods=['POST'])
+def admin_signup():
+    data = request.get_json()
+    name = data.get('name')
+    email = data.get('email')
+    password = data.get('password')
+
+    if not name or not email or not password:
+        return jsonify({"success": False, "message": "All fields are required"}), 400
+
+    if user_model.email_exists_in_admin(email):
+        return jsonify({"success": False, "message": "Email already registered"}), 400
+
+    try:
+        # Hash the password (Ensure this matches how your login verifies it)
+        from argon2 import PasswordHasher
+        ph = PasswordHasher()
+        password_hash = ph.hash(password)
+        
+        user_model.create_admin(name, email, password_hash)
+        return jsonify({"success": True, "message": "Admin account created successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500

@@ -48,7 +48,7 @@ def home():
 
 
 # ---------- SERVE WEB FILES ----------
-WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'web-app')
+WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'php-web')
 
 
 @app.route('/app/<path:filename>')
