@@ -12,22 +12,33 @@ if (isset($_POST['login_submit'])) {
     $email = $_POST['email'];
     $password = $_POST['password'];
 
-    $stmt = $conn->prepare("SELECT admin_id, name, password_hash FROM admin WHERE email = ?");
+    $stmt = $conn->prepare("SELECT admin_id, name, password_hash, status FROM admin WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $result = $stmt->get_result();
 
     if ($row = $result->fetch_assoc()) {
         if (password_verify($password, $row['password_hash'])) {
-            $_SESSION['admin_id'] = $row['admin_id'];
-            $_SESSION['admin_name'] = $row['name'];
             
-            // Log the activity
-            require 'log_helper.php';
-            logActivity($conn, $row['admin_id'], "Admin logged in");
+            // --- CHECK IF ACCOUNT IS DEACTIVATED ---
+            if (isset($row['status']) && $row['status'] === 'inactive') {
+                $loginError = "Your account has been deactivated. Please contact the Superadmin.";
+            } else {
+                $_SESSION['admin_id'] = $row['admin_id'];
+                $_SESSION['admin_name'] = $row['name'];
+                
+                require 'log_helper.php';
+                logActivity($conn, $row['admin_id'], "Admin logged in");
+                
+                // --- REDIRECT SUPERADMIN TO MANAGE ADMINS PAGE ---
+                if ($row['admin_id'] == 1) {
+                    header("Location: superadmin.php");
+                } else {
+                    header("Location: dashboard.php");
+                }
+                exit();
+            }
             
-            header("Location: dashboard.php");
-            exit();
         } else {
             $loginError = "Invalid password.";
         }
@@ -52,7 +63,7 @@ if (isset($_POST['signup_submit'])) {
     } else {
         // Hash password and insert
         $hash = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = $conn->prepare("INSERT INTO admin (name, email, password_hash) VALUES (?, ?, ?)");
+        $stmt = $conn->prepare("INSERT INTO admin (name, email, password_hash, status) VALUES (?, ?, ?, 'active')");
         $stmt->bind_param("sss", $name, $email, $hash);
         
         if ($stmt->execute()) {
@@ -85,7 +96,7 @@ if (isset($_POST['signup_submit'])) {
 
     <div class="page">
         <div class="left">
-            <img src="/logo.png" alt="KimFresh" class="logo">
+            <img src="logo.png" alt="KimFresh" class="logo">
             <div class="left-text">
                 <h1>Control everything</h1>
                 <h1 class="pink">from one dashboard.</h1>

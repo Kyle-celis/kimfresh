@@ -122,10 +122,8 @@ $recentOrders = $conn->query("
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KimFresh - Dashboard (PHP)</title>
     
-    <!-- FIXED CSS PATHS -->
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/flow.css">
     
     <style>
@@ -134,6 +132,18 @@ $recentOrders = $conn->query("
         .week-controls a:hover { background: #9a3400 !important; }
         .filter-select { padding: 8px 12px; border-radius: 5px; border: 1px solid #C34200; font-weight: bold; color: #C34200; background: white; cursor: pointer; outline: none; }
         th a:hover { color: #C34200 !important; }
+
+        /* PROFILE DROPDOWN STYLES */
+        .profile-menu { position: relative; }
+        .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
+        .profile-trigger:hover { background: var(--primary-soft); }
+        .profile-dropdown { position: absolute; top: 100%; right: 0; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 200px; padding: 8px; display: none; z-index: 100; border: 1px solid #eee; }
+        .profile-dropdown.show { display: block; }
+        .dropdown-account { padding: 12px; border-bottom: 1px solid #eee; margin-bottom: 8px; }
+        .dropdown-account strong { display: block; font-size: 14px; color: #333; }
+        .dropdown-account span { font-size: 12px; color: #777; }
+        .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
+        .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
     </style>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -150,21 +160,31 @@ $recentOrders = $conn->query("
                 <a href="orders.php">Orders</a>
                 <a href="products.php">Products</a>
                 <a href="drivers.php">Drivers</a>
-                <a href="settings.php">Settings</a> 
-                <a href="logs.php">Activity Logs</a>
+                <?php if ($_SESSION['admin_id'] == 1): ?>
+                    <a href="superadmin.php">Manage Admins</a>
+                <?php endif; ?>
             </nav>
         </aside>
 
         <div class="main-area">
             <header class="top-header">
-                <div class="profile-menu">
-                    <div class="user-profile">
+                <div class="profile-menu" id="profileMenu">
+                    <button type="button" class="profile-trigger" onclick="toggleProfileMenu(event)">
                         <div class="avatar">A</div>
-                        <div class="user-info">
-                            <p class="user-name"><?php echo $_SESSION['admin_name']; ?></p>
-                            <p class="user-role">Administrator</p>
+                        <div class="user-info" style="text-align: left;">
+                            <p class="user-name" style="margin: 0;"><?php echo $_SESSION['admin_name']; ?></p>
+                            <p class="user-role" style="margin: 0;">Administrator</p>
                         </div>
-                        <a href="logout.php" class="logout-btn" style="margin-left: 15px; text-decoration: none;">Logout</a>
+                        <span style="font-size: 18px; color: #999; margin-left: 5px;">⌄</span>
+                    </button>
+                    <div class="profile-dropdown" id="profileDropdown">
+                        <div class="dropdown-account">
+                            <strong><?php echo $_SESSION['admin_name']; ?></strong>
+                            <span>admin@kimfresh.com</span>
+                        </div>
+                        <a href="settings.php" class="dropdown-item">Settings</a>
+                        <a href="logs.php" class="dropdown-item">Activity Logs</a>
+                        <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>
                     </div>
                 </div>
             </header>
@@ -173,7 +193,31 @@ $recentOrders = $conn->query("
                 <p class="overview-label">Overview</p>
                 <h1>Distribution Dashboard</h1>
 
-                <!-- 8 Cards -->
+                <!-- 1. ORDER FLOW -->
+                <section class="panel" style="margin-bottom: 24px;">
+                    <div class="panel-head">
+                        <h3>Order Flow</h3>
+                    </div>
+                    <div class="pipeline">
+                        <a class="pipe-step <?php echo $pending > 0 ? 'attention' : ''; ?>" href="orders.php">
+                            <strong><?php echo $pending; ?></strong><span>Pending approval</span>
+                        </a>
+                        <a class="pipe-step <?php echo $waiting > 0 ? 'attention' : ''; ?>" href="orders.php">
+                            <strong><?php echo $waiting; ?></strong><span>Waiting for driver</span>
+                        </a>
+                        <a class="pipe-step" href="orders.php">
+                            <strong>0</strong><span>In pickup</span>
+                        </a>
+                        <a class="pipe-step" href="orders.php">
+                            <strong><?php echo $active; ?></strong><span>Out for delivery</span>
+                        </a>
+                        <a class="pipe-step" href="orders.php">
+                            <strong><?php echo $delivered; ?></strong><span>Delivered</span>
+                        </a>
+                    </div>
+                </section>
+
+                <!-- 2. DISTRIBUTION CARDS -->
                 <section class="cards-section">
                     <div class="card"><h3>Pending Orders</h3><div class="value"><?php echo $pending; ?></div><p class="hint">Waiting for approval</p></div>
                     <div class="card"><h3>Awaiting Driver</h3><div class="value"><?php echo $waiting; ?></div><p class="hint">Approved, no driver yet</p></div>
@@ -185,8 +229,8 @@ $recentOrders = $conn->query("
                     <div class="card"><h3>Rejected</h3><div class="value"><?php echo $rejected; ?></div><p class="hint">All time</p></div>
                 </section>
 
-                <!-- Chart with Week Controls -->
-                <section class="analytics-section">
+                <!-- 3. ORDERS PER WEEK -->
+                <section class="analytics-section" style="margin-top: 24px;">
                     <div class="week-controls" style="display: flex; gap: 10px; align-items: center;">
                         
                         <select class="filter-select" onchange="window.location.href='?filter=' + this.value;">
@@ -217,8 +261,8 @@ $recentOrders = $conn->query("
                     </div>
                 </section>
 
-                <!-- Recent Orders with Sorting -->
-                <section class="table-section">
+                <!-- 4. RECENT ORDERS -->
+                <section class="table-section" style="margin-top: 24px;">
                     <h3>Recent Orders (<?php echo $dateLabel; ?>)</h3>
                     <div class="table-responsive">
                         <table>
@@ -255,88 +299,63 @@ $recentOrders = $conn->query("
                     </div>
                 </section>
 
-                <!-- Order Flow -->
-                <section class="panel" style="margin-bottom: 24px;">
+                <!-- 5. INVENTORY ALERTS -->
+                <section class="panel" style="margin-top: 24px;">
                     <div class="panel-head">
-                        <h3>Order Flow</h3>
+                        <h3>Inventory Alerts</h3>
+                        <a href="products.php" class="panel-link">Products &rsaquo;</a>
                     </div>
-                    <div class="pipeline">
-                        <a class="pipe-step <?php echo $pending > 0 ? 'attention' : ''; ?>" href="orders.php">
-                            <strong><?php echo $pending; ?></strong><span>Pending approval</span>
-                        </a>
-                        <a class="pipe-step <?php echo $waiting > 0 ? 'attention' : ''; ?>" href="orders.php">
-                            <strong><?php echo $waiting; ?></strong><span>Waiting for driver</span>
-                        </a>
-                        <a class="pipe-step" href="orders.php">
-                            <strong>0</strong><span>In pickup</span>
-                        </a>
-                        <a class="pipe-step" href="orders.php">
-                            <strong><?php echo $active; ?></strong><span>Out for delivery</span>
-                        </a>
-                        <a class="pipe-step" href="orders.php">
-                            <strong><?php echo $delivered; ?></strong><span>Delivered</span>
-                        </a>
+                    <div id="stockList">
+                        <?php
+                        if ($lowStockList->num_rows > 0) {
+                            while($row = $lowStockList->fetch_assoc()) {
+                                $isOut = $row['stock_quantity'] <= 0;
+                                $label = $isOut ? 'Out of Stock' : 'Low Stock';
+                                $css = $isOut ? 'out-of-stock' : 'low-stock';
+                                $percent = min(100, round(($row['stock_quantity'] / max(1, $row['reorder_level'])) * 100));
+                                
+                                echo "<div class='stock-row'>";
+                                echo "<div>";
+                                echo "<strong>" . htmlspecialchars($row['name']) . "</strong>";
+                                echo "<small>" . $row['stock_quantity'] . " left &middot; reorder at " . $row['reorder_level'] . "</small>";
+                                echo "<div class='stock-bar'><i style='width:" . $percent . "%'></i></div>";
+                                echo "</div>";
+                                echo "<span class='status " . $css . "'>" . $label . "</span>";
+                                echo "</div>";
+                            }
+                        } else {
+                            echo "<p class='empty-note'>All products are well stocked.</p>";
+                        }
+                        ?>
                     </div>
                 </section>
 
-                <!-- Delivery Monitoring & Inventory Alerts -->
-                <section class="two-col">
-                    <div class="panel">
-                        <div class="panel-head">
-                            <h3>Delivery Monitoring</h3>
-                            <a href="orders.php" class="panel-link">Drivers &rsaquo;</a>
-                        </div>
-                        <div id="deliveryList">
-                            <?php
-                            if ($activeDeliveries->num_rows > 0) {
-                                while($row = $activeDeliveries->fetch_assoc()) {
-                                    $statusLabel = strtoupper(str_replace('_', ' ', $row['order_status']));
-                                    if ($row['order_status'] == 'approved') $statusLabel = 'WAITING FOR DRIVER';
-                                    $driver = $row['driver_name'] ? htmlspecialchars($row['driver_name']) : 'No driver assigned';
-                                    
-                                    echo "<div class='delivery'>";
-                                    echo "<div class='delivery-top'>";
-                                    echo "<div><strong>Order #" . $row['order_id'] . " &middot; " . htmlspecialchars($row['customer_code']) . "</strong></div>";
-                                    echo "<span class='status " . $row['order_status'] . "'>" . $statusLabel . "</span>";
-                                    echo "</div>";
-                                    echo "<p class='delivery-driver'>Driver: <strong>" . $driver . "</strong> &middot; " . htmlspecialchars($row['address']) . "</p>";
-                                    echo "</div>";
-                                }
-                            } else {
-                                echo "<p class='empty-note'>No deliveries in progress.</p>";
-                            }
-                            ?>
-                        </div>
+                <!-- 6. DELIVERY MONITORING -->
+                <section class="panel" style="margin-top: 24px;">
+                    <div class="panel-head">
+                        <h3>Delivery Monitoring</h3>
+                        <a href="orders.php" class="panel-link">Drivers &rsaquo;</a>
                     </div>
-
-                    <div class="panel">
-                        <div class="panel-head">
-                            <h3>Inventory Alerts</h3>
-                            <a href="products.php" class="panel-link">Products &rsaquo;</a>
-                        </div>
-                        <div id="stockList">
-                            <?php
-                            if ($lowStockList->num_rows > 0) {
-                                while($row = $lowStockList->fetch_assoc()) {
-                                    $isOut = $row['stock_quantity'] <= 0;
-                                    $label = $isOut ? 'Out of Stock' : 'Low Stock';
-                                    $css = $isOut ? 'out-of-stock' : 'low-stock';
-                                    $percent = min(100, round(($row['stock_quantity'] / max(1, $row['reorder_level'])) * 100));
-                                    
-                                    echo "<div class='stock-row'>";
-                                    echo "<div>";
-                                    echo "<strong>" . htmlspecialchars($row['name']) . "</strong>";
-                                    echo "<small>" . $row['stock_quantity'] . " left &middot; reorder at " . $row['reorder_level'] . "</small>";
-                                    echo "<div class='stock-bar'><i style='width:" . $percent . "%'></i></div>";
-                                    echo "</div>";
-                                    echo "<span class='status " . $css . "'>" . $label . "</span>";
-                                    echo "</div>";
-                                }
-                            } else {
-                                echo "<p class='empty-note'>All products are well stocked.</p>";
+                    <div id="deliveryList">
+                        <?php
+                        if ($activeDeliveries->num_rows > 0) {
+                            while($row = $activeDeliveries->fetch_assoc()) {
+                                $statusLabel = strtoupper(str_replace('_', ' ', $row['order_status']));
+                                if ($row['order_status'] == 'approved') $statusLabel = 'WAITING FOR DRIVER';
+                                $driver = $row['driver_name'] ? htmlspecialchars($row['driver_name']) : 'No driver assigned';
+                                
+                                echo "<div class='delivery'>";
+                                echo "<div class='delivery-top'>";
+                                echo "<div><strong>Order #" . $row['order_id'] . " &middot; " . htmlspecialchars($row['customer_code']) . "</strong></div>";
+                                echo "<span class='status " . $row['order_status'] . "'>" . $statusLabel . "</span>";
+                                echo "</div>";
+                                echo "<p class='delivery-driver'>Driver: <strong>" . $driver . "</strong> &middot; " . htmlspecialchars($row['address']) . "</p>";
+                                echo "</div>";
                             }
-                            ?>
-                        </div>
+                        } else {
+                            echo "<p class='empty-note'>No deliveries in progress.</p>";
+                        }
+                        ?>
                     </div>
                 </section>
 
@@ -382,6 +401,19 @@ $recentOrders = $conn->query("
                         }
                     }
                 }
+            }
+        });
+
+        // --- PROFILE DROPDOWN LOGIC ---
+        function toggleProfileMenu(event) {
+            event.stopPropagation();
+            document.getElementById('profileDropdown').classList.toggle('show');
+        }
+
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (!menu.contains(event.target)) {
+                document.getElementById('profileDropdown').classList.remove('show');
             }
         });
     </script>

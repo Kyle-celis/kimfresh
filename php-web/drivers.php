@@ -5,6 +5,33 @@ require 'log_helper.php';
 
 if (!isset($_SESSION['admin_id'])) { header("Location: login.php"); exit(); }
 
+// --- HANDLE CSV EXPORT ---
+if (isset($_POST['export_drivers_csv'])) {
+    logActivity($conn, $_SESSION['admin_id'], "Exported Drivers to CSV");
+
+    $filename = "KimFresh_Drivers_" . date('Y-m-d') . ".csv";
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+    $output = fopen('php://output', 'w');
+    fputcsv($output, array('Driver ID', 'Name', 'Email', 'Phone', 'License', 'Status'));
+
+    $export_query = $conn->query("SELECT * FROM driver ORDER BY driver_id ASC");
+
+    while ($row = $export_query->fetch_assoc()) {
+        fputcsv($output, array(
+            $row['driver_id'],
+            $row['name'],
+            $row['email'],
+            $row['phone'],
+            $row['license_number'],
+            strtoupper($row['status'])
+        ));
+    }
+    fclose($output);
+    exit();
+}
+
 // --- HANDLE HIDE/RESTORE ---
 if (isset($_POST['toggle_status'])) {
     $driver_id = $_POST['driver_id'];
@@ -45,13 +72,10 @@ $sql = "
 ";
 
 if ($filter === 'available') {
-    // Drivers with 0 active orders
     $sql .= " AND (SELECT COUNT(*) FROM delivery dl WHERE dl.driver_id = d.driver_id AND dl.delivery_status != 'delivered') = 0";
 } elseif ($filter === 'assigned') {
-    // Drivers whose active order is currently 'assigned'
     $sql .= " AND (SELECT dl.delivery_status FROM delivery dl WHERE dl.driver_id = d.driver_id AND dl.delivery_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) = 'assigned'";
 } elseif ($filter === 'on_delivery') {
-    // Drivers whose active order is currently 'in_transit' or 'picked_up'
     $sql .= " AND (SELECT dl.delivery_status FROM delivery dl WHERE dl.driver_id = d.driver_id AND dl.delivery_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) IN ('in_transit', 'picked_up')";
 } elseif ($filter === 'hidden') {
     $sql .= " AND d.status = 'hidden'";
@@ -80,6 +104,7 @@ if ($histRes) {
 <head>
     <meta charset="UTF-8">
     <title>KimFresh - Drivers</title>
+    
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/drivers.css">
@@ -120,6 +145,22 @@ if ($histRes) {
         .filters { display: flex; gap: 12px; margin-top: 24px; margin-bottom: 24px; justify-content: flex-end; }
         .filters select { width: 220px; height: 44px; padding: 0 16px; border: 1px solid #ddd; border-radius: 10px; font-size: 13px; outline: none; background: #fff; font-weight: bold; color: #333; }
         .filters select:focus { border-color: #C34200; }
+
+        /* Profile Dropdown Styles */
+        .profile-menu { position: relative; }
+        .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
+        .profile-trigger:hover { background: var(--primary-soft); }
+        .profile-dropdown { position: absolute; top: 100%; right: 0; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 200px; padding: 8px; display: none; z-index: 100; border: 1px solid #eee; }
+        .profile-dropdown.show { display: block; }
+        .dropdown-account { padding: 12px; border-bottom: 1px solid #eee; margin-bottom: 8px; }
+        .dropdown-account strong { display: block; font-size: 14px; color: #333; }
+        .dropdown-account span { font-size: 12px; color: #777; }
+        .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
+        .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
+
+        /* EXPORT BUTTON */
+        .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-export:hover { background: #9a3400; }
     </style>
 </head>
 <body>
@@ -134,30 +175,47 @@ if ($histRes) {
                 <a href="orders.php">Orders</a>
                 <a href="products.php">Products</a>
                 <a href="drivers.php" class="active">Drivers</a>
-                <a href="settings.php">Settings</a>
-                <a href="logs.php">Activity Logs</a>
+                <?php if ($_SESSION['admin_id'] == 1): ?>
+                    <a href="superadmin.php">Manage Admins</a>
+                <?php endif; ?>
             </nav>
         </aside>
 
         <div class="main-area">
             <header class="top-header">
-                <div class="profile-menu">
-                    <div class="user-profile">
+                <div class="profile-menu" id="profileMenu">
+                    <button type="button" class="profile-trigger" onclick="toggleProfileMenu(event)">
                         <div class="avatar">A</div>
-                        <div class="user-info">
-                            <p class="user-name"><?php echo htmlspecialchars($_SESSION['admin_name']); ?></p>
-                            <p class="user-role">Administrator</p>
+                        <div class="user-info" style="text-align: left;">
+                            <p class="user-name" style="margin: 0;"><?php echo $_SESSION['admin_name']; ?></p>
+                            <p class="user-role" style="margin: 0;">Administrator</p>
                         </div>
-                        <a href="logout.php" class="logout-btn" style="margin-left: 15px; text-decoration: none;">Logout</a>
+                        <span style="font-size: 18px; color: #999; margin-left: 5px;">⌄</span>
+                    </button>
+                    <div class="profile-dropdown" id="profileDropdown">
+                        <div class="dropdown-account">
+                            <strong><?php echo $_SESSION['admin_name']; ?></strong>
+                            <span>admin@kimfresh.com</span>
+                        </div>
+                        <a href="settings.php" class="dropdown-item">Settings</a>
+                        <a href="logs.php" class="dropdown-item">Activity Logs</a>
+                        <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>
                     </div>
                 </div>
             </header>
 
             <main class="main-content">
-                <p class="overview-label">Manage</p>
-                <h1>Drivers</h1>
+                <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                    <div>
+                        <p class="overview-label">Manage</p>
+                        <h1 style="margin:0;">Drivers</h1>
+                    </div>
+                    <form method="POST" style="margin:0;">
+                        <button type="submit" name="export_drivers_csv" class="btn-export">Export CSV</button>
+                    </form>
+                </div>
 
-                <!-- FILTERS (No Search Bar) -->
+                <!-- FILTERS -->
                 <form method="GET" class="filters">
                     <select name="filter" onchange="this.form.submit()">
                         <option value="all" <?php echo $filter == 'all' ? 'selected' : ''; ?>>All Drivers</option>
@@ -170,6 +228,8 @@ if ($histRes) {
                     <select name="sort" onchange="this.form.submit()">
                         <option value="name_asc" <?php echo $sort == 'name_asc' ? 'selected' : ''; ?>>Sort by Name (A-Z)</option>
                         <option value="name_desc" <?php echo $sort == 'name_desc' ? 'selected' : ''; ?>>Sort by Name (Z-A)</option>
+                        <option value="id_asc" <?php echo $sort == 'id_asc' ? 'selected' : ''; ?>>Sort by ID (Low to High)</option>
+                        <option value="id_desc" <?php echo $sort == 'id_desc' ? 'selected' : ''; ?>>Sort by ID (High to Low)</option>
                     </select>
                 </form>
 
@@ -298,7 +358,14 @@ if ($histRes) {
         </div>
     </div>
 
+    <!-- CUSTOM CTRL+F FIND BAR -->
+    <div id="customFindBar" style="display: none; position: fixed; top: 10px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; border: 1px solid #ddd;">
+        <input type="text" id="findInput" placeholder="Find driver..." style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; outline: none; width: 200px;">
+        <button id="closeFind" style="padding: 8px 12px; margin-left: 5px; background: #eee; border: none; border-radius: 4px; cursor: pointer;">X</button>
+    </div>
+
     <script>
+        // --- HISTORY MODAL LOGIC ---
         const historyModal = document.getElementById('historyModal');
         const historyName  = document.getElementById('historyDriverName');
         const historyBody  = document.getElementById('historyBody');
@@ -326,6 +393,49 @@ if ($histRes) {
 
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape') closeHistory();
+        });
+
+        // --- PROFILE DROPDOWN LOGIC ---
+        function toggleProfileMenu(event) {
+            event.stopPropagation();
+            document.getElementById('profileDropdown').classList.toggle('show');
+        }
+
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (!menu.contains(event.target)) {
+                document.getElementById('profileDropdown').classList.remove('show');
+            }
+        });
+
+        // --- CUSTOM CTRL+F INTERCEPTOR ---
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault(); 
+                const findBar = document.getElementById('customFindBar');
+                findBar.style.display = 'flex';
+                document.getElementById('findInput').focus();
+            }
+            if (e.key === 'Escape') {
+                document.getElementById('customFindBar').style.display = 'none';
+                document.getElementById('findInput').value = '';
+                document.querySelectorAll('.driver-card').forEach(card => card.style.display = '');
+            }
+        });
+
+        document.getElementById('closeFind').addEventListener('click', function() {
+            document.getElementById('customFindBar').style.display = 'none';
+            document.getElementById('findInput').value = '';
+            document.querySelectorAll('.driver-card').forEach(card => card.style.display = '');
+        });
+
+        document.getElementById('findInput').addEventListener('keyup', function() {
+            const query = this.value.toLowerCase();
+            const cards = document.querySelectorAll('.driver-card');
+            cards.forEach(card => {
+                const text = card.innerText.toLowerCase();
+                card.style.display = text.includes(query) ? '' : 'none';
+            });
         });
     </script>
 </body>

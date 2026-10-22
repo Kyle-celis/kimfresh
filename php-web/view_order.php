@@ -75,23 +75,34 @@ $driver_name = $driver ? $driver['driver_name'] : 'No driver assigned yet';
             </div>
             <nav class="menu">
                 <a href="dashboard.php">Dashboard</a>
-                <a href="orders.php" class="active">Orders</a>
+                <a href="orders.php">Orders</a>
                 <a href="products.php">Products</a>
                 <a href="drivers.php">Drivers</a>
+                <?php if ($_SESSION['admin_id'] == 1): ?>
+                    <a href="superadmin.php">Manage Admins</a>
+                <?php endif; ?>
             </nav>
         </aside>
 
         <div class="main-area">
-            <!-- TOP HEADER -->
             <header class="top-header">
-                <div class="profile-menu">
-                    <div class="user-profile">
+                <div class="profile-menu" id="profileMenu">
+                    <button type="button" class="profile-trigger" onclick="toggleProfileMenu(event)">
                         <div class="avatar">A</div>
-                        <div class="user-info">
-                            <p class="user-name"><?php echo $_SESSION['admin_name']; ?></p>
-                            <p class="user-role">Administrator</p>
+                        <div class="user-info" style="text-align: left;">
+                            <p class="user-name" style="margin: 0;"><?php echo $_SESSION['admin_name']; ?></p>
+                            <p class="user-role" style="margin: 0;">Administrator</p>
                         </div>
-                        <a href="logout.php" class="logout-btn" style="margin-left: 15px; text-decoration: none;">Logout</a>
+                        <span style="font-size: 18px; color: #999; margin-left: 5px;">⌄</span>
+                    </button>
+                    <div class="profile-dropdown" id="profileDropdown">
+                        <div class="dropdown-account">
+                            <strong><?php echo $_SESSION['admin_name']; ?></strong>
+                            <span>admin@kimfresh.com</span>
+                        </div>
+                        <a href="settings.php" class="dropdown-item"> Settings</a>
+                        <a href="logs.php" class="dropdown-item"> Activity Logs</a>
+                        <a href="logout.php" class="dropdown-item" style="color: #C34200;">↪ Logout</a>
                     </div>
                 </div>
             </header>
