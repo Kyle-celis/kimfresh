@@ -155,8 +155,7 @@ if ($is_superadmin) {
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
                             <strong><?php echo $_SESSION['admin_name']; ?></strong>
-                            <span>admin@kimfresh.com</span>
-                        </div>
+                    </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
                         <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>

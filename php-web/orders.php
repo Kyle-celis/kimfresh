@@ -173,7 +173,6 @@ $orders = $conn->query($sql);
         .profile-dropdown.show { display: block; }
         .dropdown-account { padding: 12px; border-bottom: 1px solid #eee; margin-bottom: 8px; }
         .dropdown-account strong { display: block; font-size: 14px; color: #333; }
-        .dropdown-account span { font-size: 12px; color: #777; }
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
 
@@ -231,10 +230,10 @@ $orders = $conn->query($sql);
                         </div>
                         <span style="font-size: 18px; color: #999; margin-left: 5px;">⌄</span>
                     </button>
-                    <div class="dropdown-account">
-                        <strong><?php echo $_SESSION['admin_name']; ?></strong>
-                        <span><?php echo $_SESSION['admin_email'] ?? 'admin@kimfresh.com'; ?></span>
-                    </div>
+                    <div class="profile-dropdown" id="profileDropdown">
+                        <div class="dropdown-account">
+                            <strong><?php echo $_SESSION['admin_name']; ?></strong>
+                        </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
                         <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>
