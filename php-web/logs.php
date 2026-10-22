@@ -84,6 +84,7 @@ if ($is_superadmin) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Activity Logs</title>
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
@@ -121,6 +122,45 @@ if ($is_superadmin) {
         .dropdown-account span { font-size: 12px; color: #777; }
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
+
+        /* Mobile Table and Header Fixes */
+        @media (max-width: 768px) {
+            .page-head {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 15px !important;
+            }
+            
+            .page-head form {
+                width: 100% !important;
+            }
+            
+            .page-head .btn-export {
+                width: 100% !important;
+                padding: 12px !important;
+            }
+
+            .table-section {
+                padding: 10px !important;
+            }
+
+            table {
+                width: 100% !important;
+                table-layout: fixed;
+            }
+
+            th, td {
+                padding: 10px 8px !important;
+                font-size: 11px !important;
+                word-wrap: break-word;
+                white-space: normal !important;
+            }
+
+            /* Hide the timestamp column to make room for actions */
+            th:nth-child(3), td:nth-child(3) {
+                display: none !important; 
+            }
+        }
     </style>
 </head>
 <body>
@@ -164,7 +204,7 @@ if ($is_superadmin) {
             </header>
 
             <main class="main-content">
-                <div class="page-head">
+                <div class="page-head" style="display:flex; justify-content: space-between; align-items: center;">
                     <div>
                         <p class="overview-label">System</p>
                         <h1>Activity Logs</h1>
@@ -218,6 +258,73 @@ if ($is_superadmin) {
                 document.getElementById('profileDropdown').classList.remove('show');
             }
         });
+    </script>
+
+    <!-- KimFresh mobile burger menu. Include this just before </body> on every admin page. -->
+    <script>
+    /* KimFresh mobile burger menu.
+       Builds the burger button, a mobile logo, a close button and the overlay,
+       so every admin page only needs to include this one script. */
+    (function () {
+        var sidebar = document.querySelector('.sidebar');
+        var header = document.querySelector('.top-header');
+        if (!sidebar || !header) return;
+
+        sidebar.id = sidebar.id || 'sidebar';
+
+        // Burger button (first item in the top bar)
+        var burger = document.createElement('button');
+        burger.type = 'button';
+        burger.className = 'menu-toggle';
+        burger.setAttribute('aria-label', 'Open menu');
+        burger.setAttribute('aria-controls', sidebar.id);
+        burger.setAttribute('aria-expanded', 'false');
+        burger.innerHTML = '<span></span><span></span><span></span>';
+        header.insertBefore(burger, header.firstChild);
+
+        // Logo in the top bar (copied from the sidebar, since the sidebar is hidden)
+        var logo = sidebar.querySelector('.logo');
+        if (logo) {
+            var mobileLogo = logo.cloneNode(true);
+            mobileLogo.className = 'mobile-logo';
+            header.insertBefore(mobileLogo, burger.nextSibling);
+        }
+
+        // Close button inside the drawer
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'sidebar-close';
+        closeBtn.setAttribute('aria-label', 'Close menu');
+        closeBtn.innerHTML = '&times;';
+        sidebar.appendChild(closeBtn);
+
+        // Dark overlay behind the drawer
+        var overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+
+        function setOpen(open) {
+            sidebar.classList.toggle('open', open);
+            document.body.classList.toggle('sidebar-open', open);
+            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        burger.addEventListener('click', function () {
+            setOpen(!sidebar.classList.contains('open'));
+        });
+        closeBtn.addEventListener('click', function () { setOpen(false); });
+        overlay.addEventListener('click', function () { setOpen(false); });
+        sidebar.addEventListener('click', function (e) {
+            if (e.target.closest('a')) setOpen(false);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') setOpen(false);
+        });
+        // If the window grows past phone size, reset the drawer
+        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) {
+            if (e.matches) setOpen(false);
+        });
+    })();
     </script>
 </body>
 </html>

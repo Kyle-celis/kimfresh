@@ -113,6 +113,7 @@ if (!$trigger_print) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KimFresh - Products</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -207,6 +208,83 @@ if (!$trigger_print) {
             .stat p { margin: 0 0 5px 0; font-size: 12px; }
             th:last-child, td:last-child { display: none !important; }
         }
+
+        /* =========================================
+           MOBILE COMPACT TABLE LAYOUT & BUTTON FIX
+           ========================================= */
+        @media (max-width: 768px) {
+            /* --- FIX HEADER BUTTONS --- */
+            .page-head {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 15px !important;
+            }
+            
+            .page-head > div:last-child {
+                display: flex !important;
+                flex-direction: row !important;
+                gap: 10px !important;
+                width: 100% !important;
+            }
+
+            .page-head .btn-export,
+            .page-head .primary-btn {
+                width: auto !important;
+                flex: 1 !important; 
+                text-align: center !important;
+                padding: 10px 12px !important;
+                font-size: 13px !important;
+                white-space: nowrap !important;
+            }
+
+            /* --- FIX TABLE --- */
+            .table-section {
+                padding: 10px !important; 
+            }
+
+            .table-responsive {
+                overflow-x: hidden !important; 
+                width: 100% !important;
+            }
+
+            table {
+                width: 100% !important;
+                min-width: 0 !important; 
+                table-layout: fixed; 
+            }
+
+            th, td {
+                padding: 8px 4px !important;
+                font-size: 11px !important;
+                word-wrap: break-word;
+                white-space: normal !important;
+            }
+
+            /* Hide the Reorder Level column */
+            th:nth-child(4), td:nth-child(4) {
+                display: none !important; 
+            }
+
+            /* Stack action buttons */
+            .actions {
+                flex-direction: column;
+                gap: 4px;
+            }
+            
+            .btn-edit,
+            .btn-delete {
+                padding: 4px 6px !important;
+                font-size: 10px !important;
+                width: 100%;
+                text-align: center;
+            }
+
+            .status {
+                font-size: 9px !important;
+                padding: 2px 4px !important;
+                display: inline-block;
+            }
+        }
     </style>
 </head>
 <body <?php if ($trigger_print) echo 'onload="window.print()"'; ?>>
@@ -252,16 +330,16 @@ if (!$trigger_print) {
             <main class="main-content">
                 <p class="overview-label">Manage</p>
 
-                <div class="page-head">
+                <div class="page-head" style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
                     <div>
-                        <h1>Products</h1>
-                        <p>Add, delete and keep track of your kimchi stock.</p>
+                        <h1 style="margin:0;">Products</h1>
+                        <p style="margin-top:5px;">Add, delete and keep track of your kimchi stock.</p>
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <form method="POST" style="margin:0;">
-                            <button type="submit" name="export_pdf" class="btn-export">Export to PDF</button>
+                        <form method="POST" style="margin:0; width: 100%;">
+                            <button type="submit" name="export_pdf" class="btn-export" style="width: 100%;">Export to PDF</button>
                         </form>
-                        <button class="primary-btn" onclick="openProductModal()">+ Add Product</button>
+                        <button class="primary-btn" onclick="openProductModal()" style="width: 100%;">+ Add Product</button>
                     </div>
                 </div>
 
@@ -298,16 +376,16 @@ if (!$trigger_print) {
                                         $stockClass = $isLow ? 'low-stock' : 'in-stock';
                                         
                                         echo "<tr>";
-                                        echo "<td>
+                                        echo "<td data-label='Product'>
                                                 <div class='product-name'>" . htmlspecialchars($row['name']) . "</div>
                                                 <div class='product-sku'>" . htmlspecialchars($row['sku']) . "</div>
                                               </td>";
-                                        echo "<td class='price'>₱" . number_format($row['unit_price'], 2) . "</td>";
-                                        echo "<td>" . $row['stock_quantity'] . " <span class='status " . $stockClass . "'>" . $stockLabel . "</span></td>";
-                                        echo "<td>" . $row['reorder_level'] . "</td>";
-                                        echo "<td><span class='status available'>Available</span></td>";
+                                        echo "<td data-label='Price' class='price'>₱" . number_format($row['unit_price'], 2) . "</td>";
+                                        echo "<td data-label='Stock'>" . $row['stock_quantity'] . " <span class='status " . $stockClass . "'>" . $stockLabel . "</span></td>";
+                                        echo "<td data-label='Reorder'>" . $row['reorder_level'] . "</td>";
+                                        echo "<td data-label='Status'><span class='status available'>Available</span></td>";
                                         
-                                        echo "<td class='actions-cell'>
+                                        echo "<td data-label='Action' class='actions-cell'>
                                                 <div class='actions'>
                                                     <button class='btn-edit' onclick='openProductModal(" . json_encode($row) . ")'>Edit</button>";
                                         
@@ -356,38 +434,38 @@ if (!$trigger_print) {
         </div>
     </div>
 
-    <!-- ADD / EDIT MODAL -->
-    <dialog id="productModal">
-        <h2 id="modalTitle">Add Product</h2>
-        <form method="POST">
-            <input type="hidden" name="product_id" id="form_id" value="">
-            
-            <label>Product Name</label>
-            <input type="text" name="name" id="form_name" required>
-            
-            <label>SKU</label>
-            <input type="text" name="sku" id="form_sku">
-            
-            <div class="row">
-                <div>
-                    <label>Price (₱)</label>
-                    <input type="number" step="0.01" min="0" name="unit_price" id="form_price" required>
-                </div>
-                <div>
-                    <label>Reorder Level</label>
-                    <input type="number" min="1" name="reorder_level" id="form_reorder" required>
-                </div>
+<!-- ADD / EDIT MODAL -->
+<dialog id="productModal">
+    <h2 id="modalTitle">Add Product</h2>
+    <form method="POST">
+        <input type="hidden" name="product_id" id="form_id" value="">
+        
+        <label>Product Name</label>
+        <input type="text" name="name" id="form_name" maxlength="50" required>
+        
+        <label>SKU</label>
+        <input type="text" name="sku" id="form_sku" maxlength="50">
+        
+        <div class="row">
+            <div>
+                <label>Price (₱)</label>
+                <input type="number" step="0.01" min="0" name="unit_price" id="form_price" required>
             </div>
-            
-            <label>Stock Quantity</label>
-            <input type="number" min="0" name="stock_quantity" id="form_stock" required>
-            
-            <div class="dialog-buttons">
-                <button type="button" class="cancel-btn" onclick="closeProductModal()">Cancel</button>
-                <button type="submit" name="save_product" class="primary-btn">Save Product</button>
+            <div>
+                <label>Reorder Level</label>
+                <input type="number" min="1" name="reorder_level" id="form_reorder" required>
             </div>
-        </form>
-    </dialog>
+        </div>
+        
+        <label>Stock Quantity</label>
+        <input type="number" min="0" name="stock_quantity" id="form_stock" required>
+        
+        <div class="dialog-buttons">
+            <button type="button" class="cancel-btn" onclick="closeProductModal()">Cancel</button>
+            <button type="submit" name="save_product" class="primary-btn">Save Product</button>
+        </div>
+    </form>
+</dialog>        
 
     <!-- CUSTOM DELETE CONFIRMATION MODAL -->
     <dialog id="deleteModal">
@@ -469,9 +547,13 @@ if (!$trigger_print) {
                 document.getElementById('findInput').focus();
             }
             if (e.key === 'Escape') {
-                document.getElementById('customFindBar').style.display = 'none';
-                document.getElementById('findInput').value = '';
-                document.querySelectorAll('table tbody tr').forEach(row => row.style.display = '');
+                const findBar = document.getElementById('customFindBar');
+                if (findBar.style.display === 'flex') {
+                    findBar.style.display = 'none';
+                    document.getElementById('findInput').value = '';
+                    document.querySelectorAll('table tbody tr').forEach(row => row.style.display = '');
+                    e.stopImmediatePropagation();
+                }
             }
         });
 
@@ -490,6 +572,73 @@ if (!$trigger_print) {
                 row.style.display = text.includes(query) ? '' : 'none';
             });
         });
+    </script>
+
+    <!-- KimFresh mobile burger menu. Include this just before </body> on every admin page. -->
+    <script>
+    /* KimFresh mobile burger menu.
+       Builds the burger button, a mobile logo, a close button and the overlay,
+       so every admin page only needs to include this one script. */
+    (function () {
+        var sidebar = document.querySelector('.sidebar');
+        var header = document.querySelector('.top-header');
+        if (!sidebar || !header) return;
+
+        sidebar.id = sidebar.id || 'sidebar';
+
+        // Burger button (first item in the top bar)
+        var burger = document.createElement('button');
+        burger.type = 'button';
+        burger.className = 'menu-toggle';
+        burger.setAttribute('aria-label', 'Open menu');
+        burger.setAttribute('aria-controls', sidebar.id);
+        burger.setAttribute('aria-expanded', 'false');
+        burger.innerHTML = '<span></span><span></span><span></span>';
+        header.insertBefore(burger, header.firstChild);
+
+        // Logo in the top bar (copied from the sidebar, since the sidebar is hidden)
+        var logo = sidebar.querySelector('.logo');
+        if (logo) {
+            var mobileLogo = logo.cloneNode(true);
+            mobileLogo.className = 'mobile-logo';
+            header.insertBefore(mobileLogo, burger.nextSibling);
+        }
+
+        // Close button inside the drawer
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'sidebar-close';
+        closeBtn.setAttribute('aria-label', 'Close menu');
+        closeBtn.innerHTML = '&times;';
+        sidebar.appendChild(closeBtn);
+
+        // Dark overlay behind the drawer
+        var overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+
+        function setOpen(open) {
+            sidebar.classList.toggle('open', open);
+            document.body.classList.toggle('sidebar-open', open);
+            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        burger.addEventListener('click', function () {
+            setOpen(!sidebar.classList.contains('open'));
+        });
+        closeBtn.addEventListener('click', function () { setOpen(false); });
+        overlay.addEventListener('click', function () { setOpen(false); });
+        sidebar.addEventListener('click', function (e) {
+            if (e.target.closest('a')) setOpen(false);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') setOpen(false);
+        });
+        // If the window grows past phone size, reset the drawer
+        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) {
+            if (e.matches) setOpen(false);
+        });
+    })();
     </script>
 </body>
 </html>

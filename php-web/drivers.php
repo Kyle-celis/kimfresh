@@ -112,6 +112,7 @@ if ($histRes) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KimFresh - Drivers</title>
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
@@ -190,6 +191,73 @@ if ($histRes) {
             .driver-contact p, .driver-license { color: #000 !important; }
             .status { border: 1px solid #000 !important; color: #000 !important; background: transparent !important; }
         }
+
+        /* =========================================
+           MOBILE RESPONSIVE FIXES
+           ========================================= */
+        @media (max-width: 768px) {
+            /* Header layout */
+            .page-head {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 15px !important;
+            }
+            
+            .page-head form {
+                width: 100% !important;
+            }
+            
+            .page-head .btn-export {
+                width: 100% !important;
+                padding: 12px !important;
+            }
+
+            /* Filter Dropdown */
+            .filters {
+                justify-content: stretch !important;
+                margin-top: 10px !important;
+                margin-bottom: 10px !important;
+            }
+            
+            .filters select {
+                width: 100% !important;
+                height: 48px;
+            }
+
+            /* Driver Cards spacing */
+            .driver-grid {
+                grid-template-columns: 1fr !important; 
+                gap: 16px !important;
+            }
+            
+            .driver-card {
+                padding: 16px !important;
+            }
+
+            /* Adjust action buttons for touch */
+            .assign-form {
+                flex-direction: column !important;
+                gap: 8px !important;
+            }
+            
+            .assign-form select {
+                width: 100% !important;
+                padding: 10px !important;
+            }
+            
+            .assign-form button {
+                width: 100% !important;
+                padding: 10px !important;
+            }
+
+            .btn-export,
+            .history-btn,
+            .btn-activate,
+            .btn-deactivate {
+                padding: 12px !important;
+                font-size: 13px !important;
+            }
+        }
     </style>
 </head>
 <body <?php if ($trigger_print) echo 'onload="window.print()"'; ?>>
@@ -233,7 +301,7 @@ if ($histRes) {
             </header>
 
             <main class="main-content">
-                <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;" class="page-head">
+                <div class="page-head" style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
                     <div>
                         <p class="overview-label">Manage</p>
                         <h1 style="margin:0;">Drivers</h1>
@@ -493,9 +561,13 @@ if ($histRes) {
                 document.getElementById('findInput').focus();
             }
             if (e.key === 'Escape') {
-                document.getElementById('customFindBar').style.display = 'none';
-                document.getElementById('findInput').value = '';
-                document.querySelectorAll('.driver-card').forEach(card => card.style.display = '');
+                const findBar = document.getElementById('customFindBar');
+                if (findBar.style.display === 'flex') {
+                    findBar.style.display = 'none';
+                    document.getElementById('findInput').value = '';
+                    document.querySelectorAll('.driver-card').forEach(card => card.style.display = '');
+                    e.stopImmediatePropagation();
+                }
             }
         });
 
@@ -513,6 +585,73 @@ if ($histRes) {
                 card.style.display = text.includes(query) ? '' : 'none';
             });
         });
+    </script>
+
+    <!-- KimFresh mobile burger menu. Include this just before </body> on every admin page. -->
+    <script>
+    /* KimFresh mobile burger menu.
+       Builds the burger button, a mobile logo, a close button and the overlay,
+       so every admin page only needs to include this one script. */
+    (function () {
+        var sidebar = document.querySelector('.sidebar');
+        var header = document.querySelector('.top-header');
+        if (!sidebar || !header) return;
+
+        sidebar.id = sidebar.id || 'sidebar';
+
+        // Burger button (first item in the top bar)
+        var burger = document.createElement('button');
+        burger.type = 'button';
+        burger.className = 'menu-toggle';
+        burger.setAttribute('aria-label', 'Open menu');
+        burger.setAttribute('aria-controls', sidebar.id);
+        burger.setAttribute('aria-expanded', 'false');
+        burger.innerHTML = '<span></span><span></span><span></span>';
+        header.insertBefore(burger, header.firstChild);
+
+        // Logo in the top bar (copied from the sidebar, since the sidebar is hidden)
+        var logo = sidebar.querySelector('.logo');
+        if (logo) {
+            var mobileLogo = logo.cloneNode(true);
+            mobileLogo.className = 'mobile-logo';
+            header.insertBefore(mobileLogo, burger.nextSibling);
+        }
+
+        // Close button inside the drawer
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'sidebar-close';
+        closeBtn.setAttribute('aria-label', 'Close menu');
+        closeBtn.innerHTML = '&times;';
+        sidebar.appendChild(closeBtn);
+
+        // Dark overlay behind the drawer
+        var overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+
+        function setOpen(open) {
+            sidebar.classList.toggle('open', open);
+            document.body.classList.toggle('sidebar-open', open);
+            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        burger.addEventListener('click', function () {
+            setOpen(!sidebar.classList.contains('open'));
+        });
+        closeBtn.addEventListener('click', function () { setOpen(false); });
+        overlay.addEventListener('click', function () { setOpen(false); });
+        sidebar.addEventListener('click', function (e) {
+            if (e.target.closest('a')) setOpen(false);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') setOpen(false);
+        });
+        // If the window grows past phone size, reset the drawer
+        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) {
+            if (e.matches) setOpen(false);
+        });
+    })();
     </script>
 </body>
 </html>

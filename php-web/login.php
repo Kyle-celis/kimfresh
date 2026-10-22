@@ -129,12 +129,13 @@ if (isset($_POST['signup_submit'])) {
                     <form method="POST" action="">
                         <label for="email">Email</label>
                         <div class="input-box">
-                            <input type="email" name="email" placeholder="admin@kimfresh.com" required>
+                            <input type="email" name="email" placeholder="Email" maxlength="30" required>
+
                         </div>
 
                         <label for="password">Password</label>
                         <div class="input-box">
-                            <input type="password" name="password" placeholder="Enter your password" required>
+                            <input type="password" name="password" placeholder="Enter your password" maxlength="30" required>
                         </div>
 
                         <button type="submit" name="login_submit" class="btn">Login</button>
@@ -151,17 +152,17 @@ if (isset($_POST['signup_submit'])) {
                     <form method="POST" action="">
                         <label for="suName">Full name</label>
                         <div class="input-box">
-                            <input type="text" name="name" id="suName" placeholder="Juan Dela Cruz" required>
+                            <input type="text" name="name" id="suName" placeholder="Juan Dela Cruz" maxlength="30" required>
                         </div>
 
                         <label for="suEmail">Email</label>
                         <div class="input-box">
-                            <input type="email" name="su_email" id="suEmail" placeholder="admin@kimfresh.com" required>
+                            <input type="email" name="su_email" id="suEmail" placeholder="admin@kimfresh.com" maxlength="30" required>
                         </div>
 
                         <label for="suPassword">Password</label>
                         <div class="input-box">
-                            <input type="password" name="su_password" id="suPassword" placeholder="Create a strong password" required>
+                            <input type="password" name="su_password" id="suPassword" placeholder="Create a strong password" maxlength="30" required>
                         </div>
 
                         <button type="submit" name="signup_submit" class="btn">Sign Up</button>

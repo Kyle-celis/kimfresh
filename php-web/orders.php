@@ -155,17 +155,23 @@ $orders = $conn->query($sql);
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KimFresh - Orders</title>
+    
     <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/flow.css">
     <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/orders.css">
-    <link rel="stylesheet" href="css/flow.css">
+    
     <style>
         :root { --primary: #C34200; --primary-dark: #9a3400; }
         th a:hover { color: #C34200 !important; }
 
+        /* PROFILE DROPDOWN STYLES */
         .profile-menu { position: relative; }
         .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
         .profile-trigger:hover { background: var(--primary-soft); }
@@ -173,6 +179,7 @@ $orders = $conn->query($sql);
         .profile-dropdown.show { display: block; }
         .dropdown-account { padding: 12px; border-bottom: 1px solid #eee; margin-bottom: 8px; }
         .dropdown-account strong { display: block; font-size: 14px; color: #333; }
+        .dropdown-account span { font-size: 12px; color: #777; }
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
 
@@ -199,6 +206,103 @@ $orders = $conn->query($sql);
         .pagination a:hover { background: #fdf0e6; border-color: #C34200; color: #C34200; }
         .pagination .active { background: #C34200; border-color: #C34200; color: white; }
         .pagination .disabled { opacity: 0.5; pointer-events: none; }
+
+        /* =========================================
+           MOBILE CARD LAYOUT (Direct Override)
+           ========================================= */
+        @media (max-width: 768px) {
+            .orders-box, 
+            .orders-box.table-responsive {
+                overflow-x: hidden !important;
+                width: 100% !important;
+                border-radius: 0 !important;
+                border: none !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            .orders-table thead {
+                display: none !important;
+            }
+
+            .orders-table, 
+            .orders-table tbody, 
+            .orders-table tr, 
+            .orders-table td {
+                display: block !important;
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+
+            .orders-table tr {
+                background: #fff !important;
+                border: 1px solid #eee !important;
+                border-radius: 12px !important;
+                padding: 14px !important;
+                margin-bottom: 16px !important;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important;
+            }
+
+            .orders-table td {
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                padding: 8px 0 !important;
+                border: none !important;
+                border-bottom: 1px dashed #f0f0f0 !important;
+                text-align: right !important;
+                font-size: 13px !important;
+            }
+
+            .orders-table td:last-child {
+                border-bottom: none !important;
+                padding-top: 12px !important;
+            }
+
+            .orders-table td::before {
+                content: attr(data-label);
+                font-weight: 700 !important;
+                color: #777 !important;
+                text-transform: uppercase !important;
+                font-size: 10px !important;
+                letter-spacing: 0.5px !important;
+                text-align: left !important;
+                margin-right: 12px !important;
+            }
+
+            .orders-table td[data-label="Order"] {
+                font-size: 15px !important;
+            }
+
+            .orders-table td[data-label="Order"] .order-no {
+                font-size: 15px !important;
+                font-weight: 800 !important;
+                color: #C34200 !important;
+            }
+
+            .orders-table td[data-label="Action"] {
+                display: block !important;
+                text-align: left !important;
+            }
+
+            .orders-table td[data-label="Action"]::before {
+                display: block !important;
+                margin-bottom: 8px !important;
+            }
+
+            .orders-table td[data-label="Action"] .action-group {
+                justify-content: flex-start !important;
+            }
+
+            .orders-table td[colspan] {
+                display: block !important;
+                text-align: center !important;
+            }
+
+            .orders-table td[colspan]::before {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -242,7 +346,7 @@ $orders = $conn->query($sql);
             </header>
 
             <main class="main-content">
-                <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                <div class="page-head" style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
                     <div>
                         <p class="overview-label">Manage</p>
                         <h1 style="margin:0;">Orders</h1>
@@ -262,7 +366,7 @@ $orders = $conn->query($sql);
                     </div>
                 </div>
 
-                <div class="orders-box">
+                <div class="orders-box table-responsive">
                     <table class="orders-table">
                         <thead>
                             <tr>
@@ -286,14 +390,14 @@ $orders = $conn->query($sql);
                                     $item_count = $item_query->fetch_assoc()['total'] ?? 0;
                                     
                                     echo "<tr>";
-                                    echo "<td><span class='order-no'>#" . $row["order_id"] . "</span></td>";
-                                    echo "<td><strong>" . htmlspecialchars($row["retailer_name"]) . "</strong></td>";
-                                    echo "<td>" . date('M d, Y, g:i A', strtotime($row['order_date'])) . "</td>";
-                                    echo "<td>" . $item_count . " items</td>";
-                                    echo "<td class='num'>₱" . number_format($row["total_amount"], 2) . "</td>";
-                                    echo "<td><span class='status-pill " . $status . "'>" . $displayStatus . "</span></td>";
+                                    echo "<td data-label='Order'><span class='order-no'>#" . $row["order_id"] . "</span></td>";
+                                    echo "<td data-label='Retailer'><strong>" . htmlspecialchars($row["retailer_name"]) . "</strong></td>";
+                                    echo "<td data-label='Date'>" . date('M d, Y, g:i A', strtotime($row['order_date'])) . "</td>";
+                                    echo "<td data-label='Items'>" . $item_count . " items</td>";
+                                    echo "<td data-label='Total' class='num'>₱" . number_format($row["total_amount"], 2) . "</td>";
+                                    echo "<td data-label='Status'><span class='status-pill " . $status . "'>" . $displayStatus . "</span></td>";
                                     
-                                    echo "<td>";
+                                    echo "<td data-label='Action'>";
                                     echo "<div class='action-group'>";
                                     
                                     if ($row["order_status"] == 'pending') {
@@ -376,9 +480,13 @@ $orders = $conn->query($sql);
                 document.getElementById('findInput').focus();
             }
             if (e.key === 'Escape') {
-                document.getElementById('customFindBar').style.display = 'none';
-                document.getElementById('findInput').value = '';
-                document.querySelectorAll('table tbody tr').forEach(row => row.style.display = '');
+                const findBar = document.getElementById('customFindBar');
+                if (findBar.style.display === 'flex') {
+                    findBar.style.display = 'none';
+                    document.getElementById('findInput').value = '';
+                    document.querySelectorAll('table tbody tr').forEach(row => row.style.display = '');
+                    e.stopImmediatePropagation();
+                }
             }
         });
 
@@ -397,6 +505,73 @@ $orders = $conn->query($sql);
                 row.style.display = text.includes(query) ? '' : 'none';
             });
         });
+    </script>
+
+    <!-- KimFresh mobile burger menu. Include this just before </body> on every admin page. -->
+    <script>
+    /* KimFresh mobile burger menu.
+       Builds the burger button, a mobile logo, a close button and the overlay,
+       so every admin page only needs to include this one script. */
+    (function () {
+        var sidebar = document.querySelector('.sidebar');
+        var header = document.querySelector('.top-header');
+        if (!sidebar || !header) return;
+
+        sidebar.id = sidebar.id || 'sidebar';
+
+        // Burger button (first item in the top bar)
+        var burger = document.createElement('button');
+        burger.type = 'button';
+        burger.className = 'menu-toggle';
+        burger.setAttribute('aria-label', 'Open menu');
+        burger.setAttribute('aria-controls', sidebar.id);
+        burger.setAttribute('aria-expanded', 'false');
+        burger.innerHTML = '<span></span><span></span><span></span>';
+        header.insertBefore(burger, header.firstChild);
+
+        // Logo in the top bar (copied from the sidebar, since the sidebar is hidden)
+        var logo = sidebar.querySelector('.logo');
+        if (logo) {
+            var mobileLogo = logo.cloneNode(true);
+            mobileLogo.className = 'mobile-logo';
+            header.insertBefore(mobileLogo, burger.nextSibling);
+        }
+
+        // Close button inside the drawer
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'sidebar-close';
+        closeBtn.setAttribute('aria-label', 'Close menu');
+        closeBtn.innerHTML = '&times;';
+        sidebar.appendChild(closeBtn);
+
+        // Dark overlay behind the drawer
+        var overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+
+        function setOpen(open) {
+            sidebar.classList.toggle('open', open);
+            document.body.classList.toggle('sidebar-open', open);
+            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        burger.addEventListener('click', function () {
+            setOpen(!sidebar.classList.contains('open'));
+        });
+        closeBtn.addEventListener('click', function () { setOpen(false); });
+        overlay.addEventListener('click', function () { setOpen(false); });
+        sidebar.addEventListener('click', function (e) {
+            if (e.target.closest('a')) setOpen(false);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') setOpen(false);
+        });
+        // If the window grows past phone size, reset the drawer
+        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) {
+            if (e.matches) setOpen(false);
+        });
+    })();
     </script>
 </body>
 </html>

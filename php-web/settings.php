@@ -63,6 +63,7 @@ $store = $conn->query("SELECT * FROM store_settings WHERE id = 1")->fetch_assoc(
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Settings</title>
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
@@ -92,6 +93,17 @@ $store = $conn->query("SELECT * FROM store_settings WHERE id = 1")->fetch_assoc(
         .dropdown-account span { font-size: 12px; color: #777; }
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
+
+        /* Mobile Form Fixes */
+        @media (max-width: 768px) {
+            .settings-box {
+                padding: 20px !important;
+            }
+            .settings-box > form > div[style*="display: flex"] {
+                flex-direction: column !important;
+                gap: 10px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -124,8 +136,8 @@ $store = $conn->query("SELECT * FROM store_settings WHERE id = 1")->fetch_assoc(
                         <span style="font-size: 18px; color: #999; margin-left: 5px;">⌄</span>
                     </button>
                     <div class="profile-dropdown" id="profileDropdown">
-                    <div class="dropdown-account">
-                        <strong><?php echo $_SESSION['admin_name']; ?></strong>
+                        <div class="dropdown-account">
+                            <strong><?php echo $_SESSION['admin_name']; ?></strong>
                     </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
@@ -147,14 +159,14 @@ $store = $conn->query("SELECT * FROM store_settings WHERE id = 1")->fetch_assoc(
                     <h3>Admin Profile</h3>
                     <form method="POST">
                         <label>Email Address (Read-Only)</label>
-                        <input type="email" value="<?php echo htmlspecialchars($admin['email']); ?>" disabled>
+                        <input type="email" value="<?php echo htmlspecialchars($admin['email']); ?>" maxlength="50" disabled>
                         <p class="readonly-text">Email cannot be changed.</p>
 
                         <label>Display Name</label>
-                        <input type="text" name="name" value="<?php echo htmlspecialchars($admin['name']); ?>" required>
+                        <input type="text" name="name" value="<?php echo htmlspecialchars($admin['name']); ?>" maxlength="50" required>
 
                         <label>New Password (Leave blank to keep current)</label>
-                        <input type="password" name="password" placeholder="Enter new password">
+                        <input type="password" name="password" placeholder="Enter new password" maxlength="50">
 
                         <button type="submit" name="update_profile">Save Profile</button>
                     </form>
@@ -192,6 +204,73 @@ $store = $conn->query("SELECT * FROM store_settings WHERE id = 1")->fetch_assoc(
                 document.getElementById('profileDropdown').classList.remove('show');
             }
         });
+    </script>
+
+    <!-- KimFresh mobile burger menu. Include this just before </body> on every admin page. -->
+    <script>
+    /* KimFresh mobile burger menu.
+       Builds the burger button, a mobile logo, a close button and the overlay,
+       so every admin page only needs to include this one script. */
+    (function () {
+        var sidebar = document.querySelector('.sidebar');
+        var header = document.querySelector('.top-header');
+        if (!sidebar || !header) return;
+
+        sidebar.id = sidebar.id || 'sidebar';
+
+        // Burger button (first item in the top bar)
+        var burger = document.createElement('button');
+        burger.type = 'button';
+        burger.className = 'menu-toggle';
+        burger.setAttribute('aria-label', 'Open menu');
+        burger.setAttribute('aria-controls', sidebar.id);
+        burger.setAttribute('aria-expanded', 'false');
+        burger.innerHTML = '<span></span><span></span><span></span>';
+        header.insertBefore(burger, header.firstChild);
+
+        // Logo in the top bar (copied from the sidebar, since the sidebar is hidden)
+        var logo = sidebar.querySelector('.logo');
+        if (logo) {
+            var mobileLogo = logo.cloneNode(true);
+            mobileLogo.className = 'mobile-logo';
+            header.insertBefore(mobileLogo, burger.nextSibling);
+        }
+
+        // Close button inside the drawer
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'sidebar-close';
+        closeBtn.setAttribute('aria-label', 'Close menu');
+        closeBtn.innerHTML = '&times;';
+        sidebar.appendChild(closeBtn);
+
+        // Dark overlay behind the drawer
+        var overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+
+        function setOpen(open) {
+            sidebar.classList.toggle('open', open);
+            document.body.classList.toggle('sidebar-open', open);
+            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        burger.addEventListener('click', function () {
+            setOpen(!sidebar.classList.contains('open'));
+        });
+        closeBtn.addEventListener('click', function () { setOpen(false); });
+        overlay.addEventListener('click', function () { setOpen(false); });
+        sidebar.addEventListener('click', function (e) {
+            if (e.target.closest('a')) setOpen(false);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') setOpen(false);
+        });
+        // If the window grows past phone size, reset the drawer
+        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) {
+            if (e.matches) setOpen(false);
+        });
+    })();
     </script>
 </body>
 </html>

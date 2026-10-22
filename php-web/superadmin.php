@@ -219,23 +219,23 @@ $admins = $conn->query("SELECT * FROM admin ORDER BY admin_id ASC");
     </div>
 
     <!-- EDIT ADMIN MODAL -->
-    <dialog id="adminModal">
-        <h2 style="margin-bottom: 15px;">Edit Admin</h2>
-        <form method="POST">
-            <input type="hidden" name="admin_id" id="form_admin_id">
-            
-            <label>Full Name</label>
-            <input type="text" name="name" id="form_name" required>
-            
-            <label>Email</label>
-            <input type="email" name="email" id="form_email" required>
-            
-            <div class="dialog-buttons">
-                <button type="button" class="cancel-btn" onclick="closeAdminModal()">Cancel</button>
-                <button type="submit" name="save_admin" class="primary-btn">Save Changes</button>
-            </div>
-        </form>
-    </dialog>
+        <dialog id="adminModal">
+            <h2 style="margin-bottom: 15px;">Edit Admin</h2>
+            <form method="POST">
+                <input type="hidden" name="admin_id" id="form_admin_id">
+                
+                <label>Full Name</label>
+                <input type="text" name="name" id="form_name" maxlength="50" required>
+                
+                <label>Email</label>
+                <input type="email" name="email" id="form_email" maxlength="50" required>
+                
+                <div class="dialog-buttons">
+                    <button type="button" class="cancel-btn" onclick="closeAdminModal()">Cancel</button>
+                    <button type="submit" name="save_admin" class="primary-btn">Save Changes</button>
+                </div>
+            </form>
+        </dialog>
 
     <script>
         function openAdminModal(admin) {
