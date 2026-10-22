@@ -8,45 +8,40 @@ if (!isset($_SESSION['admin_id'])) {
     exit();
 }
 
-// --- HANDLE CSV EXPORT ---
-if (isset($_POST['export_products_csv'])) {
-    logActivity($conn, $_SESSION['admin_id'], "Exported Products to CSV");
+// --- FETCH STORE STATUS ---
+$store_res = $conn->query("SELECT is_open FROM store_settings WHERE id = 1");
+$store_data = $store_res->fetch_assoc();
+$is_store_open = $store_data['is_open'];
 
-    $filename = "KimFresh_Products_" . date('Y-m-d') . ".csv";
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
-
-    $output = fopen('php://output', 'w');
-    fputcsv($output, array('Product ID', 'Name', 'SKU', 'Price', 'Stock', 'Reorder Level', 'Status'));
-
-    $export_query = $conn->query("SELECT * FROM product ORDER BY product_id ASC");
-
-    while ($row = $export_query->fetch_assoc()) {
-        fputcsv($output, array(
-            $row['product_id'],
-            $row['name'],
-            $row['sku'],
-            'PHP ' . number_format($row['unit_price'], 2),
-            $row['stock_quantity'],
-            $row['reorder_level'],
-            strtoupper($row['status'])
-        ));
-    }
-    fclose($output);
-    exit();
+// --- HANDLE PDF EXPORT (Using Print CSS) ---
+$trigger_print = false;
+if (isset($_POST['export_pdf'])) {
+    logActivity($conn, $_SESSION['admin_id'], "Exported Products to PDF");
+    $trigger_print = true;
+    $products = $conn->query("SELECT * FROM product ORDER BY product_id ASC");
 }
 
-// Handle Actions (Hide/Restore)
-if (isset($_POST['toggle_status'])) {
+// --- HANDLE HARD DELETE ---
+if (isset($_POST['delete_product'])) {
     $product_id = $_POST['product_id'];
-    $new_status = $_POST['new_status'];
-    $stmt = $conn->prepare("UPDATE product SET status = ? WHERE product_id = ?");
-    $stmt->bind_param("si", $new_status, $product_id);
+
+    $stmt = $conn->prepare("SELECT name FROM product WHERE product_id = ?");
+    $stmt->bind_param("i", $product_id);
     $stmt->execute();
+    $product = $stmt->get_result()->fetch_assoc();
+    $product_name = $product ? $product['name'] : 'Unknown';
+
+    $stmt = $conn->prepare("DELETE FROM order_item WHERE product_id = ?");
+    $stmt->bind_param("i", $product_id);
+    $stmt->execute();
+
+    $stmt = $conn->prepare("DELETE FROM product WHERE product_id = ?");
+    $stmt->bind_param("i", $product_id);
     
-    $action = ($new_status == 'inactive') ? "Hidden Product #" : "Restored Product #";
-    logActivity($conn, $_SESSION['admin_id'], $action . $product_id);
-    
+    if ($stmt->execute()) {
+        logActivity($conn, $_SESSION['admin_id'], "Permanently Deleted Product: " . $product_name);
+    }
+
     header("Location: products.php");
     exit();
 }
@@ -82,30 +77,42 @@ if (isset($_POST['save_product'])) {
     }
 }
 
-// Fetch Data
-$total_products = $conn->query("SELECT COUNT(*) AS c FROM product WHERE status = 'available'")->fetch_assoc()['c'];
-$low_stock = $conn->query("SELECT COUNT(*) AS c FROM product WHERE status = 'available' AND stock_quantity <= reorder_level")->fetch_assoc()['c'];
-$hidden = $conn->query("SELECT COUNT(*) AS c FROM product WHERE status = 'inactive'")->fetch_assoc()['c'];
+// Fetch Data for Stats
+$total_products = $conn->query("SELECT COUNT(*) AS c FROM product")->fetch_assoc()['c'];
+$low_stock = $conn->query("SELECT COUNT(*) AS c FROM product WHERE stock_quantity <= reorder_level")->fetch_assoc()['c'];
+$available_products = $conn->query("SELECT COUNT(*) AS c FROM product WHERE status = 'available' AND stock_quantity > 0")->fetch_assoc()['c'];
 
-$search = isset($_GET['search']) ? $conn->real_escape_string($_GET['search']) : '';
-$filter = isset($_GET['filter']) ? $_GET['filter'] : 'active'; 
+if (!$trigger_print) {
+    // --- SORTING LOGIC ---
+    $sort = isset($_GET['sort']) ? $_GET['sort'] : 'id_asc';
+    $orderBy = "product_id ASC"; 
 
-$sql = "SELECT * FROM product WHERE 1=1";
-if ($filter === 'active') { $sql .= " AND status = 'available'"; } 
-elseif ($filter === 'low') { $sql .= " AND status = 'available' AND stock_quantity <= reorder_level"; } 
+    if ($sort == 'name_asc') $orderBy = "name ASC";
+    if ($sort == 'name_desc') $orderBy = "name DESC";
+    if ($sort == 'price_asc') $orderBy = "unit_price ASC";
+    if ($sort == 'price_desc') $orderBy = "unit_price DESC";
+    if ($sort == 'stock_asc') $orderBy = "stock_quantity ASC";
+    if ($sort == 'stock_desc') $orderBy = "stock_quantity DESC";
 
-if (!empty($search)) {
-    $sql .= " AND (name LIKE '%$search%' OR sku LIKE '%$search%' OR status LIKE '%$search%')";
+    // --- PAGINATION LOGIC ---
+    $limit = 10;
+    $page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
+    if ($page < 1) $page = 1;
+    $offset = ($page - 1) * $limit;
+
+    $countQuery = $conn->query("SELECT COUNT(*) AS total FROM product");
+    $total_rows = $countQuery->fetch_assoc()['total'];
+    $total_pages = ceil($total_rows / $limit);
+
+    $sql = "SELECT * FROM product ORDER BY $orderBy LIMIT $limit OFFSET $offset";
+    $products = $conn->query($sql);
 }
-$sql .= " ORDER BY product_id ASC";
-$products = $conn->query($sql);
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KimFresh - Products</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -127,6 +134,9 @@ $products = $conn->query($sql);
         th { text-align: left; padding: 15px; font-size: 13px; color: #666; border-bottom: 1px solid #eee; background: transparent; font-weight: 700; }
         td { padding: 15px; border-bottom: 1px solid #f5f5f5; font-size: 13px; }
         
+        th a { color: #666; transition: color 0.2s ease; text-decoration: none; }
+        th a:hover { color: #C34200 !important; text-decoration: underline; }
+        
         .product-name { font-weight: 800; color: #333; font-size: 14px; margin-bottom: 3px; }
         .product-sku { color: #888; font-size: 12px; }
         .price { font-weight: 700; color: #333; }
@@ -134,22 +144,12 @@ $products = $conn->query($sql);
         .status { padding: 4px 12px; font-size: 11px; font-weight: 700; border-radius: 20px; }
         .status.in-stock, .status.available { color: #15803d; background: #dcfce7; }
         .status.low-stock { color: #b45309; background: #fef3c7; }
-        .status.hidden { color: #666; background: #eee; }
 
         .actions { display: flex; gap: 8px; }
-        
         .btn-edit { padding: 7px 16px; font-size: 12px; font-weight: 700; color: #333; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; text-decoration: none; }
         .btn-edit:hover { background: #f8f9fa; }
-        
-        .btn-hide { padding: 7px 16px; font-size: 12px; font-weight: 700; color: #C34200; background: #fff; border: 1px solid #C34200; border-radius: 8px; cursor: pointer; }
-        .btn-hide:hover { background: #fdf0e6; }
-        
-        .btn-restore { padding: 7px 16px; font-size: 12px; font-weight: 700; color: #fff; background: #C34200; border: 1px solid #C34200; border-radius: 8px; cursor: pointer; }
-
-        .filters { display: flex; gap: 12px; margin-top: 24px; margin-bottom: 24px; }
-        .filters input { flex: 1; height: 44px; padding: 0 16px; border: 1px solid #ddd; border-radius: 10px; font-size: 13px; outline: none; }
-        .filters select { width: 220px; height: 44px; padding: 0 16px; border: 1px solid #ddd; border-radius: 10px; font-size: 13px; outline: none; background: #fff; }
-        .filters input:focus, .filters select:focus { border-color: #C34200; }
+        .btn-delete { padding: 7px 16px; font-size: 12px; font-weight: 700; color: white; background: #dc2626; border: 1px solid #dc2626; border-radius: 8px; cursor: pointer; }
+        .btn-delete:hover { background: #b91c1c; }
 
         dialog { width: 90%; max-width: 460px; margin: auto; padding: 28px; border: none; border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
         dialog::backdrop { background: rgba(0,0,0,0.55); }
@@ -163,9 +163,6 @@ $products = $conn->query($sql);
         
         .error-banner { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; border: 1px solid #f87171; }
 
-        .primary-btn { background: #C34200 !important; }
-
-        /* PROFILE DROPDOWN STYLES */
         .profile-menu { position: relative; }
         .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
         .profile-trigger:hover { background: var(--primary-soft); }
@@ -177,12 +174,42 @@ $products = $conn->query($sql);
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
 
-        /* EXPORT BUTTON */
         .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-export:hover { background: #9a3400; }
+
+        .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 24px; }
+        .pagination a, .pagination span {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 36px; height: 36px; padding: 0 12px;
+            border-radius: 8px; font-size: 13px; font-weight: 700;
+            text-decoration: none; border: 1px solid #ddd; color: #555; background: white;
+            transition: 0.2s;
+        }
+        .pagination a:hover { background: #fdf0e6; border-color: #C34200; color: #C34200; }
+        .pagination .active { background: #C34200; border-color: #C34200; color: white; }
+        .pagination .disabled { opacity: 0.5; pointer-events: none; }
+
+        /* --- PRINT STYLES FOR PDF --- */
+        @media print {
+            .sidebar, .top-header, .page-head, .actions, .pagination, .btn-export, .primary-btn { display: none !important; }
+            body { background: white !important; margin: 0 !important; padding: 0 !important; }
+            .dashboard-layout { display: block !important; }
+            .main-area { margin-left: 0 !important; width: 100% !important; }
+            .main-content { padding: 0 !important; }
+            .table-section { box-shadow: none !important; border: none !important; padding: 0 !important; margin-top: 0 !important; }
+            table { width: 100% !important; border-collapse: collapse !important; }
+            th, td { border: 1px solid #000 !important; padding: 8px !important; font-size: 12px !important; color: #000 !important; }
+            th { background: #eee !important; }
+            h1 { margin-bottom: 20px !important; text-align: center; color: #C34200 !important; }
+            .stats { display: flex !important; gap: 20px; margin-bottom: 20px; }
+            .stat { border: 1px solid #000 !important; padding: 10px !important; flex: 1; text-align: center; }
+            .stat h2 { margin: 0; font-size: 18px; }
+            .stat p { margin: 0 0 5px 0; font-size: 12px; }
+            th:last-child, td:last-child { display: none !important; }
+        }
     </style>
 </head>
-<body>
+<body <?php if ($trigger_print) echo 'onload="window.print()"'; ?>>
     <div class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-brand">
@@ -229,11 +256,11 @@ $products = $conn->query($sql);
                 <div class="page-head">
                     <div>
                         <h1>Products</h1>
-                        <p>Add, hide and keep track of your kimchi stock.</p>
+                        <p>Add, delete and keep track of your kimchi stock.</p>
                     </div>
                     <div style="display:flex; gap:10px;">
                         <form method="POST" style="margin:0;">
-                            <button type="submit" name="export_products_csv" class="btn-export">Export CSV</button>
+                            <button type="submit" name="export_pdf" class="btn-export">Export to PDF</button>
                         </form>
                         <button class="primary-btn" onclick="openProductModal()">+ Add Product</button>
                     </div>
@@ -243,29 +270,21 @@ $products = $conn->query($sql);
                     <div class="error-banner"><?php echo $error_msg; ?></div>
                 <?php endif; ?>
 
+                <!-- UPDATED STATS WITH AVAILABLE -->
                 <div class="stats">
-                    <div class="stat"><p>Total products</p><h2><?php echo $total_products; ?></h2></div>
-                    <div class="stat warn"><p>Low stock</p><h2><?php echo $low_stock; ?></h2></div>
-                    <div class="stat dark"><p>Hidden</p><h2><?php echo $hidden; ?></h2></div>
+                    <div class="stat"><p>Total Products</p><h2><?php echo $total_products; ?></h2></div>
+                    <div class="stat" style="border-left-color: #15803d;"><p>Available Products</p><h2><?php echo $available_products; ?></h2></div>
+                    <div class="stat warn"><p>Low Stock</p><h2><?php echo $low_stock; ?></h2></div>
                 </div>
-
-                <form method="GET" class="filters">
-                    <input type="text" name="search" placeholder="Search by name, SKU, or status..." value="<?php echo htmlspecialchars($search); ?>">
-                    <select name="filter" onchange="this.form.submit()">
-                        <option value="active" <?php echo $filter == 'active' ? 'selected' : ''; ?>>Show Active</option>
-                        <option value="low" <?php echo $filter == 'low' ? 'selected' : ''; ?>>Low Stock Only</option>
-                        <option value="all" <?php echo $filter == 'all' ? 'selected' : ''; ?>>Show All (Including Hidden)</option>
-                    </select>
-                </form>
 
                 <section class="table-section">
                     <div class="table-responsive">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Product</th>
-                                    <th>Price</th>
-                                    <th>Stock</th>
+                                    <th><a href="?sort=<?php echo ($sort == 'name_asc' ? 'name_desc' : 'name_asc'); ?>">Product ↕</a></th>
+                                    <th><a href="?sort=<?php echo ($sort == 'price_asc' ? 'price_desc' : 'price_asc'); ?>">Price ↕</a></th>
+                                    <th><a href="?sort=<?php echo ($sort == 'stock_asc' ? 'stock_desc' : 'stock_asc'); ?>">Stock ↕</a></th>
                                     <th>Reorder Level</th>
                                     <th>Status</th>
                                     <th>Action</th>
@@ -278,7 +297,6 @@ $products = $conn->query($sql);
                                         $isLow = $row['stock_quantity'] <= $row['reorder_level'];
                                         $stockLabel = $isLow ? 'Low Stock' : 'In Stock';
                                         $stockClass = $isLow ? 'low-stock' : 'in-stock';
-                                        $isHidden = $row['status'] == 'inactive';
                                         
                                         echo "<tr>";
                                         echo "<td>
@@ -288,25 +306,18 @@ $products = $conn->query($sql);
                                         echo "<td class='price'>₱" . number_format($row['unit_price'], 2) . "</td>";
                                         echo "<td>" . $row['stock_quantity'] . " <span class='status " . $stockClass . "'>" . $stockLabel . "</span></td>";
                                         echo "<td>" . $row['reorder_level'] . "</td>";
-                                        echo "<td><span class='status " . ($isHidden ? 'hidden' : 'available') . "'>" . ($isHidden ? 'Hidden' : 'Available') . "</span></td>";
+                                        echo "<td><span class='status available'>Available</span></td>";
                                         
-                                        echo "<td>
+                                        echo "<td class='actions-cell'>
                                                 <div class='actions'>
                                                     <button class='btn-edit' onclick='openProductModal(" . json_encode($row) . ")'>Edit</button>";
                                         
-                                        if ($isHidden) {
-                                            echo "<form method='POST' style='margin:0;'>
-                                                    <input type='hidden' name='product_id' value='" . $row['product_id'] . "'>
-                                                    <input type='hidden' name='new_status' value='available'>
-                                                    <button type='submit' name='toggle_status' class='btn-restore'>Restore</button>
-                                                  </form>";
+                                        if ($is_store_open) {
+                                            echo "<button class='btn-delete' style='opacity: 0.5; cursor: not-allowed;' title='Close the store first to delete products.' disabled>Delete</button>";
                                         } else {
-                                            echo "<form method='POST' style='margin:0;'>
-                                                    <input type='hidden' name='product_id' value='" . $row['product_id'] . "'>
-                                                    <input type='hidden' name='new_status' value='inactive'>
-                                                    <button type='submit' name='toggle_status' class='btn-hide'>Hide</button>
-                                                  </form>";
+                                            echo "<button class='btn-delete' onclick='openDeleteModal(" . $row['product_id'] . ", \"" . addslashes($row['name']) . "\")'>Delete</button>";
                                         }
+                                        
                                         echo "</div></td>";
                                         echo "</tr>";
                                     }
@@ -317,6 +328,30 @@ $products = $conn->query($sql);
                             </tbody>
                         </table>
                     </div>
+                    
+                    <?php if (!$trigger_print && $total_pages > 1): ?>
+                    <div class="pagination">
+                        <?php if ($page > 1): ?>
+                            <a href="?sort=<?php echo $sort; ?>&page=<?php echo $page - 1; ?>">Prev</a>
+                        <?php else: ?>
+                            <span class="disabled">Prev</span>
+                        <?php endif; ?>
+
+                        <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                            <?php if ($i == $page): ?>
+                                <span class="active"><?php echo $i; ?></span>
+                            <?php else: ?>
+                                <a href="?sort=<?php echo $sort; ?>&page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                            <?php endif; ?>
+                        <?php endfor; ?>
+
+                        <?php if ($page < $total_pages): ?>
+                            <a href="?sort=<?php echo $sort; ?>&page=<?php echo $page + 1; ?>">Next</a>
+                        <?php else: ?>
+                            <span class="disabled">Next</span>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
                 </section>
             </main>
         </div>
@@ -351,6 +386,21 @@ $products = $conn->query($sql);
             <div class="dialog-buttons">
                 <button type="button" class="cancel-btn" onclick="closeProductModal()">Cancel</button>
                 <button type="submit" name="save_product" class="primary-btn">Save Product</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- CUSTOM DELETE CONFIRMATION MODAL -->
+    <dialog id="deleteModal">
+        <h2 style="color: #dc2626; margin-bottom: 10px;">Confirm Deletion</h2>
+        <p style="margin-bottom: 20px; font-size: 14px; color: #555; line-height: 1.5;">
+            Are you sure you want to permanently delete <strong id="deleteProductName" style="color: #333;"></strong>? This action cannot be undone.
+        </p>
+        <form method="POST" id="deleteForm">
+            <input type="hidden" name="product_id" id="delete_product_id" value="">
+            <div class="dialog-buttons">
+                <button type="button" class="cancel-btn" onclick="closeDeleteModal()">Cancel</button>
+                <button type="submit" name="delete_product" style="padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">Yes, Delete</button>
             </div>
         </form>
     </dialog>
@@ -390,6 +440,16 @@ $products = $conn->query($sql);
             document.getElementById('productModal').close();
         }
 
+        function openDeleteModal(id, name) {
+            document.getElementById('delete_product_id').value = id;
+            document.getElementById('deleteProductName').textContent = name;
+            document.getElementById('deleteModal').showModal();
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').close();
+        }
+
         function toggleProfileMenu(event) {
             event.stopPropagation();
             document.getElementById('profileDropdown').classList.toggle('show');
@@ -402,7 +462,6 @@ $products = $conn->query($sql);
             }
         });
 
-        // --- CUSTOM CTRL+F INTERCEPTOR ---
         document.addEventListener('keydown', function(e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
                 e.preventDefault(); 

@@ -1,6 +1,7 @@
 <?php
 session_start();
 require 'db.php';
+require 'log_helper.php';
 
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
@@ -51,6 +52,13 @@ $driver_query = $conn->query("
 ");
 $driver = $driver_query->fetch_assoc();
 $driver_name = $driver ? $driver['driver_name'] : 'No driver assigned yet';
+
+// --- HANDLE PDF EXPORT ---
+$trigger_print = false;
+if (isset($_GET['export_pdf'])) {
+    logActivity($conn, $_SESSION['admin_id'], "Exported Order #$order_id Receipt to PDF");
+    $trigger_print = true;
+}
 ?>
 
 <!DOCTYPE html>
@@ -62,20 +70,50 @@ $driver_name = $driver ? $driver['driver_name'] : 'No driver assigned yet';
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/orders.css">
-    <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/flow.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    
+    <style>
+        :root { --primary: #C34200; --primary-dark: #9a3400; }
+
+        .profile-menu { position: relative; }
+        .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
+        .profile-trigger:hover { background: var(--primary-soft); }
+        .profile-dropdown { position: absolute; top: 100%; right: 0; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 200px; padding: 8px; display: none; z-index: 100; border: 1px solid #eee; }
+        .profile-dropdown.show { display: block; }
+        .dropdown-account { padding: 12px; border-bottom: 1px solid #eee; margin-bottom: 8px; }
+        .dropdown-account strong { display: block; font-size: 14px; color: #333; }
+        .dropdown-account span { font-size: 12px; color: #777; }
+        .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
+        .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
+
+        .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; }
+        .btn-export:hover { background: #9a3400; }
+
+        /* --- PRINT STYLES FOR PDF --- */
+        @media print {
+            .sidebar, .top-header, .no-print, .btn-export, .back-link { display: none !important; }
+            body { background: white !important; margin: 0 !important; padding: 0 !important; }
+            .dashboard-layout { display: block !important; }
+            .main-area { margin-left: 0 !important; width: 100% !important; }
+            .main-content { padding: 0 !important; }
+            .table-section { box-shadow: none !important; border: none !important; padding: 0 !important; }
+            h2, h3, h4 { color: #000 !important; }
+            .items-table th, .items-table td { border: 1px solid #000 !important; padding: 8px !important; color: #000 !important; }
+            .items-table th { background: #eee !important; }
+        }
+    </style>
 </head>
-<body>
+<body <?php if ($trigger_print) echo 'onload="window.print()"'; ?>>
     <div class="dashboard-layout">
-        <!-- SIDEBAR -->
-        <aside class="sidebar">
+        <aside class="sidebar no-print">
             <div class="sidebar-brand">
                 <img src="logo.png" alt="KimFresh" class="logo">
                 <p>Administration</p>
             </div>
             <nav class="menu">
                 <a href="dashboard.php">Dashboard</a>
-                <a href="orders.php">Orders</a>
+                <a href="orders.php" class="active">Orders</a>
                 <a href="products.php">Products</a>
                 <a href="drivers.php">Drivers</a>
                 <?php if ($_SESSION['admin_id'] == 1): ?>
@@ -85,7 +123,7 @@ $driver_name = $driver ? $driver['driver_name'] : 'No driver assigned yet';
         </aside>
 
         <div class="main-area">
-            <header class="top-header">
+            <header class="top-header no-print">
                 <div class="profile-menu" id="profileMenu">
                     <button type="button" class="profile-trigger" onclick="toggleProfileMenu(event)">
                         <div class="avatar">A</div>
@@ -100,50 +138,56 @@ $driver_name = $driver ? $driver['driver_name'] : 'No driver assigned yet';
                             <strong><?php echo $_SESSION['admin_name']; ?></strong>
                             <span>admin@kimfresh.com</span>
                         </div>
-                        <a href="settings.php" class="dropdown-item"> Settings</a>
-                        <a href="logs.php" class="dropdown-item"> Activity Logs</a>
-                        <a href="logout.php" class="dropdown-item" style="color: #C34200;">↪ Logout</a>
+                        <a href="settings.php" class="dropdown-item">Settings</a>
+                        <a href="logs.php" class="dropdown-item">Activity Logs</a>
+                        <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>
                     </div>
                 </div>
             </header>
 
-            <!-- MAIN CONTENT -->
             <main class="main-content">
-                <div style="margin-bottom: 20px;">
-                    <a href="orders.php" style="color: #800020; text-decoration: none; font-weight: bold; font-size: 14px;">&larr; Back to Orders</a>
+                <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;" class="no-print">
+                    <a href="orders.php" class="back-link" style="color: #C34200; text-decoration: none; font-weight: bold; font-size: 14px;">&larr; Back to Orders</a>
+                    <a href="?id=<?php echo $order_id; ?>&export_pdf=1" class="btn-export">Export to PDF</a>
                 </div>
 
+                <!-- PRINT HEADER -->
+                <?php if($trigger_print): ?>
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="color: #C34200; margin-bottom: 5px;">KimFresh Order Receipt</h1>
+                        <p style="color: #666;">Generated on <?php echo date('F j, Y, g:i A'); ?></p>
+                    </div>
+                <?php endif; ?>
+
                 <div class="table-section" style="margin-bottom: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #800020; padding-bottom: 15px; margin-bottom: 20px;">
-                        <h2 style="color: #800020; margin: 0;">Order #<?php echo $order_id; ?> Receipt</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #C34200; padding-bottom: 15px; margin-bottom: 20px;">
+                        <h2 style="color: #C34200; margin: 0;">Order #<?php echo $order_id; ?></h2>
                         <span class="status-pill <?php echo strtolower($order['order_status']); ?>">
                             <?php echo strtoupper(str_replace('_', ' ', $order['order_status'])); ?>
                         </span>
                     </div>
 
-                    <!-- Retailer & Order Info -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
                         <div>
-                            <h4 style="color: #555; margin-bottom: 10px;">Retailer Information</h4>
+                            <h4 style="color: #555; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Retailer Information</h4>
                             <p><strong>Name:</strong> <?php echo htmlspecialchars($order['retailer_name']); ?></p>
                             <p><strong>Code:</strong> <?php echo htmlspecialchars($order['customer_code']); ?></p>
                             <p><strong>Phone:</strong> <?php echo htmlspecialchars($order['phone']); ?></p>
                             <p><strong>Address:</strong> <?php echo htmlspecialchars($order['address']); ?></p>
                         </div>
                         <div>
-                            <h4 style="color: #555; margin-bottom: 10px;">Order Information</h4>
+                            <h4 style="color: #555; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Order Information</h4>
                             <p><strong>Date:</strong> <?php echo date('M d, Y h:i A', strtotime($order['order_date'])); ?></p>
                             <p><strong>Assigned Driver:</strong> <?php echo htmlspecialchars($driver_name); ?></p>
-                            <p><strong>Total Amount:</strong> <span style="color: #800020; font-weight: bold;">₱<?php echo number_format($order['total_amount'], 2); ?></span></p>
+                            <p><strong>Total Amount:</strong> <span style="color: #C34200; font-weight: bold; font-size: 16px;">₱<?php echo number_format($order['total_amount'], 2); ?></span></p>
                         </div>
                     </div>
 
-                    <!-- Items Ordered -->
-                    <h3 style="margin-bottom: 15px;">Items Ordered</h3>
+                    <h3 style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Items Ordered</h3>
                     <div class="table-responsive">
                         <table class="items-table" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                             <thead>
-                                <tr style="border-bottom: 1px solid #ddd;">
+                                <tr>
                                     <th style="text-align: left; padding: 10px;">Product</th>
                                     <th style="text-align: left; padding: 10px;">Quantity</th>
                                     <th style="text-align: left; padding: 10px;">Unit Price</th>
@@ -178,7 +222,7 @@ $driver_name = $driver ? $driver['driver_name'] : 'No driver assigned yet';
                     <div class="table-responsive">
                         <table class="items-table" style="width: 100%; border-collapse: collapse;">
                             <thead>
-                                <tr style="border-bottom: 1px solid #ddd;">
+                                <tr>
                                     <th style="text-align: left; padding: 10px;">Recorded At</th>
                                     <th style="text-align: left; padding: 10px;">Temperature</th>
                                     <th style="text-align: left; padding: 10px;">Humidity</th>
@@ -188,7 +232,7 @@ $driver_name = $driver ? $driver['driver_name'] : 'No driver assigned yet';
                                 <?php
                                 if ($sensor_data->num_rows > 0) {
                                     while($sensor = $sensor_data->fetch_assoc()) {
-                                        $tempColor = $sensor['is_alert'] ? '#991b1b' : '#166534'; // Red if alert, green if safe
+                                        $tempColor = $sensor['is_alert'] ? '#991b1b' : '#166534'; 
                                         echo "<tr>";
                                         echo "<td style='padding: 10px; border-bottom: 1px solid #eee;'>" . date('M d, Y h:i A', strtotime($sensor['reading_timestamp'])) . "</td>";
                                         echo "<td style='padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; color: " . $tempColor . ";'>" . $sensor['temperature'] . "°C</td>";
@@ -203,9 +247,27 @@ $driver_name = $driver ? $driver['driver_name'] : 'No driver assigned yet';
                         </table>
                     </div>
                 </div>
-
+                
+                <?php if($trigger_print): ?>
+                    <div style="margin-top: 40px; text-align: center; color: #999; font-size: 11px;">
+                        KimFresh IoT System - Confidential Report
+                    </div>
+                <?php endif; ?>
             </main>
         </div>
     </div>
+
+    <script>
+        function toggleProfileMenu(event) {
+            event.stopPropagation();
+            document.getElementById('profileDropdown').classList.toggle('show');
+        }
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (menu && !menu.contains(event.target)) {
+                document.getElementById('profileDropdown').classList.remove('show');
+            }
+        });
+    </script>
 </body>
 </html>
