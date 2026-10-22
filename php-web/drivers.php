@@ -21,11 +21,6 @@ if (isset($_POST['toggle_status'])) {
     $stmt->bind_param("si", $new_status, $driver_id);
     $stmt->execute();
     
-    // If we just activated a driver, try to assign waiting orders
-    if ($new_status == 'available') {
-        assignWaitingOrders($conn);
-    }
-    
     $action = ($new_status == 'hidden') ? "Deactivated Driver #" : "Activated Driver #";
     logActivity($conn, $_SESSION['admin_id'], $action . $driver_id);
     
@@ -33,10 +28,28 @@ if (isset($_POST['toggle_status'])) {
     exit();
 }
 
+// --- HANDLE MANUAL ASSIGN ---
+if (isset($_POST['assign_order'])) {
+    $order_id = $_POST['order_id'];
+    $driver_id = $_POST['driver_id'];
+    
+    // 1. Create the delivery record
+    $stmt = $conn->prepare("INSERT INTO delivery (order_id, driver_id, delivery_status) VALUES (?, ?, 'assigned')");
+    $stmt->bind_param("ii", $order_id, $driver_id);
+    $stmt->execute();
+    
+    // 2. Mark driver as on_delivery
+    $conn->query("UPDATE driver SET status = 'on_delivery' WHERE driver_id = $driver_id");
+    
+    // 3. Log the action
+    logActivity($conn, $_SESSION['admin_id'], "Manually assigned Order #$order_id to Driver #$driver_id");
+    
+    header("Location: drivers.php");
+    exit();
+}
+
 // --- FILTER LOGIC ---
 $filter = isset($_GET['filter']) ? $_GET['filter'] : 'all'; 
-
-// Default sorting by Name A-Z
 $orderBy = "d.name ASC"; 
 
 $sql = "
@@ -55,7 +68,6 @@ $sql = "
 ";
 
 if (!$trigger_print) {
-    // If viewing 'all', hide inactive drivers
     if ($filter === 'all') {
         $sql .= " AND d.status != 'hidden'";
     } elseif ($filter === 'available') {
@@ -71,6 +83,15 @@ if (!$trigger_print) {
 
 $sql .= " ORDER BY $orderBy";
 $drivers = $conn->query($sql);
+
+// --- FETCH UNASSIGNED ORDERS ---
+$unassigned = $conn->query("
+    SELECT o.order_id, r.name AS retailer_name 
+    FROM `order` o
+    JOIN retailer r ON o.retailer_id = r.retailer_id
+    LEFT JOIN delivery d ON o.order_id = d.order_id
+    WHERE o.order_status = 'approved' AND d.delivery_id IS NULL
+");
 
 // --- LOAD PAST DELIVERIES ---
 $histories = [];
@@ -142,6 +163,11 @@ if ($histRes) {
 
         .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-export:hover { background: #9a3400; }
+
+        /* Assign Form */
+        .assign-form { display: flex; gap: 5px; margin-top: 5px; }
+        .assign-form select { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; }
+        .assign-form button { padding: 8px 12px; background: #C34200; color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; }
 
         /* --- PRINT STYLES FOR PDF --- */
         @media print {
@@ -279,6 +305,24 @@ if ($histRes) {
                                 </div>
 
                                 <div class="driver-actions no-print" style="display:flex; flex-direction:column; gap:8px;">
+                                    
+                                    <!-- MANUAL ASSIGN FORM -->
+                                    <?php if ($activeCount == 0 && !$isInactive && $unassigned->num_rows > 0): ?>
+                                        <form method="POST" class="assign-form">
+                                            <input type="hidden" name="driver_id" value="<?php echo $driverId; ?>">
+                                            <select name="order_id" required>
+                                                <option value="">Assign an order...</option>
+                                                <?php 
+                                                    $unassigned->data_seek(0); 
+                                                    while($uo = $unassigned->fetch_assoc()) {
+                                                        echo "<option value='".$uo['order_id']."'>#".$uo['order_id']." - ".htmlspecialchars($uo['retailer_name'])."</option>";
+                                                    }
+                                                ?>
+                                            </select>
+                                            <button type="submit" name="assign_order">Assign</button>
+                                        </form>
+                                    <?php endif; ?>
+
                                     <button
                                         class="history-btn"
                                         type="button"
