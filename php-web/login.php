@@ -26,6 +26,7 @@ if (isset($_POST['login_submit'])) {
             } else {
                 $_SESSION['admin_id'] = $row['admin_id'];
                 $_SESSION['admin_name'] = $row['name'];
+                $_SESSION['admin_email'] = $row['email'];
                 
                 require 'log_helper.php';
                 logActivity($conn, $row['admin_id'], "Admin logged in");

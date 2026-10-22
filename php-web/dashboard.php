@@ -259,10 +259,10 @@ $recentOrders = $conn->query("
                         <span style="font-size: 18px; color: #999; margin-left: 5px;">⌄</span>
                     </button>
                     <div class="profile-dropdown" id="profileDropdown">
-                        <div class="dropdown-account">
-                            <strong><?php echo $_SESSION['admin_name']; ?></strong>
-                            <span>admin@kimfresh.com</span>
-                        </div>
+                    <div class="dropdown-account">
+                        <strong><?php echo $_SESSION['admin_name']; ?></strong>
+                        <span><?php echo $_SESSION['admin_email'] ?? 'admin@kimfresh.com'; ?></span>
+                    </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
                         <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>
