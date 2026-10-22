@@ -1,9 +1,57 @@
 <?php
 session_start();
 require 'db.php';
+require 'log_helper.php';
 
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
+    exit();
+}
+
+// --- SMART STORE STATUS LOGIC ---
+$store = $conn->query("SELECT * FROM store_settings WHERE id = 1")->fetch_assoc();
+
+// Set timezone to Manila
+date_default_timezone_set('Asia/Manila');
+$current_time = date('H:i:s');
+
+$is_store_open = false;
+
+// Check if Admin set a manual override
+if ($store['manual_override'] !== NULL) {
+    $is_store_open = ($store['manual_override'] == 1);
+} else {
+    // Follow the schedule (Handles overnight schedules too)
+    if ($store['open_time'] <= $store['close_time']) {
+        // Normal schedule (e.g., 08:00 to 17:00)
+        $is_store_open = ($current_time >= $store['open_time'] && $current_time <= $store['close_time']);
+    } else {
+        // Overnight schedule (e.g., 22:00 to 06:00)
+        $is_store_open = ($current_time >= $store['open_time'] || $current_time <= $store['close_time']);
+    }
+}
+
+// Handle Manual Override Toggle
+if (isset($_POST['toggle_manual'])) {
+    $override = $_POST['override_value'];
+    $stmt = $conn->prepare("UPDATE store_settings SET manual_override = ? WHERE id = 1");
+    $stmt->bind_param("i", $override);
+    $stmt->execute();
+    
+    $action = ($override == 1) ? "Manually Opened Store" : "Manually Closed Store";
+    logActivity($conn, $_SESSION['admin_id'], $action);
+    
+    header("Location: dashboard.php");
+    exit();
+}
+
+// Handle Reset to Schedule
+if (isset($_POST['reset_schedule'])) {
+    $stmt = $conn->prepare("UPDATE store_settings SET manual_override = NULL WHERE id = 1");
+    $stmt->execute();
+    
+    logActivity($conn, $_SESSION['admin_id'], "Reset Store to Auto Schedule");
+    header("Location: dashboard.php");
     exit();
 }
 
@@ -19,12 +67,14 @@ if ($filter_type == 'daily') {
     $endDate = $startDate;
     $dateFilter = "DATE(order_date) = '$startDate'";
     $dateLabel = date("M d, Y", strtotime($startDate));
+    $filterLabel = "Day";
     $chartLabels = ["Today"];
 } elseif ($filter_type == 'monthly') {
     $startDate = date('Y-m-01');
     $endDate = date('Y-m-t');
     $dateFilter = "DATE(order_date) BETWEEN '$startDate' AND '$endDate'";
     $dateLabel = date("F Y", strtotime($startDate));
+    $filterLabel = "Month";
     $chartLabels = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5"];
 } else {
     $startOfWeek = strtotime("$weekOffset week", $currentMonday);
@@ -33,6 +83,7 @@ if ($filter_type == 'daily') {
     $endDate = date('Y-m-d', $endOfWeek);
     $dateFilter = "DATE(order_date) BETWEEN '$startDate' AND '$endDate'";
     $dateLabel = date("M d", $startOfWeek) . ' - ' . date("M d, Y", $endOfWeek);
+    $filterLabel = "Week";
     $chartLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 }
 
@@ -101,7 +152,15 @@ $lowStockList = $conn->query("
     ORDER BY stock_quantity ASC LIMIT 5
 ");
 
-// --- RECENT ORDERS ---
+// --- RECENT ORDERS WITH PAGINATION (Limit 5) ---
+$limit = 5;
+$page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $limit;
+
+$countRecent = $conn->query("SELECT COUNT(*) AS total FROM `order` o WHERE $dateFilter")->fetch_assoc()['total'];
+$totalPages = ceil($countRecent / $limit);
+
 $recentOrders = $conn->query("
     SELECT o.order_id, r.name AS retailer_name, o.order_status, o.total_amount, dr.name AS driver_name,
     (SELECT SUM(quantity) FROM order_item WHERE order_id = o.order_id) as total_items
@@ -111,7 +170,7 @@ $recentOrders = $conn->query("
     LEFT JOIN driver dr ON d.driver_id = dr.driver_id
     WHERE $dateFilter
     ORDER BY $orderBy
-    LIMIT 6
+    LIMIT $limit OFFSET $offset
 ");
 ?>
 
@@ -131,7 +190,8 @@ $recentOrders = $conn->query("
         .week-controls a, .week-controls span.btn { background: #C34200 !important; color: white !important; border-radius: 5px; }
         .week-controls a:hover { background: #9a3400 !important; }
         .filter-select { padding: 8px 12px; border-radius: 5px; border: 1px solid #C34200; font-weight: bold; color: #C34200; background: white; cursor: pointer; outline: none; }
-        th a:hover { color: #C34200 !important; }
+        th a { color: #666; transition: color 0.2s ease; text-decoration: none; }
+        th a:hover { color: #C34200 !important; text-decoration: underline; }
 
         /* PROFILE DROPDOWN STYLES */
         .profile-menu { position: relative; }
@@ -144,6 +204,27 @@ $recentOrders = $conn->query("
         .dropdown-account span { font-size: 12px; color: #777; }
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
+
+        /* PAGINATION STYLES */
+        .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 24px; }
+        .pagination a, .pagination span {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 36px; height: 36px; padding: 0 12px;
+            border-radius: 8px; font-size: 13px; font-weight: 700;
+            text-decoration: none; border: 1px solid #ddd; color: #555; background: white;
+            transition: 0.2s;
+        }
+        .pagination a:hover { background: #fdf0e6; border-color: #C34200; color: #C34200; }
+        .pagination .active { background: #C34200; border-color: #C34200; color: white; }
+        .pagination .disabled { opacity: 0.5; pointer-events: none; }
+
+        /* STORE STATUS STYLES */
+        .store-status-box { background: white; padding: 15px 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+        .store-status-box.open { border-left: 5px solid #15803d; }
+        .store-status-box.closed { border-left: 5px solid #dc2626; }
+        .btn-store { color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-store.open { background: #dc2626; }
+        .btn-store.closed { background: #15803d; }
     </style>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -193,6 +274,41 @@ $recentOrders = $conn->query("
                 <p class="overview-label">Overview</p>
                 <h1>Distribution Dashboard</h1>
 
+                <!-- STORE STATUS TOGGLE -->
+                <div class="store-status-box <?php echo $is_store_open ? 'open' : 'closed'; ?>">
+                    <div>
+                        <h3 style="margin: 0; font-size: 16px;">Store Status: 
+                            <span style="color: <?php echo $is_store_open ? '#15803d' : '#dc2626'; ?>;">
+                                <?php echo $is_store_open ? 'OPEN' : 'CLOSED'; ?>
+                            </span>
+                        </h3>
+                        <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">
+                            <?php 
+                            if ($store['manual_override'] !== NULL) {
+                                echo "Manual Override Active.";
+                            } else {
+                                echo "Auto Schedule: " . date('h:i A', strtotime($store['open_time'])) . " - " . date('h:i A', strtotime($store['close_time'])); 
+                            }
+                            ?>
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <?php if ($store['manual_override'] !== NULL): ?>
+                            <form method="POST" style="margin:0;">
+                                <button type="submit" name="reset_schedule" class="btn-store" style="background: #555;">
+                                    Reset to Schedule
+                                </button>
+                            </form>
+                        <?php endif; ?>
+                        <form method="POST" style="margin:0;">
+                            <input type="hidden" name="override_value" value="<?php echo $is_store_open ? 0 : 1; ?>">
+                            <button type="submit" name="toggle_manual" class="btn-store <?php echo $is_store_open ? 'open' : 'closed'; ?>">
+                                <?php echo $is_store_open ? 'Force Close' : 'Force Open'; ?>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
                 <!-- 1. ORDER FLOW -->
                 <section class="panel" style="margin-bottom: 24px;">
                     <div class="panel-head">
@@ -225,7 +341,7 @@ $recentOrders = $conn->query("
                     <div class="card"><h3>Delivered</h3><div class="value"><?php echo $delivered; ?></div><p class="hint">₱<?php echo number_format($revenue, 2); ?> fulfilled</p></div>
                     <div class="card"><h3>Low / Out of Stock</h3><div class="value"><?php echo $lowStock; ?></div><p class="hint"><?php echo $totalProducts; ?> active products</p></div>
                     <div class="card"><h3>Available Drivers</h3><div class="value"><?php echo $availableDrivers; ?></div><p class="hint">of <?php echo $totalDrivers; ?> drivers</p></div>
-                    <div class="card"><h3>Orders This <?php echo ucfirst(rtrim($filter_type, 'ly')); ?></h3><div class="value"><?php echo $ordersThisPeriod; ?></div><p class="hint"><?php echo $dateLabel; ?></p></div>
+                    <div class="card"><h3>Orders This <?php echo $filterLabel; ?></h3><div class="value"><?php echo $ordersThisPeriod; ?></div><p class="hint"><?php echo $dateLabel; ?></p></div>
                     <div class="card"><h3>Rejected</h3><div class="value"><?php echo $rejected; ?></div><p class="hint">All time</p></div>
                 </section>
 
@@ -243,7 +359,7 @@ $recentOrders = $conn->query("
                             <a href="?filter=weekly&week=<?php echo $weekOffset - 1; ?>" class="btn" style="text-decoration:none; padding: 5px 10px;">&#8249;</a>
                         <?php endif; ?>
 
-                        <h3>Orders Per <?php echo ucfirst(rtrim($filter_type, 'ly')); ?></h3>
+                        <h3>Orders Per <?php echo $filterLabel; ?></h3>
                         
                         <?php if ($filter_type == 'weekly'): ?>
                             <?php if ($weekOffset >= 0): ?>
@@ -261,7 +377,7 @@ $recentOrders = $conn->query("
                     </div>
                 </section>
 
-                <!-- 4. RECENT ORDERS -->
+                <!-- 4. RECENT ORDERS (With Pagination) -->
                 <section class="table-section" style="margin-top: 24px;">
                     <h3>Recent Orders (<?php echo $dateLabel; ?>)</h3>
                     <div class="table-responsive">
@@ -297,6 +413,31 @@ $recentOrders = $conn->query("
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- PAGINATION -->
+                    <?php if ($totalPages > 1): ?>
+                    <div class="pagination">
+                        <?php if ($page > 1): ?>
+                            <a href="?filter=<?php echo $filter_type; ?>&sort=<?php echo $sort; ?>&page=<?php echo $page - 1; ?>">Prev</a>
+                        <?php else: ?>
+                            <span class="disabled">Prev</span>
+                        <?php endif; ?>
+
+                        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                            <?php if ($i == $page): ?>
+                                <span class="active"><?php echo $i; ?></span>
+                            <?php else: ?>
+                                <a href="?filter=<?php echo $filter_type; ?>&sort=<?php echo $sort; ?>&page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                            <?php endif; ?>
+                        <?php endfor; ?>
+
+                        <?php if ($page < $totalPages): ?>
+                            <a href="?filter=<?php echo $filter_type; ?>&sort=<?php echo $sort; ?>&page=<?php echo $page + 1; ?>">Next</a>
+                        <?php else: ?>
+                            <span class="disabled">Next</span>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
                 </section>
 
                 <!-- 5. INVENTORY ALERTS -->
@@ -404,7 +545,6 @@ $recentOrders = $conn->query("
             }
         });
 
-        // --- PROFILE DROPDOWN LOGIC ---
         function toggleProfileMenu(event) {
             event.stopPropagation();
             document.getElementById('profileDropdown').classList.toggle('show');

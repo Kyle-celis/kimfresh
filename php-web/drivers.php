@@ -5,34 +5,14 @@ require 'log_helper.php';
 
 if (!isset($_SESSION['admin_id'])) { header("Location: login.php"); exit(); }
 
-// --- HANDLE CSV EXPORT ---
-if (isset($_POST['export_drivers_csv'])) {
-    logActivity($conn, $_SESSION['admin_id'], "Exported Drivers to CSV");
-
-    $filename = "KimFresh_Drivers_" . date('Y-m-d') . ".csv";
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
-
-    $output = fopen('php://output', 'w');
-    fputcsv($output, array('Driver ID', 'Name', 'Email', 'Phone', 'License', 'Status'));
-
-    $export_query = $conn->query("SELECT * FROM driver ORDER BY driver_id ASC");
-
-    while ($row = $export_query->fetch_assoc()) {
-        fputcsv($output, array(
-            $row['driver_id'],
-            $row['name'],
-            $row['email'],
-            $row['phone'],
-            $row['license_number'],
-            strtoupper($row['status'])
-        ));
-    }
-    fclose($output);
-    exit();
+// --- HANDLE PDF EXPORT ---
+$trigger_print = false;
+if (isset($_POST['export_pdf'])) {
+    logActivity($conn, $_SESSION['admin_id'], "Exported Drivers to PDF");
+    $trigger_print = true;
 }
 
-// --- HANDLE HIDE/RESTORE ---
+// --- HANDLE ACTIVATE/DEACTIVATE ---
 if (isset($_POST['toggle_status'])) {
     $driver_id = $_POST['driver_id'];
     $new_status = $_POST['new_status'];
@@ -41,45 +21,53 @@ if (isset($_POST['toggle_status'])) {
     $stmt->bind_param("si", $new_status, $driver_id);
     $stmt->execute();
     
-    $action = ($new_status == 'hidden') ? "Hidden Driver #" : "Restored Driver #";
+    // If we just activated a driver, try to assign waiting orders
+    if ($new_status == 'available') {
+        assignWaitingOrders($conn);
+    }
+    
+    $action = ($new_status == 'hidden') ? "Deactivated Driver #" : "Activated Driver #";
     logActivity($conn, $_SESSION['admin_id'], $action . $driver_id);
     
     header("Location: drivers.php");
     exit();
 }
 
-// --- FILTER & SORT LOGIC ---
+// --- FILTER LOGIC ---
 $filter = isset($_GET['filter']) ? $_GET['filter'] : 'all'; 
-$sort = isset($_GET['sort']) ? $_GET['sort'] : 'name_asc';
 
-$orderBy = "d.name ASC"; // Default
-if ($sort == 'name_desc') $orderBy = "d.name DESC";
-if ($sort == 'id_asc') $orderBy = "d.driver_id ASC";
-if ($sort == 'id_desc') $orderBy = "d.driver_id DESC";
+// Default sorting by Name A-Z
+$orderBy = "d.name ASC"; 
 
 $sql = "
     SELECT d.*,
            (SELECT dl.delivery_status 
-            FROM delivery dl
-            WHERE dl.driver_id = d.driver_id
-              AND dl.delivery_status != 'delivered'
+            FROM delivery dl 
+            INNER JOIN `order` o ON o.order_id = dl.order_id
+            WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' 
             ORDER BY dl.delivery_id DESC LIMIT 1) AS active_delivery_status,
-           (SELECT COUNT(*) FROM delivery dl
-            WHERE dl.driver_id = d.driver_id
-              AND dl.delivery_status != 'delivered') AS active_orders
+           (SELECT COUNT(*) 
+            FROM delivery dl 
+            INNER JOIN `order` o ON o.order_id = dl.order_id
+            WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered') AS active_orders
     FROM driver d
     WHERE 1=1
 ";
 
-if ($filter === 'available') {
-    $sql .= " AND (SELECT COUNT(*) FROM delivery dl WHERE dl.driver_id = d.driver_id AND dl.delivery_status != 'delivered') = 0";
-} elseif ($filter === 'assigned') {
-    $sql .= " AND (SELECT dl.delivery_status FROM delivery dl WHERE dl.driver_id = d.driver_id AND dl.delivery_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) = 'assigned'";
-} elseif ($filter === 'on_delivery') {
-    $sql .= " AND (SELECT dl.delivery_status FROM delivery dl WHERE dl.driver_id = d.driver_id AND dl.delivery_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) IN ('in_transit', 'picked_up')";
-} elseif ($filter === 'hidden') {
-    $sql .= " AND d.status = 'hidden'";
-} 
+if (!$trigger_print) {
+    // If viewing 'all', hide inactive drivers
+    if ($filter === 'all') {
+        $sql .= " AND d.status != 'hidden'";
+    } elseif ($filter === 'available') {
+        $sql .= " AND (SELECT COUNT(*) FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered') = 0 AND d.status != 'hidden'";
+    } elseif ($filter === 'assigned') {
+        $sql .= " AND (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) = 'assigned'";
+    } elseif ($filter === 'on_delivery') {
+        $sql .= " AND (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) IN ('in_transit', 'picked_up')";
+    } elseif ($filter === 'inactive') {
+        $sql .= " AND d.status = 'hidden'";
+    } 
+}
 
 $sql .= " ORDER BY $orderBy";
 $drivers = $conn->query($sql);
@@ -104,7 +92,6 @@ if ($histRes) {
 <head>
     <meta charset="UTF-8">
     <title>KimFresh - Drivers</title>
-    
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/drivers.css">
@@ -113,40 +100,35 @@ if ($histRes) {
     <style>
         :root { --primary: #C34200; --primary-dark: #9a3400; }
         
-        /* Status Badges */
         .status.available { color: #15803d; background: #dcfce7; }
         .status.assigned { color: #1d4ed8; background: #dbeafe; }
         .status.on-delivery { color: #b45309; background: #fef3c7; }
-        .status.hidden { color: #666; background: #eee; }
+        .status.inactive { color: #666; background: #eee; }
 
-        /* Modal Styles */
         .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
         .modal-backdrop.open { display: flex; }
         .modal { background: white; border-radius: 12px; padding: 24px; width: 90%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
         .modal-wide { max-width: 800px; }
-        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+        .modal-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .modal-actions button { padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; }
         .modal-actions .cancel { background: #eee; color: #333; }
         
-        /* Table inside modal */
         .history-table { width: 100%; border-collapse: collapse; }
         .history-table th { text-align: left; padding: 12px; font-size: 12px; color: #666; border-bottom: 1px solid #eee; background: #f8f9fa; }
         .history-table td { padding: 12px; font-size: 13px; border-bottom: 1px solid #eee; }
 
-        /* Action Buttons */
         .history-btn { padding: 8px 16px; font-size: 12px; font-weight: 700; color: #fff; background: #C34200; border: none; border-radius: 8px; cursor: pointer; width: 100%; margin-bottom: 8px; }
         .history-btn:disabled { background: #ccc; cursor: not-allowed; }
         
-        .btn-hide { padding: 8px 16px; font-size: 12px; font-weight: 700; color: #C34200; background: #fff; border: 1px solid #C34200; border-radius: 8px; cursor: pointer; width: 100%; }
-        .btn-hide:hover { background: #fdf0e6; }
-        .btn-restore { padding: 8px 16px; font-size: 12px; font-weight: 700; color: #fff; background: #C34200; border: 1px solid #C34200; border-radius: 8px; cursor: pointer; width: 100%; }
+        .btn-deactivate { padding: 8px 16px; font-size: 12px; font-weight: 700; color: #fff; background: #dc2626; border: 1px solid #dc2626; border-radius: 8px; cursor: pointer; width: 100%; }
+        .btn-deactivate:hover { background: #b91c1c; }
+        .btn-activate { padding: 8px 16px; font-size: 12px; font-weight: 700; color: #fff; background: #15803d; border: 1px solid #15803d; border-radius: 8px; cursor: pointer; width: 100%; }
+        .btn-activate:hover { background: #166534; }
 
-        /* Filters */
         .filters { display: flex; gap: 12px; margin-top: 24px; margin-bottom: 24px; justify-content: flex-end; }
         .filters select { width: 220px; height: 44px; padding: 0 16px; border: 1px solid #ddd; border-radius: 10px; font-size: 13px; outline: none; background: #fff; font-weight: bold; color: #333; }
         .filters select:focus { border-color: #C34200; }
 
-        /* Profile Dropdown Styles */
         .profile-menu { position: relative; }
         .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
         .profile-trigger:hover { background: var(--primary-soft); }
@@ -158,12 +140,33 @@ if ($histRes) {
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
 
-        /* EXPORT BUTTON */
         .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-export:hover { background: #9a3400; }
+
+        /* --- PRINT STYLES FOR PDF --- */
+        @media print {
+            .sidebar, .top-header, .filters, .page-head, .btn-export, .driver-actions, .no-print { display: none !important; }
+            body { background: white !important; margin: 0 !important; padding: 0 !important; }
+            .dashboard-layout { display: block !important; }
+            .main-area { margin-left: 0 !important; width: 100% !important; }
+            .main-content { padding: 0 !important; }
+            h1 { text-align: center; color: #000 !important; margin-bottom: 5px; }
+            .overview-label { display: none !important; }
+            
+            .driver-grid { display: block !important; }
+            .driver-card { 
+                border: 1px solid #000 !important; 
+                box-shadow: none !important; 
+                margin-bottom: 15px !important; 
+                padding: 15px !important;
+                page-break-inside: avoid;
+            }
+            .driver-contact p, .driver-license { color: #000 !important; }
+            .status { border: 1px solid #000 !important; color: #000 !important; background: transparent !important; }
+        }
     </style>
 </head>
-<body>
+<body <?php if ($trigger_print) echo 'onload="window.print()"'; ?>>
     <div class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-brand">
@@ -205,31 +208,30 @@ if ($histRes) {
             </header>
 
             <main class="main-content">
-                <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;" class="page-head">
                     <div>
                         <p class="overview-label">Manage</p>
                         <h1 style="margin:0;">Drivers</h1>
                     </div>
                     <form method="POST" style="margin:0;">
-                        <button type="submit" name="export_drivers_csv" class="btn-export">Export CSV</button>
+                        <button type="submit" name="export_pdf" class="btn-export">Export to PDF</button>
                     </form>
                 </div>
 
-                <!-- FILTERS -->
-                <form method="GET" class="filters">
+                <?php if($trigger_print): ?>
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="color: #C34200; margin-bottom: 5px;">KimFresh Driver Roster</h1>
+                        <p style="color: #666;">Generated on <?php echo date('F j, Y, g:i A'); ?></p>
+                    </div>
+                <?php endif; ?>
+
+                <form method="GET" class="filters no-print">
                     <select name="filter" onchange="this.form.submit()">
                         <option value="all" <?php echo $filter == 'all' ? 'selected' : ''; ?>>All Drivers</option>
                         <option value="available" <?php echo $filter == 'available' ? 'selected' : ''; ?>>Available</option>
                         <option value="assigned" <?php echo $filter == 'assigned' ? 'selected' : ''; ?>>Assigned</option>
                         <option value="on_delivery" <?php echo $filter == 'on_delivery' ? 'selected' : ''; ?>>On Delivery</option>
-                        <option value="hidden" <?php echo $filter == 'hidden' ? 'selected' : ''; ?>>Hidden</option>
-                    </select>
-                    
-                    <select name="sort" onchange="this.form.submit()">
-                        <option value="name_asc" <?php echo $sort == 'name_asc' ? 'selected' : ''; ?>>Sort by Name (A-Z)</option>
-                        <option value="name_desc" <?php echo $sort == 'name_desc' ? 'selected' : ''; ?>>Sort by Name (Z-A)</option>
-                        <option value="id_asc" <?php echo $sort == 'id_asc' ? 'selected' : ''; ?>>Sort by ID (Low to High)</option>
-                        <option value="id_desc" <?php echo $sort == 'id_desc' ? 'selected' : ''; ?>>Sort by ID (High to Low)</option>
+                        <option value="inactive" <?php echo $filter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
                     </select>
                 </form>
 
@@ -238,11 +240,11 @@ if ($histRes) {
                         <?php while($row = $drivers->fetch_assoc()):
                             $activeCount = (int)$row['active_orders'];
                             $deliveryStatus = $row['active_delivery_status'];
-                            $isHidden = $row['status'] === 'hidden';
+                            $isInactive = $row['status'] === 'hidden';
 
-                            if ($isHidden) {
-                                $statusClass = 'hidden';
-                                $statusLabel = 'Hidden';
+                            if ($isInactive) {
+                                $statusClass = 'inactive';
+                                $statusLabel = 'Inactive';
                             } elseif ($activeCount == 0) {
                                 $statusClass = 'available';
                                 $statusLabel = 'Available';
@@ -276,7 +278,7 @@ if ($histRes) {
                                     <p class="done-count"><?php echo count($driverPast); ?> past deliveries</p>
                                 </div>
 
-                                <div class="driver-actions" style="display:flex; flex-direction:column; gap:8px;">
+                                <div class="driver-actions no-print" style="display:flex; flex-direction:column; gap:8px;">
                                     <button
                                         class="history-btn"
                                         type="button"
@@ -287,17 +289,17 @@ if ($histRes) {
                                         View Delivery History
                                     </button>
 
-                                    <?php if ($isHidden): ?>
+                                    <?php if ($isInactive): ?>
                                         <form method='POST' style='margin:0;'>
                                             <input type='hidden' name='driver_id' value='<?php echo $driverId; ?>'>
                                             <input type='hidden' name='new_status' value='available'>
-                                            <button type='submit' name='toggle_status' class='btn-restore'>Restore Driver</button>
+                                            <button type='submit' name='toggle_status' class='btn-activate'>Activate Driver</button>
                                         </form>
                                     <?php else: ?>
                                         <form method='POST' style='margin:0;'>
                                             <input type='hidden' name='driver_id' value='<?php echo $driverId; ?>'>
                                             <input type='hidden' name='new_status' value='hidden'>
-                                            <button type='submit' name='toggle_status' class='btn-hide'>Hide Driver</button>
+                                            <button type='submit' name='toggle_status' class='btn-deactivate'>Deactivate Driver</button>
                                         </form>
                                     <?php endif; ?>
                                 </div>
@@ -348,24 +350,24 @@ if ($histRes) {
     </div>
 
     <!-- Order History Modal -->
-    <div class="modal-backdrop" id="historyModal">
+    <div class="modal-backdrop no-print" id="historyModal">
         <div class="modal modal-wide">
             <h3 style="margin-top:0; color: #C34200;">Order History — <span id="historyDriverName">—</span></h3>
             <div id="historyBody" style="max-height: 60vh; overflow: auto; margin-top: 14px;"></div>
             <div class="modal-actions" style="margin-top: 16px;">
                 <button type="button" class="cancel" onclick="closeHistory()">Close</button>
+                <button type="button" class="btn-export" onclick="exportHistoryPDF()">Export to PDF</button>
             </div>
         </div>
     </div>
 
     <!-- CUSTOM CTRL+F FIND BAR -->
-    <div id="customFindBar" style="display: none; position: fixed; top: 10px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; border: 1px solid #ddd;">
+    <div id="customFindBar" class="no-print" style="display: none; position: fixed; top: 10px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; border: 1px solid #ddd;">
         <input type="text" id="findInput" placeholder="Find driver..." style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; outline: none; width: 200px;">
         <button id="closeFind" style="padding: 8px 12px; margin-left: 5px; background: #eee; border: none; border-radius: 4px; cursor: pointer;">X</button>
     </div>
 
     <script>
-        // --- HISTORY MODAL LOGIC ---
         const historyModal = document.getElementById('historyModal');
         const historyName  = document.getElementById('historyDriverName');
         const historyBody  = document.getElementById('historyBody');
@@ -395,7 +397,39 @@ if ($histRes) {
             if (e.key === 'Escape') closeHistory();
         });
 
-        // --- PROFILE DROPDOWN LOGIC ---
+        function exportHistoryPDF() {
+            const driverName = historyName.textContent;
+            const tableHTML = historyBody.innerHTML;
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Delivery History - ${driverName}</title>
+                    <style>
+                        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; padding: 40px; }
+                        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #C34200; padding-bottom: 15px; }
+                        .header h1 { color: #C34200; margin: 0; font-size: 24px; }
+                        .header p { color: #666; margin: 5px 0 0; font-size: 14px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th { background: #fdf0e6; color: #C34200; padding: 10px; text-align: left; font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #C34200; }
+                        td { padding: 10px; border-bottom: 1px solid #eee; font-size: 12px; }
+                        .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #999; }
+                    </style>
+                </head>
+                <body onload="window.print();">
+                    <div class="header">
+                        <h1>KimFresh Delivery History</h1>
+                        <p>Driver: <strong>${driverName}</strong> | Generated on <?php echo date('F j, Y'); ?></p>
+                    </div>
+                    ${tableHTML}
+                    <div class="footer">KimFresh IoT System - Confidential Report</div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        }
+
         function toggleProfileMenu(event) {
             event.stopPropagation();
             document.getElementById('profileDropdown').classList.toggle('show');
@@ -408,7 +442,6 @@ if ($histRes) {
             }
         });
 
-        // --- CUSTOM CTRL+F INTERCEPTOR ---
         document.addEventListener('keydown', function(e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
                 e.preventDefault(); 

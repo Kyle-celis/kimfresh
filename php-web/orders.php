@@ -8,57 +8,109 @@ if (!isset($_SESSION['admin_id'])) {
     exit();
 }
 
-// --- HANDLE CSV EXPORT ---
-if (isset($_POST['export_orders_csv'])) {
-    logActivity($conn, $_SESSION['admin_id'], "Exported Orders to CSV");
+// --- HANDLE APPROVE ACTION (WITH AUTO-ASSIGN) ---
+if (isset($_POST['approve_order'])) {
+    $order_id = $_POST['order_id'];
+    
+    // 1. Update order status to approved
+    $stmt = $conn->prepare("UPDATE `order` SET order_status = 'approved' WHERE order_id = ?");
+    $stmt->bind_param("i", $order_id);
+    $stmt->execute();
+    
+    // 2. Call the auto-assign function from db.php
+    $assigned_driver = autoAssignDriver($conn, $order_id);
+    
+    if ($assigned_driver) {
+        logActivity($conn, $_SESSION['admin_id'], "Approved Order #$order_id and Auto-Assigned to Driver #$assigned_driver");
+    } else {
+        logActivity($conn, $_SESSION['admin_id'], "Approved Order #$order_id (No drivers available)");
+    }
+    
+    header("Location: orders.php?status=" . (isset($_GET['status']) ? $_GET['status'] : 'all')); 
+    exit();
+}
 
-    $filename = "KimFresh_Orders_" . date('Y-m-d') . ".csv";
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
+// --- HANDLE REJECT ACTION ---
+if (isset($_POST['reject_order'])) {
+    $order_id = $_POST['order_id'];
+    $stmt = $conn->prepare("UPDATE `order` SET order_status = 'rejected' WHERE order_id = ?");
+    $stmt->bind_param("i", $order_id);
+    $stmt->execute();
+    
+    logActivity($conn, $_SESSION['admin_id'], "Rejected Order #" . $order_id);
+    
+    header("Location: orders.php?status=" . (isset($_GET['status']) ? $_GET['status'] : 'all')); 
+    exit();
+}
 
-    $output = fopen('php://output', 'w');
-    fputcsv($output, array('Order ID', 'Retailer', 'Date', 'Items', 'Total', 'Status'));
-
-    $export_query = $conn->query("
-        SELECT o.order_id, r.name as retailer_name, o.order_date, o.total_amount, o.order_status,
+// --- HANDLE PDF EXPORT ---
+if (isset($_GET['export_pdf'])) {
+    logActivity($conn, $_SESSION['admin_id'], "Exported Orders to PDF");
+    
+    $print_query = $conn->query("
+        SELECT o.order_id, r.name as retailer_name, r.address, o.order_date, o.total_amount, o.order_status,
         (SELECT SUM(quantity) FROM order_item WHERE order_id = o.order_id) as total_items
         FROM `order` o
         LEFT JOIN retailer r ON o.retailer_id = r.retailer_id
         ORDER BY o.order_date DESC
     ");
-
-    while ($row = $export_query->fetch_assoc()) {
-        fputcsv($output, array(
-            '#' . $row['order_id'],
-            $row['retailer_name'],
-            date('M d, Y', strtotime($row['order_date'])),
-            $row['total_items'] . ' items',
-            'PHP ' . number_format($row['total_amount'], 2),
-            strtoupper($row['order_status'])
-        ));
-    }
-    fclose($output);
-    exit();
-}
-
-// Handle Approve Action
-if (isset($_POST['approve_order'])) {
-    $order_id = $_POST['order_id'];
-    $stmt = $conn->prepare("UPDATE `order` SET order_status = 'approved' WHERE order_id = ?");
-    $stmt->bind_param("i", $order_id);
-    $stmt->execute();
-    
-    logActivity($conn, $_SESSION['admin_id'], "Approved Order #" . $order_id);
-    
-    $current_filter = isset($_GET['status']) ? $_GET['status'] : 'all';
-    header("Location: orders.php?status=" . $current_filter); 
+    ?>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>KimFresh - Orders Report</title>
+        <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 40px; }
+            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #C34200; padding-bottom: 20px; }
+            .header h1 { margin: 0; color: #C34200; font-size: 28px; }
+            .header p { margin: 5px 0 0; color: #666; font-size: 14px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { background: #fdf0e6; color: #C34200; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #C34200; }
+            td { padding: 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+            .num { text-align: right; }
+            .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #999; }
+            @media print { body { padding: 0; } .no-print { display: none; } }
+        </style>
+    </head>
+    <body onload="window.print();">
+        <div class="header">
+            <h1>KimFresh Orders Report</h1>
+            <p>Generated on <?php echo date('F j, Y, g:i A'); ?></p>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Retailer</th>
+                    <th>Date</th>
+                    <th>Items</th>
+                    <th class="num">Total</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php while($row = $print_query->fetch_assoc()): ?>
+                <tr>
+                    <td>#<?php echo $row['order_id']; ?></td>
+                    <td><?php echo htmlspecialchars($row['retailer_name']); ?></td>
+                    <td><?php echo date('M d, Y', strtotime($row['order_date'])); ?></td>
+                    <td><?php echo $row['total_items'] ?? 0; ?> items</td>
+                    <td class="num">₱<?php echo number_format($row['total_amount'], 2); ?></td>
+                    <td><?php echo strtoupper($row['order_status']); ?></td>
+                </tr>
+                <?php endwhile; ?>
+            </tbody>
+        </table>
+        <div class="footer">KimFresh IoT System - Confidential Report</div>
+    </body>
+    </html>
+    <?php
     exit();
 }
 
 // --- SORTING LOGIC ---
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date_desc';
-$orderBy = "o.order_date DESC"; // Default
-
+$orderBy = "o.order_date DESC";
 if ($sort == 'id_asc') $orderBy = "o.order_id ASC";
 if ($sort == 'id_desc') $orderBy = "o.order_id DESC";
 if ($sort == 'retailer_asc') $orderBy = "r.name ASC";
@@ -74,33 +126,38 @@ $counts = [
     'pending' => $conn->query("SELECT COUNT(*) AS c FROM `order` WHERE order_status = 'pending'")->fetch_assoc()['c'],
     'approved' => $conn->query("SELECT COUNT(*) AS c FROM `order` WHERE order_status = 'approved'")->fetch_assoc()['c'],
     'waiting_for_pickup' => $conn->query("SELECT COUNT(*) AS c FROM `order` WHERE order_status = 'waiting_for_pickup'")->fetch_assoc()['c'],
-    'in_transit' => $conn->query("SELECT COUNT(*) AS c FROM `order` WHERE order_status = 'in_transit'")->fetch_assoc()['c'],
     'delivered' => $conn->query("SELECT COUNT(*) AS c FROM `order` WHERE order_status = 'delivered'")->fetch_assoc()['c'],
     'rejected' => $conn->query("SELECT COUNT(*) AS c FROM `order` WHERE order_status = 'rejected'")->fetch_assoc()['c']
 ];
 
 $current_filter = isset($_GET['status']) ? $_GET['status'] : 'all';
 
-$sql = "
-    SELECT o.order_id, r.name as retailer_name, r.customer_code, r.address, o.order_status, o.total_amount, o.order_date
-    FROM `order` o
-    LEFT JOIN retailer r ON o.retailer_id = r.retailer_id
-    WHERE 1=1
-";
+// --- PAGINATION LOGIC ---
+$limit = 10;
+$page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $limit;
+
+$baseSql = "FROM `order` o LEFT JOIN retailer r ON o.retailer_id = r.retailer_id WHERE 1=1";
 
 if ($current_filter !== 'all') {
     $safe_filter = $conn->real_escape_string($current_filter);
-    $sql .= " AND o.order_status = '$safe_filter' ";
+    $baseSql .= " AND o.order_status = '$safe_filter' ";
 }
 
-$sql .= " ORDER BY $orderBy";
+$countQuery = $conn->query("SELECT COUNT(*) AS total $baseSql");
+$total_rows = $countQuery->fetch_assoc()['total'];
+$total_pages = ceil($total_rows / $limit);
+
+$sql = "SELECT o.order_id, r.name as retailer_name, r.customer_code, r.address, o.order_status, o.total_amount, o.order_date
+        $baseSql ORDER BY $orderBy LIMIT $limit OFFSET $offset";
 $orders = $conn->query($sql);
 ?>
 
 <!DOCTYPE html>
 <html>
 <head>
-    <title>KimFresh - PHP Orders</title>
+    <title>KimFresh - Orders</title>
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/orders.css">
@@ -109,7 +166,6 @@ $orders = $conn->query($sql);
         :root { --primary: #C34200; --primary-dark: #9a3400; }
         th a:hover { color: #C34200 !important; }
 
-        /* PROFILE DROPDOWN STYLES */
         .profile-menu { position: relative; }
         .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
         .profile-trigger:hover { background: var(--primary-soft); }
@@ -121,9 +177,29 @@ $orders = $conn->query($sql);
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
 
-        /* EXPORT BUTTON */
-        .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; }
         .btn-export:hover { background: #9a3400; }
+
+        /* --- ACTION BUTTON STYLES --- */
+        .action-group { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
+        .btn-approve { background: #15803d; color: white; padding: 7px 14px; font-size: 12px; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-approve:hover { background: #166534; }
+        .btn-reject { background: #dc2626; color: white; padding: 7px 14px; font-size: 12px; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-reject:hover { background: #b91c1c; }
+        .btn-view { background: #fff; color: #333; padding: 7px 14px; font-size: 12px; font-weight: 700; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-view:hover { background: #f8f9fa; border-color: #C34200; color: #C34200; }
+
+        .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 24px; }
+        .pagination a, .pagination span {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 36px; height: 36px; padding: 0 12px;
+            border-radius: 8px; font-size: 13px; font-weight: 700;
+            text-decoration: none; border: 1px solid #ddd; color: #555; background: white;
+            transition: 0.2s;
+        }
+        .pagination a:hover { background: #fdf0e6; border-color: #C34200; color: #C34200; }
+        .pagination .active { background: #C34200; border-color: #C34200; color: white; }
+        .pagination .disabled { opacity: 0.5; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -172,21 +248,17 @@ $orders = $conn->query($sql);
                     <div>
                         <p class="overview-label">Manage</p>
                         <h1 style="margin:0;">Orders</h1>
-                        <p class="page-sub" style="margin-top:5px;">Review retailer orders. Approve or reject pending requests; delivery progress and cold-chain readings are monitored here.</p>
+                        <p class="page-sub" style="margin-top:5px;">Review retailer orders. Approve or reject pending requests.</p>
                     </div>
-                    <form method="POST" style="margin:0;">
-                        <button type="submit" name="export_orders_csv" class="btn-export">Export CSV</button>
-                    </form>
+                    <a href="?export_pdf=1" target="_blank" class="btn-export">Export PDF</a>
                 </div>
 
-                <!-- STATUS TABS -->
                 <div class="toolbar">
                     <div class="tabs">
                         <a href="?status=all&sort=<?php echo $sort; ?>" class="tab <?php echo $current_filter == 'all' ? 'active' : ''; ?>" style="text-decoration:none;">All <span><?php echo $counts['all']; ?></span></a>
                         <a href="?status=pending&sort=<?php echo $sort; ?>" class="tab <?php echo $current_filter == 'pending' ? 'active' : ''; ?>" style="text-decoration:none;">Pending <span><?php echo $counts['pending']; ?></span></a>
                         <a href="?status=approved&sort=<?php echo $sort; ?>" class="tab <?php echo $current_filter == 'approved' ? 'active' : ''; ?>" style="text-decoration:none;">Approved <span><?php echo $counts['approved']; ?></span></a>
                         <a href="?status=waiting_for_pickup&sort=<?php echo $sort; ?>" class="tab <?php echo $current_filter == 'waiting_for_pickup' ? 'active' : ''; ?>" style="text-decoration:none;">In Pickup <span><?php echo $counts['waiting_for_pickup']; ?></span></a>
-                        <a href="?status=in_transit&sort=<?php echo $sort; ?>" class="tab <?php echo $current_filter == 'in_transit' ? 'active' : ''; ?>" style="text-decoration:none;">Out for Delivery <span><?php echo $counts['in_transit']; ?></span></a>
                         <a href="?status=delivered&sort=<?php echo $sort; ?>" class="tab <?php echo $current_filter == 'delivered' ? 'active' : ''; ?>" style="text-decoration:none;">Delivered <span><?php echo $counts['delivered']; ?></span></a>
                         <a href="?status=rejected&sort=<?php echo $sort; ?>" class="tab <?php echo $current_filter == 'rejected' ? 'active' : ''; ?>" style="text-decoration:none;">Rejected <span><?php echo $counts['rejected']; ?></span></a>
                     </div>
@@ -202,7 +274,7 @@ $orders = $conn->query($sql);
                                 <th>Items</th>
                                 <th><a href="?status=<?php echo $current_filter; ?>&sort=<?php echo ($sort == 'total_asc' ? 'total_desc' : 'total_asc'); ?>" style="text-decoration:none; color:inherit;">Total ↕</a></th>
                                 <th><a href="?status=<?php echo $current_filter; ?>&sort=<?php echo ($sort == 'status_asc' ? 'status_desc' : 'status_asc'); ?>" style="text-decoration:none; color:inherit;">Status ↕</a></th>
-                                <th>Action</th>
+                                <th style="text-align: right;">Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -224,13 +296,23 @@ $orders = $conn->query($sql);
                                     echo "<td><span class='status-pill " . $status . "'>" . $displayStatus . "</span></td>";
                                     
                                     echo "<td>";
+                                    echo "<div class='action-group'>";
+                                    
                                     if ($row["order_status"] == 'pending') {
-                                        echo "<form method='POST' style='margin:0; display:inline-block;'>";
+                                        echo "<form method='POST' style='margin:0;'>";
                                         echo "<input type='hidden' name='order_id' value='" . $row["order_id"] . "'>";
-                                        echo "<button type='submit' name='approve_order' class='view-btn pending-btn' style='margin-right:5px;'>Approve</button>";
+                                        echo "<button type='submit' name='approve_order' class='btn-approve'>Approve</button>";
+                                        echo "</form>";
+                                        
+                                        echo "<form method='POST' style='margin:0;'>";
+                                        echo "<input type='hidden' name='order_id' value='" . $row["order_id"] . "'>";
+                                        echo "<button type='submit' name='reject_order' class='btn-reject' onclick='return confirm(\"Are you sure you want to reject this order?\");'>Reject</button>";
                                         echo "</form>";
                                     }
-                                    echo "<a href='view_order.php?id=" . $row["order_id"] . "' class='view-btn' style='text-decoration:none;'>View</a>";
+                                    
+                                    echo "<a href='view_order.php?id=" . $row["order_id"] . "' class='btn-view'>View</a>";
+                                    
+                                    echo "</div>";
                                     echo "</td>";
                                     echo "</tr>";
                                 }
@@ -241,6 +323,31 @@ $orders = $conn->query($sql);
                         </tbody>
                     </table>
                 </div>
+
+                <?php if ($total_pages > 1): ?>
+                <div class="pagination">
+                    <?php if ($page > 1): ?>
+                        <a href="?status=<?php echo $current_filter; ?>&sort=<?php echo $sort; ?>&page=<?php echo $page - 1; ?>">Prev</a>
+                    <?php else: ?>
+                        <span class="disabled">Prev</span>
+                    <?php endif; ?>
+
+                    <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                        <?php if ($i == $page): ?>
+                            <span class="active"><?php echo $i; ?></span>
+                        <?php else: ?>
+                            <a href="?status=<?php echo $current_filter; ?>&sort=<?php echo $sort; ?>&page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                        <?php endif; ?>
+                    <?php endfor; ?>
+
+                    <?php if ($page < $total_pages): ?>
+                        <a href="?status=<?php echo $current_filter; ?>&sort=<?php echo $sort; ?>&page=<?php echo $page + 1; ?>">Next</a>
+                    <?php else: ?>
+                        <span class="disabled">Next</span>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+
             </main>
         </div>
     </div>
@@ -263,7 +370,6 @@ $orders = $conn->query($sql);
             }
         });
 
-        // --- CUSTOM CTRL+F INTERCEPTOR ---
         document.addEventListener('keydown', function(e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
                 e.preventDefault(); 
