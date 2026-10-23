@@ -12,12 +12,10 @@ if (!isset($_SESSION['admin_id'])) {
 if (isset($_POST['approve_order'])) {
     $order_id = $_POST['order_id'];
     
-    // 1. Update order status to approved
     $stmt = $conn->prepare("UPDATE `order` SET order_status = 'approved' WHERE order_id = ?");
     $stmt->bind_param("i", $order_id);
     $stmt->execute();
     
-    // 2. Call the auto-assign function from db.php
     $assigned_driver = autoAssignDriver($conn, $order_id);
     
     if ($assigned_driver) {
@@ -43,68 +41,65 @@ if (isset($_POST['reject_order'])) {
     exit();
 }
 
-// --- HANDLE PDF EXPORT ---
+// --- HANDLE PDF EXPORT (FPDF) ---
 if (isset($_GET['export_pdf'])) {
     logActivity($conn, $_SESSION['admin_id'], "Exported Orders to PDF");
     
+    require('fpdf/fpdf.php');
+
+    class PDF extends FPDF {
+        function Header() {
+            $this->SetFont('Arial', 'B', 15);
+            $this->SetTextColor(195, 66, 0); // Terracotta
+            $this->Cell(0, 10, 'KimFresh Orders Report', 0, 1, 'C');
+            $this->SetFont('Arial', 'I', 10);
+            $this->SetTextColor(100, 100, 100);
+            $this->Cell(0, 5, 'Generated on: ' . date('F j, Y, g:i A'), 0, 1, 'C');
+            $this->Ln(10);
+            
+            // Table Header
+            $this->SetFont('Arial', 'B', 10);
+            $this->SetFillColor(195, 66, 0);
+            $this->SetTextColor(255, 255, 255);
+            $this->Cell(20, 8, 'Order ID', 1, 0, 'C', true);
+            $this->Cell(60, 8, 'Retailer', 1, 0, 'C', true);
+            $this->Cell(30, 8, 'Date', 1, 0, 'C', true);
+            $this->Cell(25, 8, 'Items', 1, 0, 'C', true);
+            $this->Cell(30, 8, 'Total', 1, 0, 'C', true);
+            $this->Cell(25, 8, 'Status', 1, 1, 'C', true);
+        }
+
+        function Footer() {
+            $this->SetY(-15);
+            $this->SetFont('Arial', 'I', 8);
+            $this->SetTextColor(128);
+            $this->Cell(0, 10, 'Page ' . $this->PageNo() . ' - KimFresh IoT System', 0, 0, 'C');
+        }
+    }
+
+    $pdf = new PDF();
+    $pdf->AddPage();
+    $pdf->SetFont('Arial', '', 10);
+    $pdf->SetTextColor(0, 0, 0);
+
     $print_query = $conn->query("
-        SELECT o.order_id, r.name as retailer_name, r.address, o.order_date, o.total_amount, o.order_status,
+        SELECT o.order_id, r.name as retailer_name, o.order_date, o.total_amount, o.order_status,
         (SELECT SUM(quantity) FROM order_item WHERE order_id = o.order_id) as total_items
         FROM `order` o
         LEFT JOIN retailer r ON o.retailer_id = r.retailer_id
         ORDER BY o.order_date DESC
     ");
-    ?>
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>KimFresh - Orders Report</title>
-        <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 40px; }
-            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #C34200; padding-bottom: 20px; }
-            .header h1 { margin: 0; color: #C34200; font-size: 28px; }
-            .header p { margin: 5px 0 0; color: #666; font-size: 14px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th { background: #fdf0e6; color: #C34200; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #C34200; }
-            td { padding: 12px; border-bottom: 1px solid #eee; font-size: 13px; }
-            .num { text-align: right; }
-            .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #999; }
-            @media print { body { padding: 0; } .no-print { display: none; } }
-        </style>
-    </head>
-    <body onload="window.print();">
-        <div class="header">
-            <h1>KimFresh Orders Report</h1>
-            <p>Generated on <?php echo date('F j, Y, g:i A'); ?></p>
-        </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Order ID</th>
-                    <th>Retailer</th>
-                    <th>Date</th>
-                    <th>Items</th>
-                    <th class="num">Total</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php while($row = $print_query->fetch_assoc()): ?>
-                <tr>
-                    <td>#<?php echo $row['order_id']; ?></td>
-                    <td><?php echo htmlspecialchars($row['retailer_name']); ?></td>
-                    <td><?php echo date('M d, Y', strtotime($row['order_date'])); ?></td>
-                    <td><?php echo $row['total_items'] ?? 0; ?> items</td>
-                    <td class="num">₱<?php echo number_format($row['total_amount'], 2); ?></td>
-                    <td><?php echo strtoupper($row['order_status']); ?></td>
-                </tr>
-                <?php endwhile; ?>
-            </tbody>
-        </table>
-        <div class="footer">KimFresh IoT System - Confidential Report</div>
-    </body>
-    </html>
-    <?php
+
+    while($row = $print_query->fetch_assoc()) {
+        $pdf->Cell(20, 8, '#' . $row['order_id'], 1, 0, 'C');
+        $pdf->Cell(60, 8, htmlspecialchars($row['retailer_name']), 1, 0, 'L');
+        $pdf->Cell(30, 8, date('M d, Y', strtotime($row['order_date'])), 1, 0, 'C');
+        $pdf->Cell(25, 8, $row['total_items'] . ' items', 1, 0, 'C');
+        $pdf->Cell(30, 8, 'PHP ' . number_format($row['total_amount'], 2), 1, 0, 'R');
+        $pdf->Cell(25, 8, strtoupper($row['order_status']), 1, 1, 'C');
+    }
+
+    $pdf->Output('D', 'KimFresh_Orders.pdf');
     exit();
 }
 
@@ -155,23 +150,17 @@ $orders = $conn->query($sql);
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KimFresh - Orders</title>
-    
     <link rel="stylesheet" href="css/theme.css">
-    <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/flow.css">
     <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/orders.css">
-    
+    <link rel="stylesheet" href="css/flow.css">
     <style>
         :root { --primary: #C34200; --primary-dark: #9a3400; }
         th a:hover { color: #C34200 !important; }
 
-        /* PROFILE DROPDOWN STYLES */
         .profile-menu { position: relative; }
         .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
         .profile-trigger:hover { background: var(--primary-soft); }
@@ -206,103 +195,6 @@ $orders = $conn->query($sql);
         .pagination a:hover { background: #fdf0e6; border-color: #C34200; color: #C34200; }
         .pagination .active { background: #C34200; border-color: #C34200; color: white; }
         .pagination .disabled { opacity: 0.5; pointer-events: none; }
-
-        /* =========================================
-           MOBILE CARD LAYOUT (Direct Override)
-           ========================================= */
-        @media (max-width: 768px) {
-            .orders-box, 
-            .orders-box.table-responsive {
-                overflow-x: hidden !important;
-                width: 100% !important;
-                border-radius: 0 !important;
-                border: none !important;
-                background: transparent !important;
-                box-shadow: none !important;
-            }
-
-            .orders-table thead {
-                display: none !important;
-            }
-
-            .orders-table, 
-            .orders-table tbody, 
-            .orders-table tr, 
-            .orders-table td {
-                display: block !important;
-                width: 100% !important;
-                min-width: 0 !important;
-            }
-
-            .orders-table tr {
-                background: #fff !important;
-                border: 1px solid #eee !important;
-                border-radius: 12px !important;
-                padding: 14px !important;
-                margin-bottom: 16px !important;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important;
-            }
-
-            .orders-table td {
-                display: flex !important;
-                justify-content: space-between !important;
-                align-items: center !important;
-                padding: 8px 0 !important;
-                border: none !important;
-                border-bottom: 1px dashed #f0f0f0 !important;
-                text-align: right !important;
-                font-size: 13px !important;
-            }
-
-            .orders-table td:last-child {
-                border-bottom: none !important;
-                padding-top: 12px !important;
-            }
-
-            .orders-table td::before {
-                content: attr(data-label);
-                font-weight: 700 !important;
-                color: #777 !important;
-                text-transform: uppercase !important;
-                font-size: 10px !important;
-                letter-spacing: 0.5px !important;
-                text-align: left !important;
-                margin-right: 12px !important;
-            }
-
-            .orders-table td[data-label="Order"] {
-                font-size: 15px !important;
-            }
-
-            .orders-table td[data-label="Order"] .order-no {
-                font-size: 15px !important;
-                font-weight: 800 !important;
-                color: #C34200 !important;
-            }
-
-            .orders-table td[data-label="Action"] {
-                display: block !important;
-                text-align: left !important;
-            }
-
-            .orders-table td[data-label="Action"]::before {
-                display: block !important;
-                margin-bottom: 8px !important;
-            }
-
-            .orders-table td[data-label="Action"] .action-group {
-                justify-content: flex-start !important;
-            }
-
-            .orders-table td[colspan] {
-                display: block !important;
-                text-align: center !important;
-            }
-
-            .orders-table td[colspan]::before {
-                display: none !important;
-            }
-        }
     </style>
 </head>
 <body>
@@ -337,6 +229,7 @@ $orders = $conn->query($sql);
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
                             <strong><?php echo $_SESSION['admin_name']; ?></strong>
+                            <span><?php echo $_SESSION['admin_email'] ?? 'admin@kimfresh.com'; ?></span>
                         </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
@@ -346,13 +239,14 @@ $orders = $conn->query($sql);
             </header>
 
             <main class="main-content">
-                <div class="page-head" style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
                     <div>
                         <p class="overview-label">Manage</p>
                         <h1 style="margin:0;">Orders</h1>
                         <p class="page-sub" style="margin-top:5px;">Review retailer orders. Approve or reject pending requests.</p>
                     </div>
-                    <a href="?export_pdf=1" target="_blank" class="btn-export">Export PDF</a>
+                    <!-- EXPORT BUTTON (Download Attribute forces instant download) -->
+                    <a href="?export_pdf=1" download="KimFresh_Orders.pdf" class="btn-export">Export PDF</a>
                 </div>
 
                 <div class="toolbar">
@@ -366,7 +260,7 @@ $orders = $conn->query($sql);
                     </div>
                 </div>
 
-                <div class="orders-box table-responsive">
+                <div class="orders-box">
                     <table class="orders-table">
                         <thead>
                             <tr>
@@ -390,14 +284,14 @@ $orders = $conn->query($sql);
                                     $item_count = $item_query->fetch_assoc()['total'] ?? 0;
                                     
                                     echo "<tr>";
-                                    echo "<td data-label='Order'><span class='order-no'>#" . $row["order_id"] . "</span></td>";
-                                    echo "<td data-label='Retailer'><strong>" . htmlspecialchars($row["retailer_name"]) . "</strong></td>";
-                                    echo "<td data-label='Date'>" . date('M d, Y, g:i A', strtotime($row['order_date'])) . "</td>";
-                                    echo "<td data-label='Items'>" . $item_count . " items</td>";
-                                    echo "<td data-label='Total' class='num'>₱" . number_format($row["total_amount"], 2) . "</td>";
-                                    echo "<td data-label='Status'><span class='status-pill " . $status . "'>" . $displayStatus . "</span></td>";
+                                    echo "<td><span class='order-no'>#" . $row["order_id"] . "</span></td>";
+                                    echo "<td><strong>" . htmlspecialchars($row["retailer_name"]) . "</strong></td>";
+                                    echo "<td>" . date('M d, Y, g:i A', strtotime($row['order_date'])) . "</td>";
+                                    echo "<td>" . $item_count . " items</td>";
+                                    echo "<td class='num'>₱" . number_format($row["total_amount"], 2) . "</td>";
+                                    echo "<td><span class='status-pill " . $status . "'>" . $displayStatus . "</span></td>";
                                     
-                                    echo "<td data-label='Action'>";
+                                    echo "<td>";
                                     echo "<div class='action-group'>";
                                     
                                     if ($row["order_status"] == 'pending') {
@@ -480,13 +374,9 @@ $orders = $conn->query($sql);
                 document.getElementById('findInput').focus();
             }
             if (e.key === 'Escape') {
-                const findBar = document.getElementById('customFindBar');
-                if (findBar.style.display === 'flex') {
-                    findBar.style.display = 'none';
-                    document.getElementById('findInput').value = '';
-                    document.querySelectorAll('table tbody tr').forEach(row => row.style.display = '');
-                    e.stopImmediatePropagation();
-                }
+                document.getElementById('customFindBar').style.display = 'none';
+                document.getElementById('findInput').value = '';
+                document.querySelectorAll('table tbody tr').forEach(row => row.style.display = '');
             }
         });
 
@@ -505,73 +395,6 @@ $orders = $conn->query($sql);
                 row.style.display = text.includes(query) ? '' : 'none';
             });
         });
-    </script>
-
-    <!-- KimFresh mobile burger menu. Include this just before </body> on every admin page. -->
-    <script>
-    /* KimFresh mobile burger menu.
-       Builds the burger button, a mobile logo, a close button and the overlay,
-       so every admin page only needs to include this one script. */
-    (function () {
-        var sidebar = document.querySelector('.sidebar');
-        var header = document.querySelector('.top-header');
-        if (!sidebar || !header) return;
-
-        sidebar.id = sidebar.id || 'sidebar';
-
-        // Burger button (first item in the top bar)
-        var burger = document.createElement('button');
-        burger.type = 'button';
-        burger.className = 'menu-toggle';
-        burger.setAttribute('aria-label', 'Open menu');
-        burger.setAttribute('aria-controls', sidebar.id);
-        burger.setAttribute('aria-expanded', 'false');
-        burger.innerHTML = '<span></span><span></span><span></span>';
-        header.insertBefore(burger, header.firstChild);
-
-        // Logo in the top bar (copied from the sidebar, since the sidebar is hidden)
-        var logo = sidebar.querySelector('.logo');
-        if (logo) {
-            var mobileLogo = logo.cloneNode(true);
-            mobileLogo.className = 'mobile-logo';
-            header.insertBefore(mobileLogo, burger.nextSibling);
-        }
-
-        // Close button inside the drawer
-        var closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'sidebar-close';
-        closeBtn.setAttribute('aria-label', 'Close menu');
-        closeBtn.innerHTML = '&times;';
-        sidebar.appendChild(closeBtn);
-
-        // Dark overlay behind the drawer
-        var overlay = document.createElement('div');
-        overlay.className = 'sidebar-overlay';
-        document.body.appendChild(overlay);
-
-        function setOpen(open) {
-            sidebar.classList.toggle('open', open);
-            document.body.classList.toggle('sidebar-open', open);
-            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
-        }
-
-        burger.addEventListener('click', function () {
-            setOpen(!sidebar.classList.contains('open'));
-        });
-        closeBtn.addEventListener('click', function () { setOpen(false); });
-        overlay.addEventListener('click', function () { setOpen(false); });
-        sidebar.addEventListener('click', function (e) {
-            if (e.target.closest('a')) setOpen(false);
-        });
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') setOpen(false);
-        });
-        // If the window grows past phone size, reset the drawer
-        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) {
-            if (e.matches) setOpen(false);
-        });
-    })();
     </script>
 </body>
 </html>

@@ -8,10 +8,48 @@ if (!isset($_SESSION['admin_id'])) {
     exit();
 }
 
-// --- FETCH STORE STATUS ---
-$store_res = $conn->query("SELECT is_open FROM store_settings WHERE id = 1");
-$store_data = $store_res->fetch_assoc();
-$is_store_open = $store_data['is_open'];
+// --- SMART STORE STATUS LOGIC ---
+$store = $conn->query("SELECT * FROM store_settings WHERE id = 1")->fetch_assoc();
+
+// Set timezone to Manila
+date_default_timezone_set('Asia/Manila');
+$current_time = date('H:i:s');
+
+$is_store_open = false;
+
+if ($store['manual_override'] !== NULL) {
+    $is_store_open = ($store['manual_override'] == 1);
+} else {
+    if ($store['open_time'] <= $store['close_time']) {
+        $is_store_open = ($current_time >= $store['open_time'] && $current_time <= $store['close_time']);
+    } else {
+        $is_store_open = ($current_time >= $store['open_time'] || $current_time <= $store['close_time']);
+    }
+}
+
+// Handle Manual Override Toggle
+if (isset($_POST['toggle_manual'])) {
+    $override = $_POST['override_value'];
+    $stmt = $conn->prepare("UPDATE store_settings SET manual_override = ? WHERE id = 1");
+    $stmt->bind_param("i", $override);
+    $stmt->execute();
+    
+    $action = ($override == 1) ? "Manually Opened Store" : "Manually Closed Store";
+    logActivity($conn, $_SESSION['admin_id'], $action);
+    
+    header("Location: products.php");
+    exit();
+}
+
+// Handle Reset to Schedule
+if (isset($_POST['reset_schedule'])) {
+    $stmt = $conn->prepare("UPDATE store_settings SET manual_override = NULL WHERE id = 1");
+    $stmt->execute();
+    
+    logActivity($conn, $_SESSION['admin_id'], "Reset Store to Auto Schedule");
+    header("Location: products.php");
+    exit();
+}
 
 // --- HANDLE PDF EXPORT (Using Print CSS) ---
 $trigger_print = false;
@@ -190,9 +228,17 @@ if (!$trigger_print) {
         .pagination .active { background: #C34200; border-color: #C34200; color: white; }
         .pagination .disabled { opacity: 0.5; pointer-events: none; }
 
+        /* STORE STATUS STYLES */
+        .store-status-box { background: white; padding: 15px 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+        .store-status-box.open { border-left: 5px solid #15803d; }
+        .store-status-box.closed { border-left: 5px solid #dc2626; }
+        .btn-store { color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-store.open { background: #dc2626; }
+        .btn-store.closed { background: #15803d; }
+
         /* --- PRINT STYLES FOR PDF --- */
         @media print {
-            .sidebar, .top-header, .page-head, .actions, .pagination, .btn-export, .primary-btn { display: none !important; }
+            .sidebar, .top-header, .page-head, .actions, .pagination, .btn-export, .primary-btn, .store-status-box { display: none !important; }
             body { background: white !important; margin: 0 !important; padding: 0 !important; }
             .dashboard-layout { display: block !important; }
             .main-area { margin-left: 0 !important; width: 100% !important; }
@@ -213,7 +259,6 @@ if (!$trigger_print) {
            MOBILE COMPACT TABLE LAYOUT & BUTTON FIX
            ========================================= */
         @media (max-width: 768px) {
-            /* --- FIX HEADER BUTTONS --- */
             .page-head {
                 flex-direction: column !important;
                 align-items: stretch !important;
@@ -237,53 +282,16 @@ if (!$trigger_print) {
                 white-space: nowrap !important;
             }
 
-            /* --- FIX TABLE --- */
-            .table-section {
-                padding: 10px !important; 
-            }
-
-            .table-responsive {
-                overflow-x: hidden !important; 
-                width: 100% !important;
-            }
-
-            table {
-                width: 100% !important;
-                min-width: 0 !important; 
-                table-layout: fixed; 
-            }
-
-            th, td {
-                padding: 8px 4px !important;
-                font-size: 11px !important;
-                word-wrap: break-word;
-                white-space: normal !important;
-            }
-
-            /* Hide the Reorder Level column */
-            th:nth-child(4), td:nth-child(4) {
-                display: none !important; 
-            }
-
-            /* Stack action buttons */
-            .actions {
-                flex-direction: column;
-                gap: 4px;
-            }
+            .table-section { padding: 10px !important; }
+            .table-responsive { overflow-x: hidden !important; width: 100% !important; }
+            table { width: 100% !important; min-width: 0 !important; table-layout: fixed; }
+            th, td { padding: 8px 4px !important; font-size: 11px !important; word-wrap: break-word; white-space: normal !important; }
+            th:nth-child(4), td:nth-child(4) { display: none !important; }
+            .actions { flex-direction: column; gap: 4px; }
+            .btn-edit, .btn-delete { padding: 4px 6px !important; font-size: 10px !important; width: 100%; text-align: center; }
+            .status { font-size: 9px !important; padding: 2px 4px !important; display: inline-block; }
             
-            .btn-edit,
-            .btn-delete {
-                padding: 4px 6px !important;
-                font-size: 10px !important;
-                width: 100%;
-                text-align: center;
-            }
-
-            .status {
-                font-size: 9px !important;
-                padding: 2px 4px !important;
-                display: inline-block;
-            }
+            .store-status-box { flex-direction: column; gap: 15px; align-items: stretch; }
         }
     </style>
 </head>
@@ -319,7 +327,8 @@ if (!$trigger_print) {
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
                             <strong><?php echo $_SESSION['admin_name']; ?></strong>
-                    </div>
+                            <span><?php echo $_SESSION['admin_email'] ?? 'admin@kimfresh.com'; ?></span>
+                        </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
                         <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>
@@ -340,6 +349,41 @@ if (!$trigger_print) {
                             <button type="submit" name="export_pdf" class="btn-export" style="width: 100%;">Export to PDF</button>
                         </form>
                         <button class="primary-btn" onclick="openProductModal()" style="width: 100%;">+ Add Product</button>
+                    </div>
+                </div>
+
+                <!-- STORE STATUS TOGGLE -->
+                <div class="store-status-box <?php echo $is_store_open ? 'open' : 'closed'; ?>">
+                    <div>
+                        <h3 style="margin: 0; font-size: 16px;">Store Status: 
+                            <span style="color: <?php echo $is_store_open ? '#15803d' : '#dc2626'; ?>;">
+                                <?php echo $is_store_open ? 'OPEN' : 'CLOSED'; ?>
+                            </span>
+                        </h3>
+                        <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">
+                            <?php 
+                            if ($store['manual_override'] !== NULL) {
+                                echo "Manual Override Active.";
+                            } else {
+                                echo "Auto Schedule: " . date('h:i A', strtotime($store['open_time'])) . " - " . date('h:i A', strtotime($store['close_time'])); 
+                            }
+                            ?>
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <?php if ($store['manual_override'] !== NULL): ?>
+                            <form method="POST" style="margin:0;">
+                                <button type="submit" name="reset_schedule" class="btn-store" style="background: #555;">
+                                    Reset to Schedule
+                                </button>
+                            </form>
+                        <?php endif; ?>
+                        <form method="POST" style="margin:0;">
+                            <input type="hidden" name="override_value" value="<?php echo $is_store_open ? 0 : 1; ?>">
+                            <button type="submit" name="toggle_manual" class="btn-store <?php echo $is_store_open ? 'open' : 'closed'; ?>">
+                                <?php echo $is_store_open ? 'Force Close' : 'Force Open'; ?>
+                            </button>
+                        </form>
                     </div>
                 </div>
 
@@ -434,38 +478,38 @@ if (!$trigger_print) {
         </div>
     </div>
 
-<!-- ADD / EDIT MODAL -->
-<dialog id="productModal">
-    <h2 id="modalTitle">Add Product</h2>
-    <form method="POST">
-        <input type="hidden" name="product_id" id="form_id" value="">
-        
-        <label>Product Name</label>
-        <input type="text" name="name" id="form_name" maxlength="50" required>
-        
-        <label>SKU</label>
-        <input type="text" name="sku" id="form_sku" maxlength="50">
-        
-        <div class="row">
-            <div>
-                <label>Price (₱)</label>
-                <input type="number" step="0.01" min="0" name="unit_price" id="form_price" required>
+    <!-- ADD / EDIT MODAL -->
+    <dialog id="productModal">
+        <h2 id="modalTitle">Add Product</h2>
+        <form method="POST">
+            <input type="hidden" name="product_id" id="form_id" value="">
+            
+            <label>Product Name</label>
+            <input type="text" name="name" id="form_name" maxlength="50" required>
+            
+            <label>SKU</label>
+            <input type="text" name="sku" id="form_sku" maxlength="50">
+            
+            <div class="row">
+                <div>
+                    <label>Price (₱)</label>
+                    <input type="number" step="0.01" min="0" name="unit_price" id="form_price" required>
+                </div>
+                <div>
+                    <label>Reorder Level</label>
+                    <input type="number" min="1" name="reorder_level" id="form_reorder" required>
+                </div>
             </div>
-            <div>
-                <label>Reorder Level</label>
-                <input type="number" min="1" name="reorder_level" id="form_reorder" required>
+            
+            <label>Stock Quantity</label>
+            <input type="number" min="0" name="stock_quantity" id="form_stock" required>
+            
+            <div class="dialog-buttons">
+                <button type="button" class="cancel-btn" onclick="closeProductModal()">Cancel</button>
+                <button type="submit" name="save_product" class="primary-btn">Save Product</button>
             </div>
-        </div>
-        
-        <label>Stock Quantity</label>
-        <input type="number" min="0" name="stock_quantity" id="form_stock" required>
-        
-        <div class="dialog-buttons">
-            <button type="button" class="cancel-btn" onclick="closeProductModal()">Cancel</button>
-            <button type="submit" name="save_product" class="primary-btn">Save Product</button>
-        </div>
-    </form>
-</dialog>        
+        </form>
+    </dialog>        
 
     <!-- CUSTOM DELETE CONFIRMATION MODAL -->
     <dialog id="deleteModal">
@@ -574,11 +618,8 @@ if (!$trigger_print) {
         });
     </script>
 
-    <!-- KimFresh mobile burger menu. Include this just before </body> on every admin page. -->
+    <!-- KimFresh mobile burger menu script -->
     <script>
-    /* KimFresh mobile burger menu.
-       Builds the burger button, a mobile logo, a close button and the overlay,
-       so every admin page only needs to include this one script. */
     (function () {
         var sidebar = document.querySelector('.sidebar');
         var header = document.querySelector('.top-header');
@@ -586,7 +627,6 @@ if (!$trigger_print) {
 
         sidebar.id = sidebar.id || 'sidebar';
 
-        // Burger button (first item in the top bar)
         var burger = document.createElement('button');
         burger.type = 'button';
         burger.className = 'menu-toggle';
@@ -596,7 +636,6 @@ if (!$trigger_print) {
         burger.innerHTML = '<span></span><span></span><span></span>';
         header.insertBefore(burger, header.firstChild);
 
-        // Logo in the top bar (copied from the sidebar, since the sidebar is hidden)
         var logo = sidebar.querySelector('.logo');
         if (logo) {
             var mobileLogo = logo.cloneNode(true);
@@ -604,7 +643,6 @@ if (!$trigger_print) {
             header.insertBefore(mobileLogo, burger.nextSibling);
         }
 
-        // Close button inside the drawer
         var closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.className = 'sidebar-close';
@@ -612,7 +650,6 @@ if (!$trigger_print) {
         closeBtn.innerHTML = '&times;';
         sidebar.appendChild(closeBtn);
 
-        // Dark overlay behind the drawer
         var overlay = document.createElement('div');
         overlay.className = 'sidebar-overlay';
         document.body.appendChild(overlay);
@@ -623,21 +660,12 @@ if (!$trigger_print) {
             burger.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
 
-        burger.addEventListener('click', function () {
-            setOpen(!sidebar.classList.contains('open'));
-        });
+        burger.addEventListener('click', function () { setOpen(!sidebar.classList.contains('open')); });
         closeBtn.addEventListener('click', function () { setOpen(false); });
         overlay.addEventListener('click', function () { setOpen(false); });
-        sidebar.addEventListener('click', function (e) {
-            if (e.target.closest('a')) setOpen(false);
-        });
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') setOpen(false);
-        });
-        // If the window grows past phone size, reset the drawer
-        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) {
-            if (e.matches) setOpen(false);
-        });
+        sidebar.addEventListener('click', function (e) { if (e.target.closest('a')) setOpen(false); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) { if (e.matches) setOpen(false); });
     })();
     </script>
 </body>

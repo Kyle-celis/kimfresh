@@ -8,53 +8,6 @@ if (!isset($_SESSION['admin_id'])) {
     exit();
 }
 
-// --- SMART STORE STATUS LOGIC ---
-$store = $conn->query("SELECT * FROM store_settings WHERE id = 1")->fetch_assoc();
-
-// Set timezone to Manila
-date_default_timezone_set('Asia/Manila');
-$current_time = date('H:i:s');
-
-$is_store_open = false;
-
-// Check if Admin set a manual override
-if ($store['manual_override'] !== NULL) {
-    $is_store_open = ($store['manual_override'] == 1);
-} else {
-    // Follow the schedule (Handles overnight schedules too)
-    if ($store['open_time'] <= $store['close_time']) {
-        // Normal schedule (e.g., 08:00 to 17:00)
-        $is_store_open = ($current_time >= $store['open_time'] && $current_time <= $store['close_time']);
-    } else {
-        // Overnight schedule (e.g., 22:00 to 06:00)
-        $is_store_open = ($current_time >= $store['open_time'] || $current_time <= $store['close_time']);
-    }
-}
-
-// Handle Manual Override Toggle
-if (isset($_POST['toggle_manual'])) {
-    $override = $_POST['override_value'];
-    $stmt = $conn->prepare("UPDATE store_settings SET manual_override = ? WHERE id = 1");
-    $stmt->bind_param("i", $override);
-    $stmt->execute();
-    
-    $action = ($override == 1) ? "Manually Opened Store" : "Manually Closed Store";
-    logActivity($conn, $_SESSION['admin_id'], $action);
-    
-    header("Location: dashboard.php");
-    exit();
-}
-
-// Handle Reset to Schedule
-if (isset($_POST['reset_schedule'])) {
-    $stmt = $conn->prepare("UPDATE store_settings SET manual_override = NULL WHERE id = 1");
-    $stmt->execute();
-    
-    logActivity($conn, $_SESSION['admin_id'], "Reset Store to Auto Schedule");
-    header("Location: dashboard.php");
-    exit();
-}
-
 // --- DATE FILTERS (Daily, Weekly, Monthly) ---
 $filter_type = isset($_GET['filter']) ? $_GET['filter'] : 'weekly'; 
 $weekOffset = isset($_GET['week']) ? (int)$_GET['week'] : 0;
@@ -218,14 +171,6 @@ $recentOrders = $conn->query("
         .pagination a:hover { background: #fdf0e6; border-color: #C34200; color: #C34200; }
         .pagination .active { background: #C34200; border-color: #C34200; color: white; }
         .pagination .disabled { opacity: 0.5; pointer-events: none; }
-
-        /* STORE STATUS STYLES */
-        .store-status-box { background: white; padding: 15px 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
-        .store-status-box.open { border-left: 5px solid #15803d; }
-        .store-status-box.closed { border-left: 5px solid #dc2626; }
-        .btn-store { color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        .btn-store.open { background: #dc2626; }
-        .btn-store.closed { background: #15803d; }
     </style>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -262,7 +207,8 @@ $recentOrders = $conn->query("
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
                             <strong><?php echo $_SESSION['admin_name']; ?></strong>
-                    </div>
+                            <span><?php echo $_SESSION['admin_email'] ?? 'admin@kimfresh.com'; ?></span>
+                        </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
                         <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>
@@ -273,41 +219,6 @@ $recentOrders = $conn->query("
             <main class="main-content">
                 <p class="overview-label">Overview</p>
                 <h1>Distribution Dashboard</h1>
-
-                <!-- STORE STATUS TOGGLE -->
-                <div class="store-status-box <?php echo $is_store_open ? 'open' : 'closed'; ?>">
-                    <div>
-                        <h3 style="margin: 0; font-size: 16px;">Store Status: 
-                            <span style="color: <?php echo $is_store_open ? '#15803d' : '#dc2626'; ?>;">
-                                <?php echo $is_store_open ? 'OPEN' : 'CLOSED'; ?>
-                            </span>
-                        </h3>
-                        <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">
-                            <?php 
-                            if ($store['manual_override'] !== NULL) {
-                                echo "Manual Override Active.";
-                            } else {
-                                echo "Auto Schedule: " . date('h:i A', strtotime($store['open_time'])) . " - " . date('h:i A', strtotime($store['close_time'])); 
-                            }
-                            ?>
-                        </p>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <?php if ($store['manual_override'] !== NULL): ?>
-                            <form method="POST" style="margin:0;">
-                                <button type="submit" name="reset_schedule" class="btn-store" style="background: #555;">
-                                    Reset to Schedule
-                                </button>
-                            </form>
-                        <?php endif; ?>
-                        <form method="POST" style="margin:0;">
-                            <input type="hidden" name="override_value" value="<?php echo $is_store_open ? 0 : 1; ?>">
-                            <button type="submit" name="toggle_manual" class="btn-store <?php echo $is_store_open ? 'open' : 'closed'; ?>">
-                                <?php echo $is_store_open ? 'Force Close' : 'Force Open'; ?>
-                            </button>
-                        </form>
-                    </div>
-                </div>
 
                 <!-- 1. ORDER FLOW -->
                 <section class="panel" style="margin-bottom: 24px;">
@@ -529,18 +440,8 @@ $recentOrders = $conn->query("
                 maintainAspectRatio: false, 
                 plugins: { legend: { display: false } },
                 scales: { 
-                    y: { 
-                        beginAtZero: true, 
-                        ticks: { 
-                            precision: 0,
-                            font: { size: 12, family: 'Nunito Sans, Arial' } 
-                        } 
-                    },
-                    x: {
-                        ticks: {
-                            font: { size: 12, family: 'Nunito Sans, Arial' } 
-                        }
-                    }
+                    y: { beginAtZero: true, ticks: { precision: 0, font: { size: 12, family: 'Nunito Sans, Arial' } } },
+                    x: { ticks: { font: { size: 12, family: 'Nunito Sans, Arial' } } }
                 }
             }
         });
@@ -558,11 +459,8 @@ $recentOrders = $conn->query("
         });
     </script>
 
-    <!-- KimFresh mobile burger menu. Include this just before </body> on every admin page. -->
+    <!-- KimFresh mobile burger menu script -->
     <script>
-    /* KimFresh mobile burger menu.
-       Builds the burger button, a mobile logo, a close button and the overlay,
-       so every admin page only needs to include this one script. */
     (function () {
         var sidebar = document.querySelector('.sidebar');
         var header = document.querySelector('.top-header');
@@ -570,7 +468,6 @@ $recentOrders = $conn->query("
 
         sidebar.id = sidebar.id || 'sidebar';
 
-        // Burger button (first item in the top bar)
         var burger = document.createElement('button');
         burger.type = 'button';
         burger.className = 'menu-toggle';
@@ -580,7 +477,6 @@ $recentOrders = $conn->query("
         burger.innerHTML = '<span></span><span></span><span></span>';
         header.insertBefore(burger, header.firstChild);
 
-        // Logo in the top bar (copied from the sidebar, since the sidebar is hidden)
         var logo = sidebar.querySelector('.logo');
         if (logo) {
             var mobileLogo = logo.cloneNode(true);
@@ -588,7 +484,6 @@ $recentOrders = $conn->query("
             header.insertBefore(mobileLogo, burger.nextSibling);
         }
 
-        // Close button inside the drawer
         var closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.className = 'sidebar-close';
@@ -596,7 +491,6 @@ $recentOrders = $conn->query("
         closeBtn.innerHTML = '&times;';
         sidebar.appendChild(closeBtn);
 
-        // Dark overlay behind the drawer
         var overlay = document.createElement('div');
         overlay.className = 'sidebar-overlay';
         document.body.appendChild(overlay);
@@ -607,21 +501,12 @@ $recentOrders = $conn->query("
             burger.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
 
-        burger.addEventListener('click', function () {
-            setOpen(!sidebar.classList.contains('open'));
-        });
+        burger.addEventListener('click', function () { setOpen(!sidebar.classList.contains('open')); });
         closeBtn.addEventListener('click', function () { setOpen(false); });
         overlay.addEventListener('click', function () { setOpen(false); });
-        sidebar.addEventListener('click', function (e) {
-            if (e.target.closest('a')) setOpen(false);
-        });
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') setOpen(false);
-        });
-        // If the window grows past phone size, reset the drawer
-        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) {
-            if (e.matches) setOpen(false);
-        });
+        sidebar.addEventListener('click', function (e) { if (e.target.closest('a')) setOpen(false); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) { if (e.matches) setOpen(false); });
     })();
     </script>
 </body>

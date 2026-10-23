@@ -1,78 +1,53 @@
 <?php
 session_start();
 require 'db.php';
+require 'log_helper.php';
+
+if (isset($_SESSION['admin_id'])) {
+    $stmt = $conn->prepare("SELECT is_superadmin FROM admin WHERE admin_id = ?");
+    $stmt->bind_param("i", $_SESSION['admin_id']);
+    $stmt->execute();
+    $is_super = $stmt->get_result()->fetch_assoc()['is_superadmin'] ?? 0;
+    
+    if ($is_super == 1) {
+        header("Location: superadmin.php");
+    } else {
+        header("Location: dashboard.php");
+    }
+    exit();
+}
 
 $loginError = '';
-$signupError = '';
-$signupSuccess = '';
-$activeTab = 'login'; // Default tab
 
 // --- HANDLE LOGIN ---
 if (isset($_POST['login_submit'])) {
     $email = $_POST['email'];
     $password = $_POST['password'];
 
-    $stmt = $conn->prepare("SELECT admin_id, name, password_hash, status FROM admin WHERE email = ?");
+    $stmt = $conn->prepare("SELECT admin_id, name, email, password_hash, is_superadmin FROM admin WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $result = $stmt->get_result();
 
     if ($row = $result->fetch_assoc()) {
         if (password_verify($password, $row['password_hash'])) {
+            $_SESSION['admin_id'] = $row['admin_id'];
+            $_SESSION['admin_name'] = $row['name'];
+            $_SESSION['admin_email'] = $row['email'];
             
-            // --- CHECK IF ACCOUNT IS DEACTIVATED ---
-            if (isset($row['status']) && $row['status'] === 'inactive') {
-                $loginError = "Your account has been deactivated. Please contact the Superadmin.";
+            logActivity($conn, $row['admin_id'], "Logged in");
+
+            if ($row['is_superadmin'] == 1) {
+                header("Location: superadmin.php");
             } else {
-                $_SESSION['admin_id'] = $row['admin_id'];
-                $_SESSION['admin_name'] = $row['name'];
-                $_SESSION['admin_email'] = $row['email'];
-                
-                require 'log_helper.php';
-                logActivity($conn, $row['admin_id'], "Admin logged in");
-                
-                // --- REDIRECT SUPERADMIN TO MANAGE ADMINS PAGE ---
-                if ($row['admin_id'] == 1) {
-                    header("Location: superadmin.php");
-                } else {
-                    header("Location: dashboard.php");
-                }
-                exit();
+                header("Location: dashboard.php");
             }
-            
+            exit();
         } else {
             $loginError = "Invalid password.";
         }
     } else {
         $loginError = "Email not found.";
-    }
-}
-
-// --- HANDLE SIGNUP ---
-if (isset($_POST['signup_submit'])) {
-    $activeTab = 'signup'; // Stay on signup tab if there is an error
-    $name = $_POST['name'];
-    $email = $_POST['su_email'];
-    $password = $_POST['su_password'];
-
-    // Check if email exists
-    $check = $conn->prepare("SELECT admin_id FROM admin WHERE email = ?");
-    $check->bind_param("s", $email);
-    $check->execute();
-    if ($check->get_result()->num_rows > 0) {
-        $signupError = "Email already registered.";
-    } else {
-        // Hash password and insert
-        $hash = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = $conn->prepare("INSERT INTO admin (name, email, password_hash, status) VALUES (?, ?, ?, 'active')");
-        $stmt->bind_param("sss", $name, $email, $hash);
-        
-        if ($stmt->execute()) {
-            $signupSuccess = "Account created! You can now log in.";
-            $activeTab = 'login'; // Switch back to login on success
-        } else {
-            $signupError = "Failed to create account.";
-        }
     }
 }
 ?>
@@ -87,11 +62,6 @@ if (isset($_POST['signup_submit'])) {
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/login.css">
-    <link rel="stylesheet" href="css/responsive.css">
-    <style>
-        /* A tiny bit of CSS to hide/show the panels */
-        .hidden { display: none; }
-    </style>
 </head>
 <body>
 
@@ -114,58 +84,27 @@ if (isset($_POST['signup_submit'])) {
             <div class="login-box">
 
                 <div class="tabs">
-                    <a href="javascript:void(0);" id="tabLogin" class="tab <?php echo $activeTab == 'login' ? 'active' : ''; ?>" onclick="switchTab('login')">Login</a>
-                    <a href="javascript:void(0);" id="tabSignup" class="tab <?php echo $activeTab == 'signup' ? 'active' : ''; ?>" onclick="switchTab('signup')">Sign up</a>
+                    <a href="javascript:void(0);" class="tab active">Login</a>
                 </div>
 
-                <!-- LOGIN PANEL -->
-                <div id="loginPanel" class="panel <?php echo $activeTab == 'signup' ? 'hidden' : ''; ?>">
+                <div class="panel">
                     <h1>Login to your account</h1>
                     <p class="subtitle">Sign in to your KimFresh admin account to continue.</p>
 
                     <?php if($loginError): ?><p class="alert-box"><?php echo $loginError; ?></p><?php endif; ?>
-                    <?php if($signupSuccess): ?><p class="alert-box success"><?php echo $signupSuccess; ?></p><?php endif; ?>
 
                     <form method="POST" action="">
                         <label for="email">Email</label>
                         <div class="input-box">
-                            <input type="email" name="email" placeholder="Email" maxlength="30" required>
-
+                            <input type="email" name="email" placeholder="admin@kimfresh.com" required>
                         </div>
 
                         <label for="password">Password</label>
                         <div class="input-box">
-                            <input type="password" name="password" placeholder="Enter your password" maxlength="30" required>
+                            <input type="password" name="password" placeholder="Enter your password" required>
                         </div>
 
                         <button type="submit" name="login_submit" class="btn">Login</button>
-                    </form>
-                </div>
-
-                <!-- SIGNUP PANEL -->
-                <div id="signupPanel" class="panel <?php echo $activeTab == 'login' ? 'hidden' : ''; ?>">
-                    <h1>Create an account</h1>
-                    <p class="subtitle">Set up your KimFresh admin access.</p>
-
-                    <?php if($signupError): ?><p class="alert-box"><?php echo $signupError; ?></p><?php endif; ?>
-
-                    <form method="POST" action="">
-                        <label for="suName">Full name</label>
-                        <div class="input-box">
-                            <input type="text" name="name" id="suName" placeholder="Juan Dela Cruz" maxlength="30" required>
-                        </div>
-
-                        <label for="suEmail">Email</label>
-                        <div class="input-box">
-                            <input type="email" name="su_email" id="suEmail" placeholder="admin@kimfresh.com" maxlength="30" required>
-                        </div>
-
-                        <label for="suPassword">Password</label>
-                        <div class="input-box">
-                            <input type="password" name="su_password" id="suPassword" placeholder="Create a strong password" maxlength="30" required>
-                        </div>
-
-                        <button type="submit" name="signup_submit" class="btn">Sign Up</button>
                     </form>
                 </div>
 
@@ -173,15 +112,5 @@ if (isset($_POST['signup_submit'])) {
         </div>
     </div>
 
-    <script>
-        // Simple JavaScript to toggle the tabs visually
-        function switchTab(tab) {
-            const isLogin = tab === 'login';
-            document.getElementById('loginPanel').classList.toggle('hidden', !isLogin);
-            document.getElementById('signupPanel').classList.toggle('hidden', isLogin);
-            document.getElementById('tabLogin').classList.toggle('active', isLogin);
-            document.getElementById('tabSignup').classList.toggle('active', !isLogin);
-        }
-    </script>
 </body>
 </html>
