@@ -9,8 +9,8 @@ if ($order_id <= 0) {
     exit;
 }
 
-// Fetch the current coordinates
-$stmt = $conn->prepare("SELECT driver_lat, driver_lng FROM `order` WHERE order_id = ?");
+// Fetch BOTH driver and retailer coordinates
+$stmt = $conn->prepare("SELECT driver_lat, driver_lng, retailer_lat, retailer_lng FROM `order` WHERE order_id = ?");
 $stmt->bind_param("i", $order_id);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -21,14 +21,16 @@ if (!$row) {
     exit;
 }
 
-if ($row['driver_lat'] === NULL || $row['driver_lng'] === NULL) {
-    echo json_encode(["success" => false, "message" => "Driver location not available yet"]);
-    exit;
-}
-
-echo json_encode([
+// Build the response
+$response = [
     "success" => true,
-    "lat" => (float)$row['driver_lat'],
-    "lng" => (float)$row['driver_lng']
-]);
+    "driver_lat" => $row['driver_lat'] !== NULL ? (float)$row['driver_lat'] : null,
+    "driver_lng" => $row['driver_lng'] !== NULL ? (float)$row['driver_lng'] : null,
+    "retailer_lat" => $row['retailer_lat'] !== NULL ? (float)$row['retailer_lat'] : null,
+    "retailer_lng" => $row['retailer_lng'] !== NULL ? (float)$row['retailer_lng'] : null
+];
+
+echo json_encode($response);
+$stmt->close();
+$conn->close();
 ?>
