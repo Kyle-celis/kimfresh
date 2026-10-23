@@ -51,12 +51,60 @@ if (isset($_POST['reset_schedule'])) {
     exit();
 }
 
-// --- HANDLE PDF EXPORT (Using Print CSS) ---
-$trigger_print = false;
-if (isset($_POST['export_pdf'])) {
+// --- HANDLE PDF EXPORT (FPDF) ---
+if (isset($_GET['export_pdf'])) {
     logActivity($conn, $_SESSION['admin_id'], "Exported Products to PDF");
-    $trigger_print = true;
-    $products = $conn->query("SELECT * FROM product ORDER BY product_id ASC");
+    
+    require('fpdf/fpdf.php');
+
+    class PDF extends FPDF {
+        function Header() {
+            $this->SetFont('Arial', 'B', 15);
+            $this->SetTextColor(195, 66, 0); 
+            $this->Cell(0, 10, 'KimFresh Product Inventory', 0, 1, 'C');
+            $this->SetFont('Arial', 'I', 10);
+            $this->SetTextColor(100, 100, 100);
+            $this->Cell(0, 5, 'Generated on: ' . date('F j, Y, g:i A'), 0, 1, 'C');
+            $this->Ln(10);
+            
+            // Table Header
+            $this->SetFont('Arial', 'B', 10);
+            $this->SetFillColor(195, 66, 0);
+            $this->SetTextColor(255, 255, 255);
+            $this->Cell(60, 8, 'Product Name', 1, 0, 'C', true);
+            $this->Cell(30, 8, 'SKU', 1, 0, 'C', true);
+            $this->Cell(30, 8, 'Price', 1, 0, 'C', true);
+            $this->Cell(20, 8, 'Stock', 1, 0, 'C', true);
+            $this->Cell(25, 8, 'Reorder', 1, 0, 'C', true);
+            $this->Cell(25, 8, 'Status', 1, 1, 'C', true);
+        }
+
+        function Footer() {
+            $this->SetY(-15);
+            $this->SetFont('Arial', 'I', 8);
+            $this->SetTextColor(128);
+            $this->Cell(0, 10, 'Page ' . $this->PageNo() . ' - KimFresh IoT System', 0, 0, 'C');
+        }
+    }
+
+    $pdf = new PDF();
+    $pdf->AddPage();
+    $pdf->SetFont('Arial', '', 10);
+    $pdf->SetTextColor(0, 0, 0);
+
+    $products_query = $conn->query("SELECT * FROM product ORDER BY product_id ASC");
+
+    while($row = $products_query->fetch_assoc()) {
+        $pdf->Cell(60, 8, htmlspecialchars($row['name']), 1, 0, 'L');
+        $pdf->Cell(30, 8, htmlspecialchars($row['sku']), 1, 0, 'C');
+        $pdf->Cell(30, 8, 'PHP ' . number_format($row['unit_price'], 2), 1, 0, 'R');
+        $pdf->Cell(20, 8, $row['stock_quantity'], 1, 0, 'C');
+        $pdf->Cell(25, 8, $row['reorder_level'], 1, 0, 'C');
+        $pdf->Cell(25, 8, strtoupper($row['status']), 1, 1, 'C');
+    }
+
+    $pdf->Output('D', 'KimFresh_Products.pdf');
+    exit();
 }
 
 // --- HANDLE HARD DELETE ---
@@ -120,31 +168,29 @@ $total_products = $conn->query("SELECT COUNT(*) AS c FROM product")->fetch_assoc
 $low_stock = $conn->query("SELECT COUNT(*) AS c FROM product WHERE stock_quantity <= reorder_level")->fetch_assoc()['c'];
 $available_products = $conn->query("SELECT COUNT(*) AS c FROM product WHERE status = 'available' AND stock_quantity > 0")->fetch_assoc()['c'];
 
-if (!$trigger_print) {
-    // --- SORTING LOGIC ---
-    $sort = isset($_GET['sort']) ? $_GET['sort'] : 'id_asc';
-    $orderBy = "product_id ASC"; 
+// --- SORTING LOGIC ---
+$sort = isset($_GET['sort']) ? $_GET['sort'] : 'id_asc';
+$orderBy = "product_id ASC"; 
 
-    if ($sort == 'name_asc') $orderBy = "name ASC";
-    if ($sort == 'name_desc') $orderBy = "name DESC";
-    if ($sort == 'price_asc') $orderBy = "unit_price ASC";
-    if ($sort == 'price_desc') $orderBy = "unit_price DESC";
-    if ($sort == 'stock_asc') $orderBy = "stock_quantity ASC";
-    if ($sort == 'stock_desc') $orderBy = "stock_quantity DESC";
+if ($sort == 'name_asc') $orderBy = "name ASC";
+if ($sort == 'name_desc') $orderBy = "name DESC";
+if ($sort == 'price_asc') $orderBy = "unit_price ASC";
+if ($sort == 'price_desc') $orderBy = "unit_price DESC";
+if ($sort == 'stock_asc') $orderBy = "stock_quantity ASC";
+if ($sort == 'stock_desc') $orderBy = "stock_quantity DESC";
 
-    // --- PAGINATION LOGIC ---
-    $limit = 10;
-    $page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
-    if ($page < 1) $page = 1;
-    $offset = ($page - 1) * $limit;
+// --- PAGINATION LOGIC ---
+$limit = 10;
+$page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $limit;
 
-    $countQuery = $conn->query("SELECT COUNT(*) AS total FROM product");
-    $total_rows = $countQuery->fetch_assoc()['total'];
-    $total_pages = ceil($total_rows / $limit);
+$countQuery = $conn->query("SELECT COUNT(*) AS total FROM product");
+$total_rows = $countQuery->fetch_assoc()['total'];
+$total_pages = ceil($total_rows / $limit);
 
-    $sql = "SELECT * FROM product ORDER BY $orderBy LIMIT $limit OFFSET $offset";
-    $products = $conn->query($sql);
-}
+$sql = "SELECT * FROM product ORDER BY $orderBy LIMIT $limit OFFSET $offset";
+$products = $conn->query($sql);
 ?>
 
 <!DOCTYPE html>
@@ -213,7 +259,7 @@ if (!$trigger_print) {
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
 
-        .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; }
         .btn-export:hover { background: #9a3400; }
 
         .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 24px; }
@@ -295,7 +341,7 @@ if (!$trigger_print) {
         }
     </style>
 </head>
-<body <?php if ($trigger_print) echo 'onload="window.print()"'; ?>>
+<body>
     <div class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-brand">
@@ -345,10 +391,8 @@ if (!$trigger_print) {
                         <p style="margin-top:5px;">Add, delete and keep track of your kimchi stock.</p>
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <form method="POST" style="margin:0; width: 100%;">
-                            <button type="submit" name="export_pdf" class="btn-export" style="width: 100%;">Export to PDF</button>
-                        </form>
-                        <button class="primary-btn" onclick="openProductModal()" style="width: 100%;">+ Add Product</button>
+                        <a href="?export_pdf=1" download="KimFresh_Products.pdf" class="btn-export" style="text-decoration:none; text-align:center;">Export to PDF</a>
+                        <button class="primary-btn" onclick="openProductModal()">+ Add Product</button>
                     </div>
                 </div>
 
@@ -450,7 +494,7 @@ if (!$trigger_print) {
                         </table>
                     </div>
                     
-                    <?php if (!$trigger_print && $total_pages > 1): ?>
+                    <?php if ($total_pages > 1): ?>
                     <div class="pagination">
                         <?php if ($page > 1): ?>
                             <a href="?sort=<?php echo $sort; ?>&page=<?php echo $page - 1; ?>">Prev</a>

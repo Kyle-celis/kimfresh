@@ -9,6 +9,7 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 $order_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$trigger_print = false;
 
 // 1. Fetch Order Details
 $stmt = $conn->prepare("
@@ -53,11 +54,80 @@ $driver_query = $conn->query("
 $driver = $driver_query->fetch_assoc();
 $driver_name = $driver ? $driver['driver_name'] : 'No driver assigned yet';
 
-// --- HANDLE PDF EXPORT ---
-$trigger_print = false;
+// --- HANDLE PDF EXPORT (FPDF) ---
 if (isset($_GET['export_pdf'])) {
     logActivity($conn, $_SESSION['admin_id'], "Exported Order #$order_id Receipt to PDF");
-    $trigger_print = true;
+    
+    require('fpdf/fpdf.php');
+
+    class PDF extends FPDF {
+        function Header() {
+            $this->SetFont('Arial', 'B', 15);
+            $this->SetTextColor(195, 66, 0); 
+            $this->Cell(0, 10, 'KimFresh Order Receipt', 0, 1, 'C');
+            $this->SetFont('Arial', 'I', 10);
+            $this->SetTextColor(100, 100, 100);
+            $this->Cell(0, 5, 'Generated on: ' . date('F j, Y, g:i A'), 0, 1, 'C');
+            $this->Ln(10);
+        }
+
+        function Footer() {
+            $this->SetY(-15);
+            $this->SetFont('Arial', 'I', 8);
+            $this->SetTextColor(128);
+            $this->Cell(0, 10, 'Page ' . $this->PageNo() . ' - KimFresh IoT System', 0, 0, 'C');
+        }
+    }
+
+    $pdf = new PDF();
+    $pdf->AddPage();
+    $pdf->SetFont('Arial', '', 10);
+    $pdf->SetTextColor(0, 0, 0);
+
+    // Retailer Info
+    $pdf->SetFont('Arial', 'B', 11);
+    $pdf->Cell(0, 8, 'Retailer Information', 0, 1);
+    $pdf->SetFont('Arial', '', 10);
+    $pdf->Cell(0, 6, 'Name: ' . htmlspecialchars($order['retailer_name']), 0, 1);
+    $pdf->Cell(0, 6, 'Code: ' . htmlspecialchars($order['customer_code']), 0, 1);
+    $pdf->Cell(0, 6, 'Address: ' . htmlspecialchars($order['address']), 0, 1);
+    $pdf->Ln(5);
+
+    // Order Info
+    $pdf->SetFont('Arial', 'B', 11);
+    $pdf->Cell(0, 8, 'Order Information', 0, 1);
+    $pdf->SetFont('Arial', '', 10);
+    $pdf->Cell(0, 6, 'Order ID: #' . $order_id, 0, 1);
+    $pdf->Cell(0, 6, 'Date: ' . date('M d, Y h:i A', strtotime($order['order_date'])), 0, 1);
+    $pdf->Cell(0, 6, 'Driver: ' . htmlspecialchars($driver_name), 0, 1);
+    $pdf->Cell(0, 6, 'Status: ' . strtoupper(str_replace('_', ' ', $order['order_status'])), 0, 1);
+    $pdf->Ln(5);
+
+    // Items Table
+    $pdf->SetFont('Arial', 'B', 10);
+    $pdf->SetFillColor(195, 66, 0);
+    $pdf->SetTextColor(255, 255, 255);
+    $pdf->Cell(80, 8, 'Product', 1, 0, 'L', true);
+    $pdf->Cell(25, 8, 'Qty', 1, 0, 'C', true);
+    $pdf->Cell(35, 8, 'Unit Price', 1, 0, 'R', true);
+    $pdf->Cell(35, 8, 'Subtotal', 1, 1, 'R', true);
+    
+    $pdf->SetFont('Arial', '', 10);
+    $pdf->SetTextColor(0, 0, 0);
+    $items->data_seek(0);
+    while($item = $items->fetch_assoc()) {
+        $pdf->Cell(80, 8, htmlspecialchars($item['product_name']), 1, 0, 'L');
+        $pdf->Cell(25, 8, $item['quantity'], 1, 0, 'C');
+        $pdf->Cell(35, 8, 'PHP ' . number_format($item['unit_price'], 2), 1, 0, 'R');
+        $pdf->Cell(35, 8, 'PHP ' . number_format($item['subtotal'], 2), 1, 1, 'R');
+    }
+    
+    $pdf->SetFont('Arial', 'B', 10);
+    $pdf->Cell(140, 8, 'Total Amount', 1, 0, 'R');
+    $pdf->Cell(35, 8, 'PHP ' . number_format($order['total_amount'], 2), 1, 1, 'R');
+
+    $pdf->Output('D', 'KimFresh_Order_' . $order_id . '.pdf');
+    exit();
 }
 ?>
 
@@ -89,22 +159,9 @@ if (isset($_GET['export_pdf'])) {
 
         .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; }
         .btn-export:hover { background: #9a3400; }
-
-        /* --- PRINT STYLES FOR PDF --- */
-        @media print {
-            .sidebar, .top-header, .no-print, .btn-export, .back-link { display: none !important; }
-            body { background: white !important; margin: 0 !important; padding: 0 !important; }
-            .dashboard-layout { display: block !important; }
-            .main-area { margin-left: 0 !important; width: 100% !important; }
-            .main-content { padding: 0 !important; }
-            .table-section { box-shadow: none !important; border: none !important; padding: 0 !important; }
-            h2, h3, h4 { color: #000 !important; }
-            .items-table th, .items-table td { border: 1px solid #000 !important; padding: 8px !important; color: #000 !important; }
-            .items-table th { background: #eee !important; }
-        }
     </style>
 </head>
-<body <?php if ($trigger_print) echo 'onload="window.print()"'; ?>>
+<body>
     <div class="dashboard-layout">
         <aside class="sidebar no-print">
             <div class="sidebar-brand">
@@ -136,7 +193,8 @@ if (isset($_GET['export_pdf'])) {
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
                             <strong><?php echo $_SESSION['admin_name']; ?></strong>
-                    </div>
+                            <span><?php echo $_SESSION['admin_email'] ?? 'admin@kimfresh.com'; ?></span>
+                        </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
                         <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>
@@ -147,16 +205,8 @@ if (isset($_GET['export_pdf'])) {
             <main class="main-content">
                 <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;" class="no-print">
                     <a href="orders.php" class="back-link" style="color: #C34200; text-decoration: none; font-weight: bold; font-size: 14px;">&larr; Back to Orders</a>
-                    <a href="?id=<?php echo $order_id; ?>&export_pdf=1" class="btn-export">Export to PDF</a>
+                    <a href="?id=<?php echo $order_id; ?>&export_pdf=1" download="KimFresh_Order_<?php echo $order_id; ?>.pdf" class="btn-export">Export to PDF</a>
                 </div>
-
-                <!-- PRINT HEADER -->
-                <?php if($trigger_print): ?>
-                    <div style="text-align: center; margin-bottom: 30px;">
-                        <h1 style="color: #C34200; margin-bottom: 5px;">KimFresh Order Receipt</h1>
-                        <p style="color: #666;">Generated on <?php echo date('F j, Y, g:i A'); ?></p>
-                    </div>
-                <?php endif; ?>
 
                 <div class="table-section" style="margin-bottom: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #C34200; padding-bottom: 15px; margin-bottom: 20px;">
@@ -196,6 +246,7 @@ if (isset($_GET['export_pdf'])) {
                             <tbody>
                                 <?php
                                 if ($items->num_rows > 0) {
+                                    $items->data_seek(0);
                                     while($item = $items->fetch_assoc()) {
                                         echo "<tr>";
                                         echo "<td style='padding: 10px; border-bottom: 1px solid #eee;'>" . htmlspecialchars($item['product_name']) . "</td>";
@@ -246,12 +297,6 @@ if (isset($_GET['export_pdf'])) {
                         </table>
                     </div>
                 </div>
-                
-                <?php if($trigger_print): ?>
-                    <div style="margin-top: 40px; text-align: center; color: #999; font-size: 11px;">
-                        KimFresh IoT System - Confidential Report
-                    </div>
-                <?php endif; ?>
             </main>
         </div>
     </div>

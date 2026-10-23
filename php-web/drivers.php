@@ -5,11 +5,57 @@ require 'log_helper.php';
 
 if (!isset($_SESSION['admin_id'])) { header("Location: login.php"); exit(); }
 
-// --- HANDLE PDF EXPORT ---
-$trigger_print = false;
-if (isset($_POST['export_pdf'])) {
+// --- HANDLE PDF EXPORT (FPDF) ---
+if (isset($_GET['export_pdf'])) {
     logActivity($conn, $_SESSION['admin_id'], "Exported Drivers to PDF");
-    $trigger_print = true;
+    
+    require('fpdf/fpdf.php');
+
+    class PDF extends FPDF {
+        function Header() {
+            $this->SetFont('Arial', 'B', 15);
+            $this->SetTextColor(195, 66, 0); 
+            $this->Cell(0, 10, 'KimFresh Driver Roster', 0, 1, 'C');
+            $this->SetFont('Arial', 'I', 10);
+            $this->SetTextColor(100, 100, 100);
+            $this->Cell(0, 5, 'Generated on: ' . date('F j, Y, g:i A'), 0, 1, 'C');
+            $this->Ln(10);
+            
+            // Table Header
+            $this->SetFont('Arial', 'B', 10);
+            $this->SetFillColor(195, 66, 0);
+            $this->SetTextColor(255, 255, 255);
+            $this->Cell(50, 8, 'Driver Name', 1, 0, 'C', true);
+            $this->Cell(40, 8, 'License', 1, 0, 'C', true);
+            $this->Cell(50, 8, 'Email', 1, 0, 'C', true);
+            $this->Cell(30, 8, 'Status', 1, 1, 'C', true);
+        }
+
+        function Footer() {
+            $this->SetY(-15);
+            $this->SetFont('Arial', 'I', 8);
+            $this->SetTextColor(128);
+            $this->Cell(0, 10, 'Page ' . $this->PageNo() . ' - KimFresh IoT System', 0, 0, 'C');
+        }
+    }
+
+    $pdf = new PDF();
+    $pdf->AddPage();
+    $pdf->SetFont('Arial', '', 10);
+    $pdf->SetTextColor(0, 0, 0);
+
+    $print_query = $conn->query("SELECT * FROM driver ORDER BY name ASC");
+
+    while($row = $print_query->fetch_assoc()) {
+        $status = ($row['status'] === 'hidden') ? 'INACTIVE' : strtoupper($row['status']);
+        $pdf->Cell(50, 8, htmlspecialchars($row['name']), 1, 0, 'L');
+        $pdf->Cell(40, 8, htmlspecialchars($row['license_number'] ?? 'N/A'), 1, 0, 'L');
+        $pdf->Cell(50, 8, htmlspecialchars($row['email'] ?? 'N/A'), 1, 0, 'L');
+        $pdf->Cell(30, 8, $status, 1, 1, 'C');
+    }
+
+    $pdf->Output('D', 'KimFresh_Drivers.pdf');
+    exit();
 }
 
 // --- HANDLE ACTIVATE/DEACTIVATE ---
@@ -67,19 +113,17 @@ $sql = "
     WHERE 1=1
 ";
 
-if (!$trigger_print) {
-    if ($filter === 'all') {
-        $sql .= " AND d.status != 'hidden'";
-    } elseif ($filter === 'available') {
-        $sql .= " AND (SELECT COUNT(*) FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered') = 0 AND d.status != 'hidden'";
-    } elseif ($filter === 'assigned') {
-        $sql .= " AND (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) = 'assigned'";
-    } elseif ($filter === 'on_delivery') {
-        $sql .= " AND (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) IN ('in_transit', 'picked_up')";
-    } elseif ($filter === 'inactive') {
-        $sql .= " AND d.status = 'hidden'";
-    } 
-}
+if ($filter === 'all') {
+    $sql .= " AND d.status != 'hidden'";
+} elseif ($filter === 'available') {
+    $sql .= " AND (SELECT COUNT(*) FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered') = 0 AND d.status != 'hidden'";
+} elseif ($filter === 'assigned') {
+    $sql .= " AND (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) = 'assigned'";
+} elseif ($filter === 'on_delivery') {
+    $sql .= " AND (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) IN ('in_transit', 'picked_up')";
+} elseif ($filter === 'inactive') {
+    $sql .= " AND d.status = 'hidden'";
+} 
 
 $sql .= " ORDER BY $orderBy";
 $drivers = $conn->query($sql);
@@ -162,105 +206,50 @@ if ($histRes) {
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
 
-        .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; }
         .btn-export:hover { background: #9a3400; }
 
         /* Assign Form */
         .assign-form { display: flex; gap: 5px; margin-top: 5px; }
-        .assign-form select { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; }
+        .assign-form select { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; outline: none; }
         .assign-form button { padding: 8px 12px; background: #C34200; color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; }
-
-        /* --- PRINT STYLES FOR PDF --- */
-        @media print {
-            .sidebar, .top-header, .filters, .page-head, .btn-export, .driver-actions, .no-print { display: none !important; }
-            body { background: white !important; margin: 0 !important; padding: 0 !important; }
-            .dashboard-layout { display: block !important; }
-            .main-area { margin-left: 0 !important; width: 100% !important; }
-            .main-content { padding: 0 !important; }
-            h1 { text-align: center; color: #000 !important; margin-bottom: 5px; }
-            .overview-label { display: none !important; }
-            
-            .driver-grid { display: block !important; }
-            .driver-card { 
-                border: 1px solid #000 !important; 
-                box-shadow: none !important; 
-                margin-bottom: 15px !important; 
-                padding: 15px !important;
-                page-break-inside: avoid;
-            }
-            .driver-contact p, .driver-license { color: #000 !important; }
-            .status { border: 1px solid #000 !important; color: #000 !important; background: transparent !important; }
-        }
 
         /* =========================================
            MOBILE RESPONSIVE FIXES
            ========================================= */
         @media (max-width: 768px) {
-            /* Header layout */
             .page-head {
                 flex-direction: column !important;
                 align-items: stretch !important;
                 gap: 15px !important;
             }
             
-            .page-head form {
-                width: 100% !important;
-            }
-            
-            .page-head .btn-export {
-                width: 100% !important;
-                padding: 12px !important;
-            }
+            .page-head form { width: 100% !important; }
+            .page-head .btn-export { width: 100% !important; padding: 12px !important; text-align: center !important; }
 
-            /* Filter Dropdown */
             .filters {
                 justify-content: stretch !important;
                 margin-top: 10px !important;
                 margin-bottom: 10px !important;
             }
             
-            .filters select {
-                width: 100% !important;
-                height: 48px;
-            }
+            .filters select { width: 100% !important; height: 48px; }
 
-            /* Driver Cards spacing */
-            .driver-grid {
-                grid-template-columns: 1fr !important; 
-                gap: 16px !important;
-            }
-            
-            .driver-card {
-                padding: 16px !important;
-            }
+            .driver-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+            .driver-card { padding: 16px !important; }
 
-            /* Adjust action buttons for touch */
-            .assign-form {
-                flex-direction: column !important;
-                gap: 8px !important;
-            }
-            
-            .assign-form select {
-                width: 100% !important;
-                padding: 10px !important;
-            }
-            
-            .assign-form button {
-                width: 100% !important;
-                padding: 10px !important;
-            }
+            .assign-form { flex-direction: column !important; gap: 8px !important; }
+            .assign-form select { width: 100% !important; padding: 10px !important; }
+            .assign-form button { width: 100% !important; padding: 10px !important; }
 
-            .btn-export,
-            .history-btn,
-            .btn-activate,
-            .btn-deactivate {
+            .btn-export, .history-btn, .btn-activate, .btn-deactivate {
                 padding: 12px !important;
                 font-size: 13px !important;
             }
         }
     </style>
 </head>
-<body <?php if ($trigger_print) echo 'onload="window.print()"'; ?>>
+<body>
     <div class="dashboard-layout">
         <aside class="sidebar">
             <div class="sidebar-brand">
@@ -292,7 +281,8 @@ if ($histRes) {
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
                             <strong><?php echo $_SESSION['admin_name']; ?></strong>
-                    </div>
+                            <span><?php echo $_SESSION['admin_email'] ?? 'admin@kimfresh.com'; ?></span>
+                        </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
                         <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>
@@ -306,17 +296,8 @@ if ($histRes) {
                         <p class="overview-label">Manage</p>
                         <h1 style="margin:0;">Drivers</h1>
                     </div>
-                    <form method="POST" style="margin:0;">
-                        <button type="submit" name="export_pdf" class="btn-export">Export to PDF</button>
-                    </form>
+                    <a href="?export_pdf=1" download="KimFresh_Drivers.pdf" class="btn-export">Export to PDF</a>
                 </div>
-
-                <?php if($trigger_print): ?>
-                    <div style="text-align: center; margin-bottom: 30px;">
-                        <h1 style="color: #C34200; margin-bottom: 5px;">KimFresh Driver Roster</h1>
-                        <p style="color: #666;">Generated on <?php echo date('F j, Y, g:i A'); ?></p>
-                    </div>
-                <?php endif; ?>
 
                 <form method="GET" class="filters no-print">
                     <select name="filter" onchange="this.form.submit()">
@@ -587,11 +568,8 @@ if ($histRes) {
         });
     </script>
 
-    <!-- KimFresh mobile burger menu. Include this just before </body> on every admin page. -->
+    <!-- KimFresh mobile burger menu script -->
     <script>
-    /* KimFresh mobile burger menu.
-       Builds the burger button, a mobile logo, a close button and the overlay,
-       so every admin page only needs to include this one script. */
     (function () {
         var sidebar = document.querySelector('.sidebar');
         var header = document.querySelector('.top-header');
@@ -599,7 +577,6 @@ if ($histRes) {
 
         sidebar.id = sidebar.id || 'sidebar';
 
-        // Burger button (first item in the top bar)
         var burger = document.createElement('button');
         burger.type = 'button';
         burger.className = 'menu-toggle';
@@ -609,7 +586,6 @@ if ($histRes) {
         burger.innerHTML = '<span></span><span></span><span></span>';
         header.insertBefore(burger, header.firstChild);
 
-        // Logo in the top bar (copied from the sidebar, since the sidebar is hidden)
         var logo = sidebar.querySelector('.logo');
         if (logo) {
             var mobileLogo = logo.cloneNode(true);
@@ -617,7 +593,6 @@ if ($histRes) {
             header.insertBefore(mobileLogo, burger.nextSibling);
         }
 
-        // Close button inside the drawer
         var closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.className = 'sidebar-close';
@@ -625,7 +600,6 @@ if ($histRes) {
         closeBtn.innerHTML = '&times;';
         sidebar.appendChild(closeBtn);
 
-        // Dark overlay behind the drawer
         var overlay = document.createElement('div');
         overlay.className = 'sidebar-overlay';
         document.body.appendChild(overlay);
@@ -636,21 +610,12 @@ if ($histRes) {
             burger.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
 
-        burger.addEventListener('click', function () {
-            setOpen(!sidebar.classList.contains('open'));
-        });
+        burger.addEventListener('click', function () { setOpen(!sidebar.classList.contains('open')); });
         closeBtn.addEventListener('click', function () { setOpen(false); });
         overlay.addEventListener('click', function () { setOpen(false); });
-        sidebar.addEventListener('click', function (e) {
-            if (e.target.closest('a')) setOpen(false);
-        });
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') setOpen(false);
-        });
-        // If the window grows past phone size, reset the drawer
-        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) {
-            if (e.matches) setOpen(false);
-        });
+        sidebar.addEventListener('click', function (e) { if (e.target.closest('a')) setOpen(false); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) { if (e.matches) setOpen(false); });
     })();
     </script>
 </body>

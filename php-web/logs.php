@@ -1,6 +1,7 @@
 <?php
 session_start();
 require 'db.php';
+require 'log_helper.php';
 
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
@@ -10,26 +11,46 @@ if (!isset($_SESSION['admin_id'])) {
 $current_admin_id = $_SESSION['admin_id'];
 $is_superadmin = ($current_admin_id == 1);
 
-// --- HANDLE CSV EXPORT ---
-if (isset($_POST['export_csv'])) {
-    // 1. Log the activity
-    require 'log_helper.php';
-    logActivity($conn, $current_admin_id, "Exported Activity Logs to CSV");
+// --- HANDLE PDF EXPORT (FPDF) ---
+if (isset($_GET['export_pdf'])) {
+    logActivity($conn, $current_admin_id, "Exported Activity Logs to PDF");
+    
+    require('fpdf/fpdf.php');
 
-    // 2. Set headers for CSV download
-    $filename = "KimFresh_Activity_Logs_" . date('Y-m-d') . ".csv";
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    class PDF extends FPDF {
+        function Header() {
+            $this->SetFont('Arial', 'B', 15);
+            $this->SetTextColor(195, 66, 0); 
+            $this->Cell(0, 10, 'KimFresh Activity Logs', 0, 1, 'C');
+            $this->SetFont('Arial', 'I', 10);
+            $this->SetTextColor(100, 100, 100);
+            $this->Cell(0, 5, 'Generated on: ' . date('F j, Y, g:i A'), 0, 1, 'C');
+            $this->Ln(10);
+            
+            // Table Header
+            $this->SetFont('Arial', 'B', 10);
+            $this->SetFillColor(195, 66, 0);
+            $this->SetTextColor(255, 255, 255);
+            $this->Cell(50, 8, 'Admin Name', 1, 0, 'C', true);
+            $this->Cell(80, 8, 'Action', 1, 0, 'C', true);
+            $this->Cell(40, 8, 'Timestamp', 1, 1, 'C', true);
+        }
 
-    // 3. Open output stream
-    $output = fopen('php://output', 'w');
+        function Footer() {
+            $this->SetY(-15);
+            $this->SetFont('Arial', 'I', 8);
+            $this->SetTextColor(128);
+            $this->Cell(0, 10, 'Page ' . $this->PageNo() . ' - KimFresh IoT System', 0, 0, 'C');
+        }
+    }
 
-    // 4. Add Column Headers
-    fputcsv($output, array('Log ID', 'Admin Name', 'Action', 'Timestamp'));
+    $pdf = new PDF();
+    $pdf->AddPage();
+    $pdf->SetFont('Arial', '', 10);
+    $pdf->SetTextColor(0, 0, 0);
 
-    // 5. Fetch data based on role
+    // Fetch data based on role
     if ($is_superadmin) {
-        // Superadmin sees everything
         $logs_export = $conn->query("
             SELECT l.log_id, a.name as admin_name, l.action, l.timestamp 
             FROM activity_logs l
@@ -37,7 +58,6 @@ if (isset($_POST['export_csv'])) {
             ORDER BY l.timestamp DESC
         ");
     } else {
-        // Normal Admins only see their own logs
         $logs_export = $conn->query("
             SELECT l.log_id, a.name as admin_name, l.action, l.timestamp 
             FROM activity_logs l
@@ -48,16 +68,13 @@ if (isset($_POST['export_csv'])) {
     }
     
     while ($row = $logs_export->fetch_assoc()) {
-        $admin = $row['admin_name'] ? $row['admin_name'] : 'System';
-        fputcsv($output, array(
-            $row['log_id'], 
-            $admin, 
-            $row['action'], 
-            date('M d, Y h:i A', strtotime($row['timestamp']))
-        ));
+        $admin = $row['admin_name'] ? htmlspecialchars($row['admin_name']) : 'System';
+        $pdf->Cell(50, 8, $admin, 1, 0, 'L');
+        $pdf->Cell(80, 8, htmlspecialchars($row['action']), 1, 0, 'L');
+        $pdf->Cell(40, 8, date('M d, Y h:i A', strtotime($row['timestamp'])), 1, 1, 'C');
     }
 
-    fclose($output);
+    $pdf->Output('D', 'KimFresh_Activity_Logs.pdf');
     exit();
 }
 
@@ -108,7 +125,7 @@ if ($is_superadmin) {
         td { padding: 15px; border-bottom: 1px solid #f5f5f5; font-size: 13px; }
         
         .page-head { display: flex; justify-content: space-between; align-items: center; }
-        .btn-export { background: #C34200; color: white; padding: 12px 20px; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; transition: 0.2s; }
+        .btn-export { background: #C34200; color: white; padding: 12px 20px; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; }
         .btn-export:hover { background: #9a3400; }
 
         /* PROFILE DROPDOWN STYLES */
@@ -138,6 +155,7 @@ if ($is_superadmin) {
             .page-head .btn-export {
                 width: 100% !important;
                 padding: 12px !important;
+                text-align: center !important;
             }
 
             .table-section {
@@ -195,7 +213,8 @@ if ($is_superadmin) {
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
                             <strong><?php echo $_SESSION['admin_name']; ?></strong>
-                    </div>
+                            <span><?php echo $_SESSION['admin_email'] ?? 'admin@kimfresh.com'; ?></span>
+                        </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
                         <a href="logout.php" class="dropdown-item" style="color: #C34200;">Logout</a>
@@ -209,10 +228,8 @@ if ($is_superadmin) {
                         <p class="overview-label">System</p>
                         <h1>Activity Logs</h1>
                     </div>
-                    <!-- EXPORT BUTTON -->
-                    <form method="POST" style="margin:0;">
-                        <button type="submit" name="export_csv" class="btn-export">Download CSV Report</button>
-                    </form>
+                    <!-- PDF EXPORT BUTTON -->
+                    <a href="?export_pdf=1" download="KimFresh_Activity_Logs.pdf" class="btn-export">Export to PDF</a>
                 </div>
 
                 <section class="table-section">
@@ -260,11 +277,8 @@ if ($is_superadmin) {
         });
     </script>
 
-    <!-- KimFresh mobile burger menu. Include this just before </body> on every admin page. -->
+    <!-- KimFresh mobile burger menu script -->
     <script>
-    /* KimFresh mobile burger menu.
-       Builds the burger button, a mobile logo, a close button and the overlay,
-       so every admin page only needs to include this one script. */
     (function () {
         var sidebar = document.querySelector('.sidebar');
         var header = document.querySelector('.top-header');
@@ -272,7 +286,6 @@ if ($is_superadmin) {
 
         sidebar.id = sidebar.id || 'sidebar';
 
-        // Burger button (first item in the top bar)
         var burger = document.createElement('button');
         burger.type = 'button';
         burger.className = 'menu-toggle';
@@ -282,7 +295,6 @@ if ($is_superadmin) {
         burger.innerHTML = '<span></span><span></span><span></span>';
         header.insertBefore(burger, header.firstChild);
 
-        // Logo in the top bar (copied from the sidebar, since the sidebar is hidden)
         var logo = sidebar.querySelector('.logo');
         if (logo) {
             var mobileLogo = logo.cloneNode(true);
@@ -290,7 +302,6 @@ if ($is_superadmin) {
             header.insertBefore(mobileLogo, burger.nextSibling);
         }
 
-        // Close button inside the drawer
         var closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.className = 'sidebar-close';
@@ -298,7 +309,6 @@ if ($is_superadmin) {
         closeBtn.innerHTML = '&times;';
         sidebar.appendChild(closeBtn);
 
-        // Dark overlay behind the drawer
         var overlay = document.createElement('div');
         overlay.className = 'sidebar-overlay';
         document.body.appendChild(overlay);
@@ -309,21 +319,12 @@ if ($is_superadmin) {
             burger.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
 
-        burger.addEventListener('click', function () {
-            setOpen(!sidebar.classList.contains('open'));
-        });
+        burger.addEventListener('click', function () { setOpen(!sidebar.classList.contains('open')); });
         closeBtn.addEventListener('click', function () { setOpen(false); });
         overlay.addEventListener('click', function () { setOpen(false); });
-        sidebar.addEventListener('click', function (e) {
-            if (e.target.closest('a')) setOpen(false);
-        });
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') setOpen(false);
-        });
-        // If the window grows past phone size, reset the drawer
-        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) {
-            if (e.matches) setOpen(false);
-        });
+        sidebar.addEventListener('click', function (e) { if (e.target.closest('a')) setOpen(false); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) { if (e.matches) setOpen(false); });
     })();
     </script>
 </body>
