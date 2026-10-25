@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 class ForegroundService {
@@ -14,7 +15,10 @@ class ForegroundService {
         channelImportance: NotificationChannelImportance.LOW,
         priority: NotificationPriority.LOW,
       ),
-      iosNotificationOptions: IOSNotificationOptions(),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: true,
+        playSound: false,
+      ),
       foregroundTaskOptions: ForegroundTaskOptions(
         eventAction: ForegroundTaskEventAction.nothing(),
         autoRunOnBoot: false,
@@ -27,24 +31,40 @@ class ForegroundService {
   }
 
   static Future<void> start() async {
-    init();
+    try {
+      final permission = await FlutterForegroundTask.checkNotificationPermission();
+      if (permission != NotificationPermission.granted) {
+        await FlutterForegroundTask.requestNotificationPermission();
+      }
 
-    await FlutterForegroundTask.startService(
-      notificationTitle: 'KimFresh Driver',
-      notificationText: 'Monitoring delivery',
-      callback: startCallback,
-    );
+      await FlutterForegroundTask.startService(
+        notificationTitle: 'KimFresh Driver',
+        notificationText: 'Monitoring delivery',
+        callback: startCallback,
+      );
+    } catch (e, st) {
+      debugPrint('ForegroundService.start failed: $e\n$st');
+    }
   }
 
   static Future<void> updateTemp(double temp, double hum) async {
-    await FlutterForegroundTask.updateService(
-      notificationTitle: 'KimFresh Driver',
-      notificationText: 'Temp: ${temp.toStringAsFixed(1)}°C | Hum: ${hum.toStringAsFixed(1)}%',
-    );
+    try {
+      await FlutterForegroundTask.updateService(
+        notificationTitle: 'KimFresh Driver',
+        notificationText:
+        'Temp: ${temp.toStringAsFixed(1)}°C | Hum: ${hum.toStringAsFixed(1)}%',
+      );
+    } catch (e) {
+      debugPrint('ForegroundService.updateTemp failed: $e');
+    }
   }
 
   static Future<void> stop() async {
-    await FlutterForegroundTask.stopService();
+    try {
+      await FlutterForegroundTask.stopService();
+    } catch (e) {
+      debugPrint('ForegroundService.stop failed: $e');
+    }
   }
 }
 
@@ -55,10 +75,15 @@ void startCallback() {
 
 class MyTaskHandler extends TaskHandler {
   @override
-  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {}
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
+    // 🔥 REQUIRED: Tell Flutter the task started successfully
+    FlutterForegroundTask.sendDataToTask({});
+  }
 
   @override
-  void onRepeatEvent(DateTime timestamp) {}
+  void onRepeatEvent(DateTime timestamp) {
+    // 🔥 REQUIRED: If autoRunOnBoot is false, this keeps the task alive
+  }
 
   @override
   Future<void> onDestroy(DateTime timestamp) async {}
