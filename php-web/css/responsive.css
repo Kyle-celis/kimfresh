@@ -1,0 +1,583 @@
+/* =========================================
+   KIMFRESH RESPONSIVE OVERRIDES (revised v3)
+   Load this AFTER theme.css, dashboard.css and flow.css
+   Needs mobile-nav.js for the burger menu on phones
+   ========================================= */
+
+/* --- ALL SCREEN SIZES: safety rules --- */
+.main-area { min-width: 0; }
+img, canvas { max-width: 100%; }
+.status, .status-pill { white-space: nowrap; }
+.panel-head { flex-wrap: wrap; gap: 8px; }
+
+/* Burger parts are injected by mobile-nav.js; hidden on desktop/tablet */
+.menu-toggle, .mobile-logo, .sidebar-close, .sidebar-overlay { display: none; }
+
+/* --- TABLETS (max-width: 1024px) --- */
+@media (max-width: 1024px) {
+    .cards-section {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    .two-col {
+        grid-template-columns: 1fr !important;
+    }
+
+    .stats {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    .pipeline {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+        gap: 10px !important;
+    }
+}
+
+/* --- MOBILE PHONES (max-width: 768px) --- */
+@media (max-width: 768px) {
+
+    /* 1. Layout: sidebar leaves the page flow (it becomes a drawer) */
+    .dashboard-layout {
+        flex-direction: column !important;
+    }
+
+    .main-area {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+
+    .main-content {
+        padding: 16px 14px !important;
+    }
+
+    .main-content h1 {
+        font-size: 24px !important;
+    }
+
+    /* 2. Top bar: burger + logo on the left, avatar on the right */
+    .top-header {
+        position: sticky !important;
+        top: 0;
+        z-index: 70;
+        height: 56px !important;
+        padding: 0 12px !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: flex-start !important;
+        background: var(--primary, #C34200) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+        border: none !important;
+    }
+
+    .menu-toggle {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 5px;
+        width: 42px;
+        height: 42px;
+        padding: 0 10px;
+        background: transparent;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+    }
+
+    .menu-toggle span {
+        display: block;
+        height: 3px;
+        border-radius: 2px;
+        background: #fff;
+    }
+
+    .menu-toggle:active {
+        background: rgba(255,255,255,0.15);
+    }
+
+    .mobile-logo {
+        display: block;
+        width: 84px;
+        height: auto;
+        margin: 0 auto 0 6px;   /* auto right margin pushes the avatar to the far right */
+    }
+
+    .profile-menu {
+        margin-left: auto;
+    }
+
+    .profile-trigger {
+        padding: 4px !important;
+        gap: 4px !important;
+    }
+
+    .profile-trigger .user-info {
+        display: none; /* keep only the avatar */
+    }
+
+    .profile-trigger .avatar {
+        background: #fff !important;
+        color: #C34200 !important;
+    }
+
+    .profile-trigger > span {
+        color: #fff !important;   /* the small arrow */
+        margin-left: 0 !important;
+    }
+
+    .profile-dropdown {
+        width: 200px !important;
+        right: 0 !important;
+    }
+
+    /* 3. Sidebar becomes a slide-in drawer */
+    .sidebar {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 260px !important;
+        max-width: 82vw;
+        height: 100% !important;
+        z-index: 90;
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        padding: 56px 16px 20px !important;
+        overflow-y: auto;
+        box-shadow: none !important;
+        transform: translateX(-100%);
+        visibility: hidden;           /* keeps hidden links out of tab order */
+        transition: transform 0.25s ease, visibility 0s linear 0.25s;
+    }
+
+    .sidebar.open {
+        transform: none;
+        visibility: visible;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.3) !important;
+        transition: transform 0.25s ease;
+    }
+
+    .sidebar-close {
+        display: flex;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 36px;
+        height: 36px;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.15);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .sidebar-brand {
+        display: block !important;
+        margin-bottom: 20px !important;
+        padding-bottom: 16px !important;
+        text-align: center !important;
+    }
+
+    .sidebar-brand .logo {
+        display: block;
+        width: 120px !important;
+        max-width: none !important;
+        height: auto !important;
+        margin: 0 auto;
+    }
+
+    .sidebar-brand p {
+        display: block !important;   /* show "Administration" inside the drawer */
+    }
+
+    .menu {
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        overflow: visible;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .menu a {
+        display: block;
+        padding: 12px 14px !important;
+        border-radius: 10px !important;
+        font-size: 14px !important;
+        box-shadow: none !important;
+    }
+
+    /* Dark overlay behind the open drawer */
+    .sidebar-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        background: rgba(0,0,0,0.45);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.25s ease, visibility 0s linear 0.25s;
+    }
+
+    body.sidebar-open .sidebar-overlay {
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.25s ease;
+    }
+
+    body.sidebar-open {
+        overflow: hidden;   /* stop the page scrolling behind the drawer */
+    }
+
+    /* 4. Store status box: stack text and buttons */
+    .store-status-box {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 14px;
+    }
+
+    .store-status-box > div:last-child {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .store-status-box form {
+        flex: 1 1 140px;
+    }
+
+    .btn-store {
+        width: 100%;
+        padding: 12px 16px !important;
+    }
+
+    /* 5. Order Flow pipeline: 2 per row, hide connector arrows */
+    .pipeline {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    .pipe-step::before,
+    .pipe-step::after {
+        display: none !important;
+    }
+
+    .pipe-step:last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+    }
+
+    /* 6. Summary cards: 2 per row */
+    .cards-section {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px !important;
+    }
+
+    .card {
+        padding: 14px !important;
+    }
+
+    /* 7. Chart controls + chart */
+    .week-controls {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    .week-controls .filter-select {
+        width: 100%;
+        padding: 10px 12px;
+    }
+
+    .week-controls h3 {
+        margin: 0;
+        font-size: 16px;
+    }
+
+    .week-range {
+        width: 100%;
+        font-size: 13px;
+    }
+
+    .chart-box {
+        height: 240px !important;
+    }
+
+    /* 8. Tables scroll horizontally (generic) */
+    .table-responsive {
+        overflow-x: auto;
+        width: 100%;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table-responsive table {
+        min-width: 600px;
+    }
+
+    /* 9. Pagination */
+    .pagination {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .pagination a, .pagination span {
+        min-width: 40px;
+        height: 40px;
+    }
+
+    /* 10. Inventory + delivery rows */
+    .stock-row {
+        gap: 10px;
+    }
+
+    .stock-row > div:first-child {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .delivery-top {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .delivery-driver {
+        font-size: 13px;
+        word-break: break-word;
+    }
+
+    /* 11. Other pages: headers, toolbars, forms, modals */
+    .page-head, .toolbar {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 15px !important;
+    }
+
+    .tabs {
+        width: 100%;
+        overflow-x: auto;
+        flex-wrap: nowrap !important;
+        padding-bottom: 5px;
+    }
+
+    .tab {
+        white-space: nowrap;
+    }
+
+    .btn-export, .primary-btn {
+        width: 100%;
+        text-align: center;
+        justify-content: center;
+    }
+
+    .driver-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .filters {
+        flex-direction: column !important;
+        width: 100%;
+    }
+
+    .filters select, .filters input {
+        width: 100% !important;
+    }
+
+    dialog {
+        width: 95% !important;
+        padding: 20px !important;
+    }
+
+    .settings-box {
+        padding: 20px !important;
+    }
+
+    /* =========================================
+       ORDERS PAGE ADDITIONS (stacked cards on mobile)
+       ========================================= */
+
+    /* Action buttons in the orders table */
+    .action-group {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .btn-approve,
+    .btn-reject,
+    .btn-view {
+        padding: 8px 14px;
+        font-size: 12px;
+        flex: 1 1 auto;
+    }
+
+    /* Compact status pills in narrow table cells */
+    .status-pill {
+        font-size: 10px;
+        padding: 4px 10px;
+    }
+
+    /* Orders box — no horizontal scroll on phones */
+    .orders-box {
+        width: 100%;
+        overflow: visible;
+    }
+
+    /* Fix table overflow issues on mobile */
+    .orders-box, 
+    .orders-box.table-responsive,
+    .table-responsive {
+        overflow-x: hidden !important; /* Kill the horizontal scrollbar */
+        width: 100% !important;
+    }
+
+    /* Turn each row into a stacked card */
+    .orders-box .orders-table {
+        min-width: 0 !important; 
+        width: 100% !important;
+        display: block !important; /* Forces table to behave like a block container */
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .orders-box .orders-table thead {
+        display: none;   /* headers are shown per-cell via data-label */
+    }
+
+    .orders-box .orders-table tbody,
+    .orders-box .orders-table tr,
+    .orders-box .orders-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .orders-box .orders-table tr {
+        background: #fff;
+        border: 1px solid #eee;
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    }
+
+    .orders-box .orders-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border: none;
+        border-bottom: 1px dashed #f0f0f0;
+        text-align: right;
+        font-size: 13px;
+    }
+
+    .orders-box .orders-table td:last-child {
+        border-bottom: none;
+        padding-top: 12px;
+    }
+
+    /* The label (left side of each row) */
+    .orders-box .orders-table td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        color: #777;
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.5px;
+        text-align: left;
+        margin-right: 12px;
+    }
+
+    /* Order ID stands out */
+    .orders-box .orders-table td[data-label="Order"] {
+        font-size: 15px;
+    }
+
+    .orders-box .orders-table td[data-label="Order"] .order-no {
+        font-size: 15px;
+        font-weight: 800;
+        color: #C34200;
+    }
+
+    /* Action buttons stretch across the card */
+    .orders-box .orders-table td[data-label="Action"] {
+        display: block;
+        text-align: left;
+    }
+
+    .orders-box .orders-table td[data-label="Action"]::before {
+        display: block;
+        margin-bottom: 8px;
+    }
+
+    .orders-box .orders-table td[data-label="Action"] .action-group {
+        justify-content: flex-start;
+    }
+
+    /* Empty state */
+    .orders-box .orders-table td[colspan] {
+        display: block;
+        text-align: center !important;
+    }
+
+    .orders-box .orders-table td[colspan]::before {
+        display: none;
+    }
+}
+
+/* --- SMALL PHONES (max-width: 480px) --- */
+@media (max-width: 480px) {
+    .main-content h1 {
+        font-size: 21px !important;
+    }
+
+    .avatar {
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 12px !important;
+    }
+
+    .stat h2 {
+        font-size: 20px !important;
+    }
+
+    .card .value {
+        font-size: 24px !important;
+    }
+
+    .card h3 {
+        font-size: 13px !important;
+    }
+
+    .card .hint {
+        font-size: 11px !important;
+    }
+
+    .chart-box {
+        height: 210px !important;
+    }
+
+    /* Ctrl+F find bar fits the viewport */
+    #customFindBar {
+        left: 10px !important;
+        right: 10px !important;
+        top: 10px !important;
+    }
+
+    #findInput {
+        width: calc(100% - 60px) !important;
+    }
+}
+
+/* --- VERY NARROW PHONES (max-width: 360px) --- */
+@media (max-width: 360px) {
+    .cards-section {
+        grid-template-columns: 1fr !important;
+    }
+
+    .pipeline {
+        grid-template-columns: 1fr !important;
+    }
+}

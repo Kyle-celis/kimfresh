@@ -45,25 +45,27 @@ def get_orders_by_retailer(retailer_id):
     conn.close()
     return rows
 
-
 def get_all_orders():
-    """Return all orders with items + latest sensor data."""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
     cursor.execute("""
         SELECT 
             r.customer_code,
+            r.name AS retailer_name,
+            r.address AS retailer_address,
             o.order_id,
             o.order_date,
             o.total_amount,
             o.order_status,
+            dr.driver_id,
+            dr.name AS driver_name,
             sd.temperature,
             sd.humidity,
             sd.is_alert
         FROM `order` o
         LEFT JOIN retailer r ON o.retailer_id = r.retailer_id
         LEFT JOIN delivery d ON o.order_id = d.order_id
+        LEFT JOIN driver dr ON d.driver_id = dr.driver_id
         LEFT JOIN (
             SELECT delivery_id, MAX(sensor_id) AS latest_id
             FROM sensor_data
@@ -78,8 +80,6 @@ def get_all_orders():
         cursor.execute("""
             SELECT 
                 oi.quantity,
-                oi.unit_price,
-                oi.subtotal,
                 p.name AS product_name,
                 p.sku
             FROM order_item oi
@@ -91,7 +91,6 @@ def get_all_orders():
     cursor.close()
     conn.close()
     return orders
-
 
 def create_order(retailer_id, total):
     """Insert order header, return order_id."""
@@ -156,3 +155,41 @@ def reduce_stock(product_id, new_quantity):
     conn.commit()
     cursor.close()
     conn.close()
+
+def get_order_by_id(order_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT * FROM `order` WHERE order_id = %s", (order_id,))
+    order = cursor.fetchone()
+    
+    if order:
+        # 1. Get the items
+        cursor.execute("""
+            SELECT oi.quantity, oi.unit_price, oi.subtotal, p.name AS product_name 
+            FROM order_item oi
+            JOIN product p ON oi.product_id = p.product_id
+            WHERE oi.order_id = %s
+        """, (order_id,))
+        order['items'] = cursor.fetchall()
+        
+        # 2. Get customer code
+        cursor.execute("SELECT customer_code FROM retailer WHERE retailer_id = %s", (order['retailer_id'],))
+        retailer = cursor.fetchone()
+        if retailer:
+            order['customer_code'] = retailer['customer_code']
+            
+        # 3. Get Temperature History (LIMITED TO 10)
+        cursor.execute("""
+            SELECT sd.temperature, sd.humidity, sd.reading_timestamp, sd.is_alert
+            FROM sensor_data sd
+            JOIN delivery d ON sd.delivery_id = d.delivery_id
+            WHERE d.order_id = %s
+            ORDER BY sd.reading_timestamp DESC
+            LIMIT 10
+        """, (order_id,))
+        order['sensor_data'] = cursor.fetchall()
+            
+    cursor.close()
+    conn.close()
+    return order
