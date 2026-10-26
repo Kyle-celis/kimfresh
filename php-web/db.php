@@ -3,7 +3,7 @@
 $host = 'localhost';
 $dbname = 'kimfresh';
 $username = 'root'; 
-$password = 'YOUR_DB_PASSWORD'; // Your local password
+$password = 'KC2120320'; // Your local password
 
 $conn = new mysqli($host, $username, $password, $dbname);
 
