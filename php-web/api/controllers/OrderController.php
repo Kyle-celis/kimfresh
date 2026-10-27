@@ -104,17 +104,63 @@ class OrderController extends BaseController {
 
     public function updateDeliveryStatus(int $delivery_id, array $data): void {
         $new_status = $data['delivery_status'] ?? '';
-        if (empty($new_status)) $this->respond(['success' => false, 'message' => 'Missing status'], 400);
-
-        $order_id = $this->orderModel->updateDelivery($delivery_id, $new_status);
         
-        if ($order_id > 0) {
-            $status_map = ['assigned' => 'approved', 'picked_up' => 'waiting_for_pickup', 'in_transit' => 'in_transit', 'delivered' => 'delivered'];
-            $this->orderModel->updateOrderStatus($order_id, $status_map[$new_status] ?? 'approved');
+        if (empty($new_status)) {
+            $this->respond(['success' => false, 'message' => 'Missing status'], 400);
+        }
 
-            if ($new_status === 'delivered') {
-                $this->orderModel->freeDriver($delivery_id);
-            }
+        // 1. Find the Order ID and Driver ID
+        $stmt2 = $this->db->prepare("SELECT order_id, driver_id FROM delivery WHERE delivery_id = ?");
+        $stmt2->bind_param("i", $delivery_id);
+        $stmt2->execute();
+        $res = $stmt2->get_result()->fetch_assoc();
+        
+        if (!$res) {
+            $this->respond(['success' => false, 'message' => 'Delivery not found'], 404);
+        }
+
+        $order_id = (int)$res['order_id'];
+        $driver_id = (int)$res['driver_id'];
+
+        // 2. IF DRIVER REJECTS: Free driver, put order back to Approved, delete delivery
+        if ($new_status === 'rejected') {
+            $free = $this->db->prepare("UPDATE driver SET status = 'available' WHERE driver_id = ?");
+            $free->bind_param("i", $driver_id);
+            $free->execute();
+            
+            $reset = $this->db->prepare("UPDATE `order` SET order_status = 'approved' WHERE order_id = ?");
+            $reset->bind_param("i", $order_id);
+            $reset->execute();
+
+            $del = $this->db->prepare("DELETE FROM delivery WHERE delivery_id = ?");
+            $del->bind_param("i", $delivery_id);
+            $del->execute();
+
+            $this->respond(['success' => true, 'message' => 'Order rejected and returned to admin.']);
+            return;
+        }
+
+        // 3. NORMAL STATUS UPDATES
+        $stmt = $this->db->prepare("UPDATE delivery SET delivery_status = ? WHERE delivery_id = ?");
+        $stmt->bind_param("si", $new_status, $delivery_id);
+        $stmt->execute();
+        
+        $order_status_map = [
+            'assigned' => 'approved',
+            'picked_up' => 'waiting_for_pickup',
+            'in_transit' => 'in_transit',
+            'delivered' => 'delivered'
+        ];
+        $new_order_status = $order_status_map[$new_status] ?? 'approved';
+        
+        $stmt3 = $this->db->prepare("UPDATE `order` SET order_status = ? WHERE order_id = ?");
+        $stmt3->bind_param("si", $new_order_status, $order_id);
+        $stmt3->execute();
+
+        if ($new_status === 'delivered') {
+            $free2 = $this->db->prepare("UPDATE driver SET status = 'available' WHERE driver_id = ?");
+            $free2->bind_param("i", $driver_id);
+            $free2->execute();
         }
 
         $this->respond(['success' => true, 'message' => "Delivery updated to $new_status"]);
