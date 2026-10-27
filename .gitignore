@@ -28,3 +28,9 @@ web-app-design.zip
 backend/logs/
 
 .idea/
+php-web/db.php
+php-web/.env
+php-web/.env.local_backup
+php-web/db.php.local_backup
+php-web/mailer.php
+php-web/local_otps.txt

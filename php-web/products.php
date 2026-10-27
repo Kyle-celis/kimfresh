@@ -1,5 +1,8 @@
 <?php
 session_start();
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 require 'db.php';
 require 'log_helper.php';
 
@@ -30,11 +33,11 @@ if ($store['manual_override'] !== NULL) {
 // Handle Manual Override Toggle
 if (isset($_POST['toggle_manual'])) {
     $override = $_POST['override_value'];
-    $stmt = $conn->prepare("UPDATE store_settings SET manual_override = ? WHERE id = 1");
-    $stmt->bind_param("i", $override);
+    $stmt = $conn->prepare("UPDATE store_settings SET manual_override = ?, is_open = ? WHERE id = 1");
+    $stmt->bind_param("ii", $override, $override);
     $stmt->execute();
     
-    $action = ($override == 1) ? "Manually Opened Store" : "Manually Closed Store";
+    $action = ($override == 1) ? "Activated Store Manually" : "Disabled Store Manually";
     logActivity($conn, $_SESSION['admin_id'], $action);
     
     header("Location: products.php");
@@ -67,7 +70,6 @@ if (isset($_GET['export_pdf'])) {
             $this->Cell(0, 5, 'Generated on: ' . date('F j, Y, g:i A'), 0, 1, 'C');
             $this->Ln(10);
             
-            // Table Header
             $this->SetFont('Arial', 'B', 10);
             $this->SetFillColor(195, 66, 0);
             $this->SetTextColor(255, 255, 255);
@@ -137,8 +139,7 @@ $error_msg = "";
 // Handle Add/Edit
 if (isset($_POST['save_product'])) {
     $product_id = $_POST['product_id'];
-    $name = $_POST['name'];
-    $sku = $_POST['sku'];
+    $name = trim($_POST['name']);
     $price = $_POST['unit_price'];
     $stock = $_POST['stock_quantity'];
     $reorder = $_POST['reorder_level'];
@@ -146,20 +147,43 @@ if (isset($_POST['save_product'])) {
     if ($price < 0 || $stock < 0 || $reorder < 0) {
         $error_msg = "Error: Price, Stock, and Reorder level cannot be negative!";
     } else {
-        if (empty($product_id)) {
-            $stmt = $conn->prepare("INSERT INTO product (name, sku, unit_price, stock_quantity, reorder_level, status) VALUES (?, ?, ?, ?, ?, 'available')");
-            $stmt->bind_param("ssdii", $name, $sku, $price, $stock, $reorder);
+        // Check for duplicate name
+        $check_name = $conn->prepare("SELECT product_id FROM product WHERE name = ? AND product_id != ?");
+        $check_name->bind_param("si", $name, $product_id);
+        $check_name->execute();
+        if ($check_name->get_result()->num_rows > 0) {
+            $error_msg = "Error: A product with this name already exists!";
         } else {
-            $stmt = $conn->prepare("UPDATE product SET name=?, sku=?, unit_price=?, stock_quantity=?, reorder_level=? WHERE product_id=?");
-            $stmt->bind_param("ssdiii", $name, $sku, $price, $stock, $reorder, $product_id);
+            if (empty($product_id)) {
+                // GENERATE SKU AUTOMATICALLY (e.g., KKD-001)
+                $prefix = "KKD"; // Fixed prefix for all Kimchi products
+                if (empty($prefix)) $prefix = "PRD";
+
+                // Find the highest number used for this prefix
+                $sku_query = $conn->query("SELECT sku FROM product WHERE sku LIKE '$prefix-%' ORDER BY product_id DESC LIMIT 1");
+                $next_num = 1;
+                if ($sku_query && $sku_query->num_rows > 0) {
+                    $last_sku = $sku_query->fetch_assoc()['sku'];
+                    $parts = explode('-', $last_sku);
+                    if (isset($parts[1])) $next_num = (int)$parts[1] + 1;
+                }
+                $sku = $prefix . '-' . sprintf("%03d", $next_num);
+
+                $stmt = $conn->prepare("INSERT INTO product (name, sku, unit_price, stock_quantity, reorder_level, status) VALUES (?, ?, ?, ?, ?, 'available')");
+                $stmt->bind_param("ssdii", $name, $sku, $price, $stock, $reorder);
+            } else {
+                // If editing, just update the name, price, stock, and reorder
+                $stmt = $conn->prepare("UPDATE product SET name=?, unit_price=?, stock_quantity=?, reorder_level=? WHERE product_id=?");
+                $stmt->bind_param("sdiii", $name, $price, $stock, $reorder, $product_id);
+            }
+            $stmt->execute();
+            
+            $action = empty($product_id) ? "Added new product: " : "Updated product: ";
+            logActivity($conn, $_SESSION['admin_id'], $action . $name);
+            
+            header("Location: products.php");
+            exit();
         }
-        $stmt->execute();
-        
-        $action = empty($product_id) ? "Added new product: " : "Updated product: ";
-        logActivity($conn, $_SESSION['admin_id'], $action . $name);
-        
-        header("Location: products.php");
-        exit();
     }
 }
 
@@ -219,8 +243,9 @@ $products = $conn->query($sql);
         th { text-align: left; padding: 15px; font-size: 13px; color: #666; border-bottom: 1px solid #eee; background: transparent; font-weight: 700; }
         td { padding: 15px; border-bottom: 1px solid #f5f5f5; font-size: 13px; }
         
-        th a { color: #666; transition: color 0.2s ease; text-decoration: none; }
-        th a:hover { color: #C34200 !important; text-decoration: underline; }
+        th a {
+    text-decoration: none !important;
+}
         
         .product-name { font-weight: 800; color: #333; font-size: 14px; margin-bottom: 3px; }
         .product-sku { color: #888; font-size: 12px; }
@@ -301,33 +326,10 @@ $products = $conn->query($sql);
             th:last-child, td:last-child { display: none !important; }
         }
 
-        /* =========================================
-           MOBILE COMPACT TABLE LAYOUT & BUTTON FIX
-           ========================================= */
         @media (max-width: 768px) {
-            .page-head {
-                flex-direction: column !important;
-                align-items: stretch !important;
-                gap: 15px !important;
-            }
-            
-            .page-head > div:last-child {
-                display: flex !important;
-                flex-direction: row !important;
-                gap: 10px !important;
-                width: 100% !important;
-            }
-
-            .page-head .btn-export,
-            .page-head .primary-btn {
-                width: auto !important;
-                flex: 1 !important; 
-                text-align: center !important;
-                padding: 10px 12px !important;
-                font-size: 13px !important;
-                white-space: nowrap !important;
-            }
-
+            .page-head { flex-direction: column !important; align-items: stretch !important; gap: 15px !important; }
+            .page-head > div:last-child { display: flex !important; flex-direction: row !important; gap: 10px !important; width: 100% !important; }
+            .page-head .btn-export, .page-head .primary-btn { width: auto !important; flex: 1 !important; text-align: center !important; padding: 10px 12px !important; font-size: 13px !important; white-space: nowrap !important; }
             .table-section { padding: 10px !important; }
             .table-responsive { overflow-x: hidden !important; width: 100% !important; }
             table { width: 100% !important; min-width: 0 !important; table-layout: fixed; }
@@ -336,7 +338,6 @@ $products = $conn->query($sql);
             .actions { flex-direction: column; gap: 4px; }
             .btn-edit, .btn-delete { padding: 4px 6px !important; font-size: 10px !important; width: 100%; text-align: center; }
             .status { font-size: 9px !important; padding: 2px 4px !important; display: inline-block; }
-            
             .store-status-box { flex-direction: column; gap: 15px; align-items: stretch; }
         }
     </style>
@@ -392,7 +393,12 @@ $products = $conn->query($sql);
                     </div>
                     <div style="display:flex; gap:10px;">
                         <a href="?export_pdf=1" download="KimFresh_Products.pdf" class="btn-export" style="text-decoration:none; text-align:center;">Export to PDF</a>
-                        <button class="primary-btn" onclick="openProductModal()">+ Add Product</button>
+                        <!-- DISABLE ADD PRODUCT IF STORE IS OPEN -->
+                        <?php if ($is_store_open): ?>
+                            <button class="primary-btn" style="background: #ccc; cursor: not-allowed;" title="Disable the store first to add products." disabled>+ Add Product</button>
+                        <?php else: ?>
+                            <button class="primary-btn" onclick="openProductModal()">+ Add Product</button>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -401,7 +407,7 @@ $products = $conn->query($sql);
                     <div>
                         <h3 style="margin: 0; font-size: 16px;">Store Status: 
                             <span style="color: <?php echo $is_store_open ? '#15803d' : '#dc2626'; ?>;">
-                                <?php echo $is_store_open ? 'OPEN' : 'CLOSED'; ?>
+                                <?php echo $is_store_open ? 'ACTIVE' : 'INACTIVE'; ?>
                             </span>
                         </h3>
                         <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">
@@ -425,7 +431,7 @@ $products = $conn->query($sql);
                         <form method="POST" style="margin:0;">
                             <input type="hidden" name="override_value" value="<?php echo $is_store_open ? 0 : 1; ?>">
                             <button type="submit" name="toggle_manual" class="btn-store <?php echo $is_store_open ? 'open' : 'closed'; ?>">
-                                <?php echo $is_store_open ? 'Force Close' : 'Force Open'; ?>
+                                <?php echo $is_store_open ? 'Disable Store' : 'Activate Store'; ?>
                             </button>
                         </form>
                     </div>
@@ -474,11 +480,16 @@ $products = $conn->query($sql);
                                         echo "<td data-label='Status'><span class='status available'>Available</span></td>";
                                         
                                         echo "<td data-label='Action' class='actions-cell'>
-                                                <div class='actions'>
-                                                    <button class='btn-edit' onclick='openProductModal(" . json_encode($row) . ")'>Edit</button>";
+                                                <div class='actions'>";
                                         
                                         if ($is_store_open) {
-                                            echo "<button class='btn-delete' style='opacity: 0.5; cursor: not-allowed;' title='Close the store first to delete products.' disabled>Delete</button>";
+                                            echo "<button class='btn-edit' style='opacity: 0.5; cursor: not-allowed;' title='Disable the store first to edit products.' disabled>Edit</button>";
+                                        } else {
+                                            echo "<button class='btn-edit' onclick='openProductModal(" . json_encode($row) . ")'>Edit</button>";
+                                        }
+                                        
+                                        if ($is_store_open) {
+                                            echo "<button class='btn-delete' style='opacity: 0.5; cursor: not-allowed;' title='Disable the store first to delete products.' disabled>Delete</button>";
                                         } else {
                                             echo "<button class='btn-delete' onclick='openDeleteModal(" . $row['product_id'] . ", \"" . addslashes($row['name']) . "\")'>Delete</button>";
                                         }
@@ -531,8 +542,6 @@ $products = $conn->query($sql);
             <label>Product Name</label>
             <input type="text" name="name" id="form_name" maxlength="50" required>
             
-            <label>SKU</label>
-            <input type="text" name="sku" id="form_sku" maxlength="50">
             
             <div class="row">
                 <div>
@@ -570,12 +579,6 @@ $products = $conn->query($sql);
         </form>
     </dialog>
 
-    <!-- CUSTOM CTRL+F FIND BAR -->
-    <div id="customFindBar" style="display: none; position: fixed; top: 10px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; border: 1px solid #ddd;">
-        <input type="text" id="findInput" placeholder="Find product..." style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; outline: none; width: 200px;">
-        <button id="closeFind" style="padding: 8px 12px; margin-left: 5px; background: #eee; border: none; border-radius: 4px; cursor: pointer;">X</button>
-    </div>
-
     <script>
         function openProductModal(product = null) {
             const modal = document.getElementById('productModal');
@@ -585,7 +588,6 @@ $products = $conn->query($sql);
                 title.textContent = 'Edit Product';
                 document.getElementById('form_id').value = product.product_id;
                 document.getElementById('form_name').value = product.name;
-                document.getElementById('form_sku').value = product.sku;
                 document.getElementById('form_price').value = product.unit_price;
                 document.getElementById('form_reorder').value = product.reorder_level;
                 document.getElementById('form_stock').value = product.stock_quantity;
@@ -593,7 +595,6 @@ $products = $conn->query($sql);
                 title.textContent = 'Add Product';
                 document.getElementById('form_id').value = '';
                 document.getElementById('form_name').value = '';
-                document.getElementById('form_sku').value = '';
                 document.getElementById('form_price').value = '';
                 document.getElementById('form_reorder').value = '';
                 document.getElementById('form_stock').value = '';
@@ -626,91 +627,17 @@ $products = $conn->query($sql);
                 document.getElementById('profileDropdown').classList.remove('show');
             }
         });
-
-        document.addEventListener('keydown', function(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-                e.preventDefault(); 
-                const findBar = document.getElementById('customFindBar');
-                findBar.style.display = 'flex';
-                document.getElementById('findInput').focus();
-            }
-            if (e.key === 'Escape') {
-                const findBar = document.getElementById('customFindBar');
-                if (findBar.style.display === 'flex') {
-                    findBar.style.display = 'none';
-                    document.getElementById('findInput').value = '';
-                    document.querySelectorAll('table tbody tr').forEach(row => row.style.display = '');
-                    e.stopImmediatePropagation();
-                }
-            }
-        });
-
-        document.getElementById('closeFind').addEventListener('click', function() {
-            document.getElementById('customFindBar').style.display = 'none';
-            document.getElementById('findInput').value = '';
-            document.querySelectorAll('table tbody tr').forEach(row => row.style.display = '');
-        });
-
-        document.getElementById('findInput').addEventListener('keyup', function() {
-            const query = this.value.toLowerCase();
-            const rows = document.querySelectorAll('table tbody tr');
-            rows.forEach(row => {
-                if (row.cells.length < 2) return; 
-                const text = row.innerText.toLowerCase();
-                row.style.display = text.includes(query) ? '' : 'none';
-            });
-        });
     </script>
-
-    <!-- KimFresh mobile burger menu script -->
+    <!-- SECURITY: Force reload on back button & hide body on leave -->
     <script>
-    (function () {
-        var sidebar = document.querySelector('.sidebar');
-        var header = document.querySelector('.top-header');
-        if (!sidebar || !header) return;
-
-        sidebar.id = sidebar.id || 'sidebar';
-
-        var burger = document.createElement('button');
-        burger.type = 'button';
-        burger.className = 'menu-toggle';
-        burger.setAttribute('aria-label', 'Open menu');
-        burger.setAttribute('aria-controls', sidebar.id);
-        burger.setAttribute('aria-expanded', 'false');
-        burger.innerHTML = '<span></span><span></span><span></span>';
-        header.insertBefore(burger, header.firstChild);
-
-        var logo = sidebar.querySelector('.logo');
-        if (logo) {
-            var mobileLogo = logo.cloneNode(true);
-            mobileLogo.className = 'mobile-logo';
-            header.insertBefore(mobileLogo, burger.nextSibling);
-        }
-
-        var closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'sidebar-close';
-        closeBtn.setAttribute('aria-label', 'Close menu');
-        closeBtn.innerHTML = '&times;';
-        sidebar.appendChild(closeBtn);
-
-        var overlay = document.createElement('div');
-        overlay.className = 'sidebar-overlay';
-        document.body.appendChild(overlay);
-
-        function setOpen(open) {
-            sidebar.classList.toggle('open', open);
-            document.body.classList.toggle('sidebar-open', open);
-            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
-        }
-
-        burger.addEventListener('click', function () { setOpen(!sidebar.classList.contains('open')); });
-        closeBtn.addEventListener('click', function () { setOpen(false); });
-        overlay.addEventListener('click', function () { setOpen(false); });
-        sidebar.addEventListener('click', function (e) { if (e.target.closest('a')) setOpen(false); });
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
-        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) { if (e.matches) setOpen(false); });
-    })();
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted || (typeof window.performance != "undefined" && window.performance.navigation.type === 2)) {
+                window.location.reload();
+            }
+        });
+        window.addEventListener('pagehide', function (event) {
+            document.body.style.display = 'none';
+        });
     </script>
 </body>
 </html>

@@ -1,5 +1,8 @@
 <?php
 session_start();
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 require 'db.php';
 require 'log_helper.php';
 
@@ -271,6 +274,13 @@ $store = $conn->query("SELECT * FROM store_settings WHERE id = 1")->fetch_assoc(
             if (e.matches) setOpen(false);
         });
     })();
+    </script>
+    <script>
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted || (typeof window.performance != "undefined" && window.performance.navigation.type === 2)) {
+                window.location.reload();
+            }
+        });
     </script>
 </body>
 </html>

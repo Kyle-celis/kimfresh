@@ -1,235 +1,200 @@
 <?php
-// api/controllers/AuthController.php
+declare(strict_types=1);
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+require_once __DIR__ . '/../core/BaseController.php';
+require_once __DIR__ . '/../models/UserModel.php';
 
-class AuthController {
-    private $conn;
+class AuthController extends BaseController {
+    private string $jwt_secret = '2027KimfreshDB';
+    private UserModel $userModel;
 
-    private $sender_email = 's2120320@usls.edu.ph';
-    private $sender_password = 'YOUR_16_LETTER_APP_PASSWORD'; // <--- REPLACE THIS
-
-    public function __construct($db) {
-        $this->conn = $db;
+    public function __construct(mysqli $db) {
+        parent::__construct($db);
+        $this->userModel = new UserModel($db);
     }
 
-    private function hashPassword($password) {
-        return password_hash($password, PASSWORD_ARGON2ID);
-    }
-
-    private function generateToken($userId, $role) {
-        $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
-        $payload = json_encode(['user_id' => $userId, 'role' => $role, 'exp' => time() + (86400 * 7)]);
-        $base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
-        $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($payload));
-        
-        $secret = '2027KimfreshDB';
-        $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, $secret, true);
-        $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
-        
-        return $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
-    }
-
-    private function sendEmail($to, $subject, $body, $otp = "") {
-        // LOCAL TESTING FALLBACK
-        if ($otp) {
-            $log = "Email: $to\nOTP: $otp\nTime: " . date('Y-m-d H:i:s') . "\n-------------------\n";
-            file_put_contents(__DIR__ . '/../../local_otps.txt', $log, FILE_APPEND);
-            print("Saved OTP to local_otps.txt\n");
-        }
-
-        // Try to send real email
-        require_once __DIR__ . '/../../PHPMailer/Exception.php';
-        require_once __DIR__ . '/../../PHPMailer/PHPMailer.php';
-        require_once __DIR__ . '/../../PHPMailer/SMTP.php';
-
-        $mail = new PHPMailer(true);
-        try {
-            $mail->isSMTP();
-            $mail->Host       = 'smtp.gmail.com';
-            $mail->SMTPAuth   = true;
-            $mail->Username   = $this->sender_email;
-            $mail->Password   = $this->sender_password;
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port       = 587;
-
-            $mail->setFrom($this->sender_email, 'KimFresh');
-            $mail->addAddress($to);
-            $mail->isHTML(true);
-            $mail->Subject = $subject;
-            $mail->Body    = $body;
-            $mail->send();
-            return true;
-        } catch (Exception $e) {
-            return false;
-        }
-    }
-
-    public function login($data) {
+    public function login(array $data): void {
         $email = $data['email'] ?? '';
         $password = $data['password'] ?? '';
-        $requested_role = $data['role'] ?? 'any';
+        $role = $data['role'] ?? 'any';
 
-        if (!$email || !$password) {
-            return ["success" => false, "message" => "Email and password required"];
+        if (empty($email) || empty($password)) {
+            $this->respond(['success' => false, 'message' => 'Email and password required'], 400);
         }
 
         $user = null;
-        $role = null;
+        $actual_role = null;
 
-        if ($requested_role === 'retailer') {
-            $stmt = $this->conn->prepare("SELECT retailer_id as user_id, name, password_hash, account_status FROM retailer WHERE email = ?");
-            $stmt->bind_param("s", $email);
-            $stmt->execute();
-            $user = $stmt->get_result()->fetch_assoc();
-            $role = "retailer";
-        } elseif ($requested_role === 'driver') {
-            $stmt = $this->conn->prepare("SELECT driver_id as user_id, name, password_hash, account_status FROM driver WHERE email = ?");
-            $stmt->bind_param("s", $email);
-            $stmt->execute();
-            $user = $stmt->get_result()->fetch_assoc();
-            $role = "driver";
+        if ($role === 'retailer') {
+            $user = $this->userModel->findRetailerByEmail($email);
+            $actual_role = 'retailer';
+        } elseif ($role === 'driver') {
+            $user = $this->userModel->findDriverByEmail($email);
+            $actual_role = 'driver';
         } else {
-            $stmt = $this->conn->prepare("SELECT admin_id as user_id, name, password_hash FROM admin WHERE email = ?");
-            $stmt->bind_param("s", $email);
-            $stmt->execute();
-            $user = $stmt->get_result()->fetch_assoc();
-            $role = "admin";
+            $user = $this->userModel->findAdminByEmail($email);
+            $actual_role = 'admin';
         }
 
-        if (!$user) {
-            return ["success" => false, "message" => "Invalid email or password"];
+        if (!$user || !password_verify($password, $user['password_hash'])) {
+            $this->respond(['success' => false, 'message' => 'Invalid credentials'], 401);
         }
 
-        if (!password_verify($password, $user['password_hash'])) {
-            return ["success" => false, "message" => "Invalid email or password"];
-        }
-
-        if ($role !== 'admin') {
-            if ($user['account_status'] === 'pending') return ["success" => false, "message" => "Account pending admin approval."];
-            if ($user['account_status'] === 'rejected') return ["success" => false, "message" => "Account rejected."];
+        if (isset($user['account_status'])) {
+            if ($user['account_status'] === 'pending') {
+                $this->respond(['success' => false, 'message' => 'Account pending admin approval.'], 200);
+            }
             if ($user['account_status'] === 'otp_pending') {
-                return ["success" => false, "require_otp" => true, "user_id" => $user['user_id'], "retailer_id" => $user['user_id'], "driver_id" => $user['user_id']];
+                $this->respond(['success' => false, 'require_otp' => true, 'user_id' => $user['user_id'], 'driver_id' => $user['user_id'], 'retailer_id' => $user['user_id']], 200);
             }
         }
 
-        $token = $this->generateToken($user['user_id'], $role);
-        return [
-            "success" => true, "token" => $token, "user_id" => $user['user_id'],
-            "retailer_id" => $user['user_id'], "driver_id" => $user['user_id'],
-            "name" => $user['name'], "retailer_name" => $user['name'], "role" => $role
-        ];
+        $token = $this->generateToken((int)$user['user_id'], $actual_role);
+        
+        $this->respond([
+            'success' => true, 'token' => $token, 'user_id' => $user['user_id'], 
+            'retailer_id' => $user['user_id'], 'driver_id' => $user['user_id'], 
+            'name' => $user['name'], 'retailer_name' => $user['name'], 'role' => $actual_role
+        ]);
     }
 
-    public function register($data) {
+    public function register(array $data): void {
         $name = $data['name'] ?? '';
         $email = $data['email'] ?? '';
         $password = $data['password'] ?? '';
         $phone = $data['phone'] ?? '';
-        $address = $data['address'] ?? '';
 
-        $stmt = $this->conn->prepare("SELECT retailer_id, account_status FROM retailer WHERE email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $existing = $stmt->get_result()->fetch_assoc();
-
-        if ($existing) {
-            if ($existing['account_status'] === 'otp_pending') {
-                $otp = sprintf("%06d", mt_rand(1, 999999));
-                $expiry = date('Y-m-d H:i:s', strtotime('+5 minutes'));
-                $upd = $this->conn->prepare("UPDATE retailer SET otp_code = ?, otp_expires_at = ? WHERE retailer_id = ?");
-                $upd->bind_param("ssi", $otp, $expiry, $existing['retailer_id']);
-                $upd->execute();
-                
-                $this->sendEmail($email, "KimFresh Verification Code (Resend)", "<h2>Hello $name,</h2><p>Your code is: <b>$otp</b></p>", $otp);
-                return ["success" => true, "retailer_id" => $existing['retailer_id'], "message" => "Unverified account. New OTP sent."];
-            }
-            return ["success" => false, "message" => "Email already registered."];
+        if (empty($name) || empty($email) || empty($password)) {
+            $this->respond(['success' => false, 'message' => 'Missing fields'], 400);
         }
 
-        do {
-            $code = sprintf("%06d", mt_rand(1, 999999));
-            $check = $this->conn->prepare("SELECT retailer_id FROM retailer WHERE customer_code = ?");
-            $check->bind_param("s", $code);
-            $check->execute();
-        } while ($check->get_result()->num_rows > 0);
+        if ($this->userModel->findRetailerByEmail($email)) {
+            $this->respond(['success' => false, 'message' => 'Email already registered'], 400);
+        }
 
-        $hash = $this->hashPassword($password);
+        $hash = password_hash($password, PASSWORD_ARGON2ID);
         $otp = sprintf("%06d", mt_rand(1, 999999));
         $expiry = date('Y-m-d H:i:s', strtotime('+5 minutes'));
 
-        $stmt = $this->conn->prepare("INSERT INTO retailer (name, email, phone, password_hash, address, customer_code, account_status, otp_code, otp_expires_at) VALUES (?, ?, ?, ?, ?, ?, 'otp_pending', ?, ?)");
-        $stmt->bind_param("ssssssss", $name, $email, $phone, $hash, $address, $code, $otp, $expiry);
-        
-        if ($stmt->execute()) {
-            $retailer_id = $this->conn->insert_id;
-            $this->sendEmail($email, "KimFresh Verification Code", "<h2>Hello $name,</h2><p>Your code is: <b>$otp</b></p>", $otp);
-            return ["success" => true, "retailer_id" => $retailer_id, "customer_code" => $code, "name" => $name, "message" => "Registered! Check email for OTP."];
+        $retailer_id = $this->userModel->createRetailer($name, $email, $phone, $hash, $otp, $expiry);
+
+        if ($retailer_id) {
+            $this->sendEmail($email, "KimFresh Verification", "Your OTP is: <b>$otp</b>");
+            $this->respond(['success' => true, 'retailer_id' => $retailer_id, 'message' => 'Registered! Check email for OTP.']);
         }
-        return ["success" => false, "message" => "Database error"];
+        $this->respond(['success' => false, 'message' => 'Database error'], 500);
     }
 
-    public function verifyOTP($data) {
-        $retailer_id = $data['retailer_id'] ?? 0;
-        $otp = $data['otp'] ?? '';
+    public function driverRegister(array $data): void {
+        $name = $data['name'] ?? '';
+        $email = $data['email'] ?? '';
+        $password = $data['password'] ?? '';
+        $phone = $data['phone'] ?? '';
+        $license = $data['license_number'] ?? '';
 
-        $stmt = $this->conn->prepare("SELECT otp_code, otp_expires_at FROM retailer WHERE retailer_id = ? AND account_status = 'otp_pending'");
-        $stmt->bind_param("i", $retailer_id);
-        $stmt->execute();
-        $res = $stmt->get_result()->fetch_assoc();
+        if (empty($name) || empty($email) || empty($password)) {
+            $this->respond(['success' => false, 'message' => 'Missing required fields'], 400);
+        }
+
+        if ($this->userModel->findDriverByEmail($email)) {
+            $this->respond(['success' => false, 'message' => 'Email already registered'], 400);
+        }
+
+        $hash = password_hash($password, PASSWORD_ARGON2ID);
+        $driver_id = $this->userModel->createDriver($name, $email, $phone, $license, $hash);
+
+        if ($driver_id) {
+            $this->respond(['success' => true, 'driver_id' => $driver_id, 'message' => 'Account created! Wait for admin approval.']);
+        }
+        $this->respond(['success' => false, 'message' => 'Database error'], 500);
+    }
+
+    public function verifyOTP(array $data): void {
+        $this->handleOTPVerification('retailer', 'retailer_id', (int)($data['retailer_id'] ?? 0), $data['otp'] ?? '');
+    }
+
+    public function driverVerifyOTP(array $data): void {
+        $this->handleOTPVerification('driver', 'driver_id', (int)($data['driver_id'] ?? 0), $data['otp'] ?? '');
+    }
+
+    private function handleOTPVerification(string $table, string $id_col, int $id, string $otp): void {
+        $res = $this->userModel->getOTP($table, $id_col, $id);
 
         if (!$res || $res['otp_code'] !== $otp || strtotime($res['otp_expires_at']) < time()) {
-            return ["success" => false, "message" => "Invalid or expired OTP."];
+            $this->respond(['success' => false, 'message' => 'Invalid or expired OTP'], 400);
         }
 
-        $upd = $this->conn->prepare("UPDATE retailer SET account_status = 'approved', otp_code = NULL WHERE retailer_id = ?");
-        $upd->bind_param("i", $retailer_id);
-        $upd->execute();
-
-        return ["success" => true, "message" => "Account verified!"];
+        $this->userModel->approveUser($table, $id_col, $id);
+        $this->respond(['success' => true, 'message' => 'Account verified!']);
     }
 
-    public function forgotPassword($data) {
-        $email = $data['email'] ?? '';
-        $otp = sprintf("%06d", mt_rand(1, 999999));
-        $expiry = date('Y-m-d H:i:s', strtotime('+5 minutes'));
-
-        $stmt = $this->conn->prepare("SELECT retailer_id FROM retailer WHERE email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $user = $stmt->get_result()->fetch_assoc();
-
-        if ($user) {
-            $upd = $this->conn->prepare("UPDATE retailer SET otp_code = ?, otp_expires_at = ? WHERE retailer_id = ?");
-            $upd->bind_param("ssi", $otp, $expiry, $user['retailer_id']);
-            $upd->execute();
-            $this->sendEmail($email, "KimFresh Password Reset", "Your OTP is: <b>$otp</b>", $otp);
-            return ["success" => true, "message" => "OTP sent to email."];
-        }
-        return ["success" => false, "message" => "Email not found."];
+    public function getRetailerProfile(int $id): void {
+        $this->respond($this->userModel->getRetailerProfile($id) ?: ['success' => false]);
     }
 
-    public function resetPassword($data) {
-        $email = $data['email'] ?? '';
-        $new_password = $data['new_password'] ?? '';
-        $otp = $data['otp'] ?? '';
+    public function getDriverProfile(int $id): void {
+        $this->respond($this->userModel->getDriverProfile($id) ?: ['success' => false]);
+    }
 
-        $stmt = $this->conn->prepare("SELECT retailer_id, otp_code, otp_expires_at FROM retailer WHERE email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $user = $stmt->get_result()->fetch_assoc();
+    public function getProducts(): void {
+        // You can move this to OrderModel if you want to be strict
+        $result = $this->db->query("SELECT * FROM product ORDER BY product_id DESC");
+        $products = [];
+        while ($row = $result->fetch_assoc()) { $products[] = $row; }
+        $this->respond($products);
+    }
 
-        if (!$user || $user['otp_code'] !== $otp || strtotime($user['otp_expires_at']) < time()) {
-            return ["success" => false, "message" => "Invalid or expired OTP."];
+    public function getStoreStatus(): void {
+        $result = $this->db->query("SELECT * FROM store_settings WHERE id = 1")->fetch_assoc();
+        date_default_timezone_set('Asia/Manila');
+        $current_time = date('H:i:s');
+        $is_open = false;
+        
+        if ($result['manual_override'] !== NULL) {
+            $is_open = ($result['manual_override'] == 1);
+        } else {
+            if ($result['open_time'] <= $result['close_time']) {
+                $is_open = ($current_time >= $result['open_time'] && $current_time <= $result['close_time']);
+            } else {
+                $is_open = ($current_time >= $result['open_time'] || $current_time <= $result['close_time']);
+            }
         }
+        $this->respond(["is_open" => $is_open, "message" => $is_open ? "Open" : "Closed", "status_type" => $is_open ? "normal" : "closed"]);
+    }
 
-        $hash = $this->hashPassword($new_password);
-        $upd = $this->conn->prepare("UPDATE retailer SET password_hash = ?, otp_code = NULL WHERE retailer_id = ?");
-        $upd->bind_param("si", $hash, $user['retailer_id']);
-        $upd->execute();
+    private function generateToken(int $userId, string $role): string {
+        $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
+        $payload = json_encode(['user_id' => $userId, 'role' => $role, 'exp' => time() + 86400]);
+        $b64Header = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
+        $b64Payload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($payload));
+        $signature = hash_hmac('sha256', "$b64Header.$b64Payload", $this->jwt_secret, true);
+        return "$b64Header.$b64Payload." . str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
+    }
 
-        return ["success" => true, "message" => "Password reset successfully."];
+    private function sendEmail(string $to, string $subject, string $body): void {
+        require_once __DIR__ . '/../../PHPMailer/Exception.php';
+        require_once __DIR__ . '/../../PHPMailer/PHPMailer.php';
+        require_once __DIR__ . '/../../PHPMailer/SMTP.php';
+
+        $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+        try {
+            $mail->isSMTP();
+            $mail->Host       = 'smtp.gmail.com';
+            $mail->SMTPAuth   = true;
+            $mail->Username   = 's2120320@usls.edu.ph'; 
+            $mail->Password   = 'zrtjposwynbyubpq'; 
+            $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+            $mail->Port       = 465;
+
+            $mail->setFrom('s2120320@usls.edu.ph', 'KimFresh');
+            $mail->addAddress($to);
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body    = $body;
+
+            $mail->send();
+        } catch (\Exception $e) {
+            file_put_contents(__DIR__ . '/../../../local_otps.txt', "To: $to | OTP: $body\n", FILE_APPEND);
+        }
     }
 }
-?>

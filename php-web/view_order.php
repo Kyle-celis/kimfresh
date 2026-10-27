@@ -1,5 +1,8 @@
 <?php
 session_start();
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 require 'db.php';
 require 'log_helper.php';
 
@@ -9,7 +12,31 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 $order_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-$trigger_print = false;
+
+// --- HANDLE APPROVE ACTION ---
+if (isset($_POST['approve_order'])) {
+    $stmt = $conn->prepare("UPDATE `order` SET order_status = 'approved' WHERE order_id = ?");
+    $stmt->bind_param("i", $order_id);
+    $stmt->execute();
+    
+    $assigned_driver = autoAssignDriver($conn, $order_id);
+    logActivity($conn, $_SESSION['admin_id'], "Approved Order #$order_id from view page");
+    
+    header("Location: view_order.php?id=$order_id");
+    exit();
+}
+
+// --- HANDLE REJECT ACTION ---
+if (isset($_POST['reject_order'])) {
+    $stmt = $conn->prepare("UPDATE `order` SET order_status = 'rejected' WHERE order_id = ?");
+    $stmt->bind_param("i", $order_id);
+    $stmt->execute();
+    
+    logActivity($conn, $_SESSION['admin_id'], "Rejected Order #$order_id from view page");
+    
+    header("Location: view_order.php?id=$order_id");
+    exit();
+}
 
 // 1. Fetch Order Details
 $stmt = $conn->prepare("
@@ -44,7 +71,7 @@ $sensor_data = $conn->query("
     LIMIT 10
 ");
 
-// 4. Fetch Driver Info (if assigned)
+// 4. Fetch Driver Info
 $driver_query = $conn->query("
     SELECT dr.name as driver_name 
     FROM delivery d 
@@ -84,7 +111,6 @@ if (isset($_GET['export_pdf'])) {
     $pdf->SetFont('Arial', '', 10);
     $pdf->SetTextColor(0, 0, 0);
 
-    // Retailer Info
     $pdf->SetFont('Arial', 'B', 11);
     $pdf->Cell(0, 8, 'Retailer Information', 0, 1);
     $pdf->SetFont('Arial', '', 10);
@@ -93,7 +119,6 @@ if (isset($_GET['export_pdf'])) {
     $pdf->Cell(0, 6, 'Address: ' . htmlspecialchars($order['address']), 0, 1);
     $pdf->Ln(5);
 
-    // Order Info
     $pdf->SetFont('Arial', 'B', 11);
     $pdf->Cell(0, 8, 'Order Information', 0, 1);
     $pdf->SetFont('Arial', '', 10);
@@ -103,7 +128,6 @@ if (isset($_GET['export_pdf'])) {
     $pdf->Cell(0, 6, 'Status: ' . strtoupper(str_replace('_', ' ', $order['order_status'])), 0, 1);
     $pdf->Ln(5);
 
-    // Items Table
     $pdf->SetFont('Arial', 'B', 10);
     $pdf->SetFillColor(195, 66, 0);
     $pdf->SetTextColor(255, 255, 255);
@@ -145,7 +169,6 @@ if (isset($_GET['export_pdf'])) {
     
     <style>
         :root { --primary: #C34200; --primary-dark: #9a3400; }
-
         .profile-menu { position: relative; }
         .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
         .profile-trigger:hover { background: var(--primary-soft); }
@@ -156,7 +179,6 @@ if (isset($_GET['export_pdf'])) {
         .dropdown-account span { font-size: 12px; color: #777; }
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
-
         .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; }
         .btn-export:hover { background: #9a3400; }
     </style>
@@ -210,10 +232,23 @@ if (isset($_GET['export_pdf'])) {
 
                 <div class="table-section" style="margin-bottom: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #C34200; padding-bottom: 15px; margin-bottom: 20px;">
-                        <h2 style="color: #C34200; margin: 0;">Order #<?php echo $order_id; ?></h2>
-                        <span class="status-pill <?php echo strtolower($order['order_status']); ?>">
-                            <?php echo strtoupper(str_replace('_', ' ', $order['order_status'])); ?>
-                        </span>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <h2 style="color: #C34200; margin: 0;">Order #<?php echo $order_id; ?></h2>
+                            <span class="status-pill <?php echo strtolower($order['order_status']); ?>">
+                                <?php echo strtoupper(str_replace('_', ' ', $order['order_status'])); ?>
+                            </span>
+                        </div>
+
+<?php if ($order['order_status'] === 'pending'): ?>
+    <div style="display: flex; gap: 8px;">
+        <form method="POST" style="margin: 0;">
+            <button type="submit" name="reject_order" style="background: #dc2626; color: white; padding: 8px 16px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;" onclick="return confirm('Reject this order?');">Reject</button>
+        </form>
+        <form method="POST" style="margin: 0;">
+            <button type="submit" name="approve_order" style="background: #15803d; color: white; padding: 8px 16px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;">Approve</button>
+        </form>
+    </div>
+<?php endif; ?>
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
@@ -310,6 +345,13 @@ if (isset($_GET['export_pdf'])) {
             const menu = document.getElementById('profileMenu');
             if (menu && !menu.contains(event.target)) {
                 document.getElementById('profileDropdown').classList.remove('show');
+            }
+        });
+    </script>
+    <script>
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted || (typeof window.performance != "undefined" && window.performance.navigation.type === 2)) {
+                window.location.reload();
             }
         });
     </script>

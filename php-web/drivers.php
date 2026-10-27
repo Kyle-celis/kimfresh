@@ -1,66 +1,18 @@
 <?php
 session_start();
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 require 'db.php';
 require 'log_helper.php';
+require 'mailer.php'; 
 
+// FIX: Session security
 if (!isset($_SESSION['admin_id'])) { header("Location: login.php"); exit(); }
-
-// --- HANDLE PDF EXPORT (FPDF) ---
-if (isset($_GET['export_pdf'])) {
-    logActivity($conn, $_SESSION['admin_id'], "Exported Drivers to PDF");
-    
-    require('fpdf/fpdf.php');
-
-    class PDF extends FPDF {
-        function Header() {
-            $this->SetFont('Arial', 'B', 15);
-            $this->SetTextColor(195, 66, 0); 
-            $this->Cell(0, 10, 'KimFresh Driver Roster', 0, 1, 'C');
-            $this->SetFont('Arial', 'I', 10);
-            $this->SetTextColor(100, 100, 100);
-            $this->Cell(0, 5, 'Generated on: ' . date('F j, Y, g:i A'), 0, 1, 'C');
-            $this->Ln(10);
-            
-            // Table Header
-            $this->SetFont('Arial', 'B', 10);
-            $this->SetFillColor(195, 66, 0);
-            $this->SetTextColor(255, 255, 255);
-            $this->Cell(50, 8, 'Driver Name', 1, 0, 'C', true);
-            $this->Cell(40, 8, 'License', 1, 0, 'C', true);
-            $this->Cell(50, 8, 'Email', 1, 0, 'C', true);
-            $this->Cell(30, 8, 'Status', 1, 1, 'C', true);
-        }
-
-        function Footer() {
-            $this->SetY(-15);
-            $this->SetFont('Arial', 'I', 8);
-            $this->SetTextColor(128);
-            $this->Cell(0, 10, 'Page ' . $this->PageNo() . ' - KimFresh IoT System', 0, 0, 'C');
-        }
-    }
-
-    $pdf = new PDF();
-    $pdf->AddPage();
-    $pdf->SetFont('Arial', '', 10);
-    $pdf->SetTextColor(0, 0, 0);
-
-    $print_query = $conn->query("SELECT * FROM driver ORDER BY name ASC");
-
-    while($row = $print_query->fetch_assoc()) {
-        $status = ($row['status'] === 'hidden') ? 'INACTIVE' : strtoupper($row['status']);
-        $pdf->Cell(50, 8, htmlspecialchars($row['name']), 1, 0, 'L');
-        $pdf->Cell(40, 8, htmlspecialchars($row['license_number'] ?? 'N/A'), 1, 0, 'L');
-        $pdf->Cell(50, 8, htmlspecialchars($row['email'] ?? 'N/A'), 1, 0, 'L');
-        $pdf->Cell(30, 8, $status, 1, 1, 'C');
-    }
-
-    $pdf->Output('D', 'KimFresh_Drivers.pdf');
-    exit();
-}
 
 // --- HANDLE ACTIVATE/DEACTIVATE ---
 if (isset($_POST['toggle_status'])) {
-    $driver_id = $_POST['driver_id'];
+    $driver_id = (int)$_POST['driver_id'];
     $new_status = $_POST['new_status'];
     
     $stmt = $conn->prepare("UPDATE driver SET status = ? WHERE driver_id = ?");
@@ -76,25 +28,97 @@ if (isset($_POST['toggle_status'])) {
 
 // --- HANDLE MANUAL ASSIGN ---
 if (isset($_POST['assign_order'])) {
-    $order_id = $_POST['order_id'];
-    $driver_id = $_POST['driver_id'];
+    $order_id = (int)$_POST['order_id'];
+    $driver_id = (int)$_POST['driver_id'];
     
-    // 1. Create the delivery record
+    // Check if order already has a delivery
+    $check = $conn->prepare("SELECT delivery_id FROM delivery WHERE order_id = ?");
+    $check->bind_param("i", $order_id);
+    $check->execute();
+    
+    if ($check->get_result()->num_rows > 0) {
+        header("Location: drivers.php?error=already_assigned");
+        exit();
+    }
+
+    // Create delivery record
     $stmt = $conn->prepare("INSERT INTO delivery (order_id, driver_id, delivery_status) VALUES (?, ?, 'assigned')");
     $stmt->bind_param("ii", $order_id, $driver_id);
     $stmt->execute();
     
-    // 2. Mark driver as on_delivery
+    // Mark driver as busy
     $conn->query("UPDATE driver SET status = 'on_delivery' WHERE driver_id = $driver_id");
     
-    // 3. Log the action
+    // Mark order as approved
+    $conn->query("UPDATE `order` SET order_status = 'approved' WHERE order_id = $order_id AND order_status = 'pending'");
+    
     logActivity($conn, $_SESSION['admin_id'], "Manually assigned Order #$order_id to Driver #$driver_id");
     
     header("Location: drivers.php");
     exit();
 }
 
-// --- FILTER LOGIC ---
+// --- HANDLE BULK DRIVER APPROVAL ---
+if (isset($_POST['bulk_approve_drivers'])) {
+    if (!empty($_POST['driver_ids'])) {
+        foreach ($_POST['driver_ids'] as $driver_id) {
+            $driver_id = (int)$driver_id;
+            $stmt = $conn->prepare("UPDATE driver SET account_status = 'approved', status = 'available' WHERE driver_id = ?");
+            $stmt->bind_param("i", $driver_id);
+            $stmt->execute();
+            logActivity($conn, $_SESSION['admin_id'], "Bulk Approved Driver Registration #$driver_id");
+        }
+    }
+    header("Location: drivers.php");
+    exit();
+}
+
+// --- HANDLE SINGLE APPROVAL/REJECTION ---
+if (isset($_POST['approve_driver']) || isset($_POST['reject_driver'])) {
+    $driver_id = (int)$_POST['driver_id'];
+    $is_approve = isset($_POST['approve_driver']);
+    
+    if ($is_approve) {
+        $res = $conn->query("SELECT name, email FROM driver WHERE driver_id = $driver_id");
+        $driver = $res->fetch_assoc();
+        
+        $otp = sprintf("%06d", mt_rand(1, 999999));
+        $expiry = date('Y-m-d H:i:s', strtotime('+5 minutes'));
+        
+        $stmt = $conn->prepare("UPDATE driver SET account_status = 'otp_pending', otp_code = ?, otp_expires_at = ? WHERE driver_id = ?");
+        $stmt->bind_param("ssi", $otp, $expiry, $driver_id);
+        $stmt->execute();
+        
+        sendOTPEmail($driver['email'], $driver['name'], $otp, 'Driver');
+        logActivity($conn, $_SESSION['admin_id'], "Approved Driver #$driver_id and generated OTP");
+    } else {
+        $stmt = $conn->prepare("UPDATE driver SET account_status = 'rejected', status = 'hidden', rejected_at = NOW() WHERE driver_id = ?");
+        $stmt->bind_param("i", $driver_id);
+        $stmt->execute();
+        logActivity($conn, $_SESSION['admin_id'], "Rejected Driver Registration #$driver_id");
+    }
+    
+    header("Location: drivers.php");
+    exit();
+}
+
+// --- FETCH PENDING DRIVERS (PAGINATED) ---
+$pending_limit = 5;
+$pending_page = isset($_GET['p_page']) && is_numeric($_GET['p_page']) ? (int)$_GET['p_page'] : 1;
+if ($pending_page < 1) $pending_page = 1;
+$pending_offset = ($pending_page - 1) * $pending_limit;
+
+$total_pending = $conn->query("SELECT COUNT(*) as total FROM driver WHERE account_status = 'pending'")->fetch_assoc()['total'];
+$total_pending_pages = ceil($total_pending / $pending_limit);
+
+$pendingDrivers = $conn->query("
+    SELECT * FROM driver 
+    WHERE account_status = 'pending' 
+    ORDER BY created_at ASC
+    LIMIT $pending_limit OFFSET $pending_offset
+");
+
+// --- FILTER LOGIC FOR ACTIVE DRIVERS ---
 $filter = isset($_GET['filter']) ? $_GET['filter'] : 'all'; 
 $orderBy = "d.name ASC"; 
 
@@ -110,7 +134,7 @@ $sql = "
             INNER JOIN `order` o ON o.order_id = dl.order_id
             WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered') AS active_orders
     FROM driver d
-    WHERE 1=1
+    WHERE d.account_status = 'approved'
 ";
 
 if ($filter === 'all') {
@@ -128,7 +152,7 @@ if ($filter === 'all') {
 $sql .= " ORDER BY $orderBy";
 $drivers = $conn->query($sql);
 
-// --- FETCH UNASSIGNED ORDERS ---
+// --- FETCH UNASSIGNED ORDERS (For Manual Assign) ---
 $unassigned = $conn->query("
     SELECT o.order_id, r.name AS retailer_name 
     FROM `order` o
@@ -209,43 +233,26 @@ if ($histRes) {
         .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; }
         .btn-export:hover { background: #9a3400; }
 
-        /* Assign Form */
+        th a {
+    text-decoration: none !important;
+}
+
         .assign-form { display: flex; gap: 5px; margin-top: 5px; }
         .assign-form select { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; outline: none; }
         .assign-form button { padding: 8px 12px; background: #C34200; color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; }
 
-        /* =========================================
-           MOBILE RESPONSIVE FIXES
-           ========================================= */
         @media (max-width: 768px) {
-            .page-head {
-                flex-direction: column !important;
-                align-items: stretch !important;
-                gap: 15px !important;
-            }
-            
+            .page-head { flex-direction: column !important; align-items: stretch !important; gap: 15px !important; }
             .page-head form { width: 100% !important; }
             .page-head .btn-export { width: 100% !important; padding: 12px !important; text-align: center !important; }
-
-            .filters {
-                justify-content: stretch !important;
-                margin-top: 10px !important;
-                margin-bottom: 10px !important;
-            }
-            
+            .filters { justify-content: stretch !important; margin-top: 10px !important; margin-bottom: 10px !important; }
             .filters select { width: 100% !important; height: 48px; }
-
             .driver-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
             .driver-card { padding: 16px !important; }
-
             .assign-form { flex-direction: column !important; gap: 8px !important; }
             .assign-form select { width: 100% !important; padding: 10px !important; }
             .assign-form button { width: 100% !important; padding: 10px !important; }
-
-            .btn-export, .history-btn, .btn-activate, .btn-deactivate {
-                padding: 12px !important;
-                font-size: 13px !important;
-            }
+            .btn-export, .history-btn, .btn-activate, .btn-deactivate { padding: 12px !important; font-size: 13px !important; }
         }
     </style>
 </head>
@@ -299,6 +306,73 @@ if ($histRes) {
                     <a href="?export_pdf=1" download="KimFresh_Drivers.pdf" class="btn-export">Export to PDF</a>
                 </div>
 
+                <!-- PENDING DRIVERS SECTION (PAGINATED) -->
+                <?php if ($total_pending > 0): ?>
+                    <div class="pending-section" style="margin-bottom: 30px; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #fde047; box-shadow: 0 4px 12px rgba(253, 224, 71, 0.15);">
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h2 style="margin: 0; color: #b45309; font-size: 18px;">
+                                Pending Driver Approvals (<?php echo $total_pending; ?>)
+                            </h2>
+                            <form id="bulk-driver-form" method="POST">
+                                <button type="submit" name="bulk_approve_drivers" style="background: #15803d; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;">
+                                    Approve Selected
+                                </button>
+                            </form>
+                        </div>
+                        
+                        <p style="font-size: 13px; color: #666; margin-bottom: 16px;">These drivers cannot log in to the mobile app until approved.</p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                <input type="checkbox" id="selectAllDrivers" style="width: 16px; height: 16px; cursor: pointer;">
+                                <label for="selectAllDrivers" style="font-size: 13px; font-weight: bold; color: #555; cursor: pointer;">Select All on this page</label>
+                            </div>
+
+                            <?php while($pd = $pendingDrivers->fetch_assoc()): ?>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border: 1px solid #fef08a; background: #fefce8; border-radius: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 15px;">
+                                        <input type="checkbox" form="bulk-driver-form" name="driver_ids[]" value="<?php echo $pd['driver_id']; ?>" class="driver-checkbox" style="width: 16px; height: 16px; cursor: pointer;">
+                                        <div>
+                                            <strong style="display: block; font-size: 16px; color: #333;"><?php echo htmlspecialchars($pd['name']); ?></strong>
+                                            <span style="font-size: 13px; color: #666;"><?php echo htmlspecialchars($pd['email']); ?> | License: <?php echo htmlspecialchars($pd['license_number'] ?? 'N/A'); ?></span>
+                                            <div style="font-size: 11px; color: #999; margin-top: 4px;">Registered: <?php echo date('M d, Y g:i A', strtotime($pd['created_at'])); ?></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="display: flex; gap: 8px;">
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="driver_id" value="<?php echo $pd['driver_id']; ?>">
+                                            <button type="submit" name="reject_driver" style="background: #dc2626; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;" onclick="return confirm('Reject this driver?');">Reject</button>
+                                        </form>
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="driver_id" value="<?php echo $pd['driver_id']; ?>">
+                                            <button type="submit" name="approve_driver" style="background: #15803d; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;">Approve & Send OTP</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            <?php endwhile; ?>
+                        </div>
+
+                        <?php if ($total_pending_pages > 1): ?>
+                        <div style="display: flex; justify-content: center; gap: 6px; margin-top: 20px;">
+                            <?php if ($pending_page > 1): ?>
+                                <a href="?p_page=<?php echo $pending_page - 1; ?>" style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; text-decoration: none; color: #555; background: white;">Prev</a>
+                            <?php endif; ?>
+
+                            <span style="padding: 6px 12px; background: #C34200; color: white; border-radius: 6px; font-weight: bold;">
+                                Page <?php echo $pending_page; ?> of <?php echo $total_pending_pages; ?>
+                            </span>
+
+                            <?php if ($pending_page < $total_pending_pages): ?>
+                                <a href="?p_page=<?php echo $pending_page + 1; ?>" style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; text-decoration: none; color: #555; background: white;">Next</a>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
+                <!-- ACTIVE DRIVERS GRID -->
                 <form method="GET" class="filters no-print">
                     <select name="filter" onchange="this.form.submit()">
                         <option value="all" <?php echo $filter == 'all' ? 'selected' : ''; ?>>All Drivers</option>
@@ -339,7 +413,7 @@ if ($histRes) {
                                     <div class='driver-avatar'><?php echo $initial; ?></div>
                                     <div class='driver-title'>
                                         <div class='driver-name'><?php echo htmlspecialchars($row['name']); ?></div>
-                                        <div class='driver-license'><?php echo htmlspecialchars($row['license_number'] ?? 'No license'); ?></div>
+                                        <div class='driver-license' style="font-weight: 500; color: #666; margin-top: 2px;">License: <?php echo htmlspecialchars($row['license_number'] ?? 'N/A'); ?></div>
                                     </div>
                                     <span class='status <?php echo $statusClass; ?>'><?php echo $statusLabel; ?></span>
                                 </div>
@@ -453,13 +527,17 @@ if ($histRes) {
         </div>
     </div>
 
-    <!-- CUSTOM CTRL+F FIND BAR -->
-    <div id="customFindBar" class="no-print" style="display: none; position: fixed; top: 10px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; border: 1px solid #ddd;">
-        <input type="text" id="findInput" placeholder="Find driver..." style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; outline: none; width: 200px;">
-        <button id="closeFind" style="padding: 8px 12px; margin-left: 5px; background: #eee; border: none; border-radius: 4px; cursor: pointer;">X</button>
-    </div>
-
     <script>
+        // --- SELECT ALL DRIVERS LOGIC ---
+        const selectAllDrivers = document.getElementById('selectAllDrivers');
+        if (selectAllDrivers) {
+            selectAllDrivers.addEventListener('change', function() {
+                const checkboxes = document.querySelectorAll('.driver-checkbox');
+                checkboxes.forEach(cb => cb.checked = this.checked);
+            });
+        }
+
+        // --- HISTORY MODAL LOGIC ---
         const historyModal = document.getElementById('historyModal');
         const historyName  = document.getElementById('historyDriverName');
         const historyBody  = document.getElementById('historyBody');
@@ -485,10 +563,19 @@ if ($histRes) {
             if (e.target === historyModal) closeHistory();
         });
 
-        document.addEventListener('keydown', e => {
-            if (e.key === 'Escape') closeHistory();
+        function toggleProfileMenu(event) {
+            event.stopPropagation();
+            document.getElementById('profileDropdown').classList.toggle('show');
+        }
+
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (!menu.contains(event.target)) {
+                document.getElementById('profileDropdown').classList.remove('show');
+            }
         });
 
+        // --- FIX PDF EXPORT ---
         function exportHistoryPDF() {
             const driverName = historyName.textContent;
             const tableHTML = historyBody.innerHTML;
@@ -521,102 +608,17 @@ if ($histRes) {
             `);
             printWindow.document.close();
         }
-
-        function toggleProfileMenu(event) {
-            event.stopPropagation();
-            document.getElementById('profileDropdown').classList.toggle('show');
-        }
-
-        document.addEventListener('click', function(event) {
-            const menu = document.getElementById('profileMenu');
-            if (!menu.contains(event.target)) {
-                document.getElementById('profileDropdown').classList.remove('show');
-            }
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-                e.preventDefault(); 
-                const findBar = document.getElementById('customFindBar');
-                findBar.style.display = 'flex';
-                document.getElementById('findInput').focus();
-            }
-            if (e.key === 'Escape') {
-                const findBar = document.getElementById('customFindBar');
-                if (findBar.style.display === 'flex') {
-                    findBar.style.display = 'none';
-                    document.getElementById('findInput').value = '';
-                    document.querySelectorAll('.driver-card').forEach(card => card.style.display = '');
-                    e.stopImmediatePropagation();
-                }
-            }
-        });
-
-        document.getElementById('closeFind').addEventListener('click', function() {
-            document.getElementById('customFindBar').style.display = 'none';
-            document.getElementById('findInput').value = '';
-            document.querySelectorAll('.driver-card').forEach(card => card.style.display = '');
-        });
-
-        document.getElementById('findInput').addEventListener('keyup', function() {
-            const query = this.value.toLowerCase();
-            const cards = document.querySelectorAll('.driver-card');
-            cards.forEach(card => {
-                const text = card.innerText.toLowerCase();
-                card.style.display = text.includes(query) ? '' : 'none';
-            });
-        });
     </script>
-
-    <!-- KimFresh mobile burger menu script -->
+    <!-- SECURITY: Force reload on back button & hide body on leave -->
     <script>
-    (function () {
-        var sidebar = document.querySelector('.sidebar');
-        var header = document.querySelector('.top-header');
-        if (!sidebar || !header) return;
-
-        sidebar.id = sidebar.id || 'sidebar';
-
-        var burger = document.createElement('button');
-        burger.type = 'button';
-        burger.className = 'menu-toggle';
-        burger.setAttribute('aria-label', 'Open menu');
-        burger.setAttribute('aria-controls', sidebar.id);
-        burger.setAttribute('aria-expanded', 'false');
-        burger.innerHTML = '<span></span><span></span><span></span>';
-        header.insertBefore(burger, header.firstChild);
-
-        var logo = sidebar.querySelector('.logo');
-        if (logo) {
-            var mobileLogo = logo.cloneNode(true);
-            mobileLogo.className = 'mobile-logo';
-            header.insertBefore(mobileLogo, burger.nextSibling);
-        }
-
-        var closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'sidebar-close';
-        closeBtn.setAttribute('aria-label', 'Close menu');
-        closeBtn.innerHTML = '&times;';
-        sidebar.appendChild(closeBtn);
-
-        var overlay = document.createElement('div');
-        overlay.className = 'sidebar-overlay';
-        document.body.appendChild(overlay);
-
-        function setOpen(open) {
-            sidebar.classList.toggle('open', open);
-            document.body.classList.toggle('sidebar-open', open);
-            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
-        }
-
-        burger.addEventListener('click', function () { setOpen(!sidebar.classList.contains('open')); });
-        closeBtn.addEventListener('click', function () { setOpen(false); });
-        overlay.addEventListener('click', function () { setOpen(false); });
-        sidebar.addEventListener('click', function (e) { if (e.target.closest('a')) setOpen(false); });
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
-        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) { if (e.matches) setOpen(false); });
-    })();
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted || (typeof window.performance != "undefined" && window.performance.navigation.type === 2)) {
+                window.location.reload();
+            }
+        });
+        window.addEventListener('pagehide', function (event) {
+            document.body.style.display = 'none';
+        });
     </script>
 </body>
 </html>

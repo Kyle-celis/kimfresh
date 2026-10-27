@@ -1,5 +1,8 @@
 <?php
 session_start();
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 require 'db.php';
 require 'log_helper.php';
 
@@ -10,26 +13,35 @@ if (!isset($_SESSION['admin_id'])) {
 
 // --- DATE FILTERS (Daily, Weekly, Monthly) ---
 $filter_type = isset($_GET['filter']) ? $_GET['filter'] : 'weekly'; 
-$weekOffset = isset($_GET['week']) ? (int)$_GET['week'] : 0;
-if ($weekOffset > 0) { $weekOffset = 0; }
 
-$currentMonday = strtotime('monday this week');
+// Offsets for navigating back/forward
+$dayOffset = isset($_GET['day']) ? (int)$_GET['day'] : 0;
+$weekOffset = isset($_GET['week']) ? (int)$_GET['week'] : 0;
+$monthOffset = isset($_GET['month']) ? (int)$_GET['month'] : 0;
+
+// Prevent going into the future
+if ($dayOffset > 0) $dayOffset = 0;
+if ($weekOffset > 0) $weekOffset = 0;
+if ($monthOffset > 0) $monthOffset = 0;
 
 if ($filter_type == 'daily') {
-    $startDate = date('Y-m-d');
+    $targetDate = strtotime("$dayOffset day");
+    $startDate = date('Y-m-d', $targetDate);
     $endDate = $startDate;
     $dateFilter = "DATE(order_date) = '$startDate'";
-    $dateLabel = date("M d, Y", strtotime($startDate));
+    $dateLabel = date("M d, Y", $targetDate);
     $filterLabel = "Day";
-    $chartLabels = ["Today"];
+    $chartLabels = [date("M d", $targetDate)];
 } elseif ($filter_type == 'monthly') {
-    $startDate = date('Y-m-01');
-    $endDate = date('Y-m-t');
+    $targetMonth = strtotime("$monthOffset month");
+    $startDate = date('Y-m-01', $targetMonth);
+    $endDate = date('Y-m-t', $targetMonth);
     $dateFilter = "DATE(order_date) BETWEEN '$startDate' AND '$endDate'";
-    $dateLabel = date("F Y", strtotime($startDate));
+    $dateLabel = date("F Y", $targetMonth);
     $filterLabel = "Month";
     $chartLabels = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5"];
 } else {
+    $currentMonday = strtotime('monday this week');
     $startOfWeek = strtotime("$weekOffset week", $currentMonday);
     $endOfWeek = strtotime("+6 days", $startOfWeek);
     $startDate = date('Y-m-d', $startOfWeek);
@@ -39,6 +51,12 @@ if ($filter_type == 'daily') {
     $filterLabel = "Week";
     $chartLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 }
+
+// Params to keep filter state for pagination and sorting
+$urlParams = "filter=$filter_type";
+if ($filter_type == 'daily') $urlParams .= "&day=$dayOffset";
+if ($filter_type == 'monthly') $urlParams .= "&month=$monthOffset";
+if ($filter_type == 'weekly') $urlParams .= "&week=$weekOffset";
 
 // --- SORTING LOGIC ---
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date_desc';
@@ -74,7 +92,10 @@ if ($filter_type == 'daily') {
     for ($i = 1; $i <= 5; $i++) {
         $wStart = date('Y-m-d', strtotime("$startDate +" . (($i-1)*7) . " days"));
         $wEnd = date('Y-m-d', strtotime("$wStart +6 days"));
-        if ($wStart > $endDate) break;
+        if ($wStart > $endDate) {
+            $chartData[] = 0;
+            continue;
+        }
         $count = $conn->query("SELECT COUNT(*) AS c FROM `order` WHERE DATE(order_date) BETWEEN '$wStart' AND '$wEnd'")->fetch_assoc()['c'];
         $chartData[] = $count;
     }
@@ -147,7 +168,6 @@ $recentOrders = $conn->query("
         th a { color: #666; transition: color 0.2s ease; text-decoration: none; }
         th a:hover { color: #C34200 !important; text-decoration: underline; }
 
-        /* PROFILE DROPDOWN STYLES */
         .profile-menu { position: relative; }
         .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
         .profile-trigger:hover { background: var(--primary-soft); }
@@ -159,7 +179,6 @@ $recentOrders = $conn->query("
         .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: 0.2s; }
         .dropdown-item:hover { background: #fdf0e6; color: #C34200; }
 
-        /* PAGINATION STYLES */
         .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 24px; }
         .pagination a, .pagination span {
             display: inline-flex; align-items: center; justify-content: center;
@@ -220,7 +239,6 @@ $recentOrders = $conn->query("
                 <p class="overview-label">Overview</p>
                 <h1>Distribution Dashboard</h1>
 
-                <!-- 1. ORDER FLOW -->
                 <section class="panel" style="margin-bottom: 24px;">
                     <div class="panel-head">
                         <h3>Order Flow</h3>
@@ -244,7 +262,6 @@ $recentOrders = $conn->query("
                     </div>
                 </section>
 
-                <!-- 2. DISTRIBUTION CARDS -->
                 <section class="cards-section">
                     <div class="card"><h3>Pending Orders</h3><div class="value"><?php echo $pending; ?></div><p class="hint">Waiting for approval</p></div>
                     <div class="card"><h3>Awaiting Driver</h3><div class="value"><?php echo $waiting; ?></div><p class="hint">Approved, no driver yet</p></div>
@@ -256,7 +273,6 @@ $recentOrders = $conn->query("
                     <div class="card"><h3>Rejected</h3><div class="value"><?php echo $rejected; ?></div><p class="hint">All time</p></div>
                 </section>
 
-                <!-- 3. ORDERS PER WEEK -->
                 <section class="analytics-section" style="margin-top: 24px;">
                     <div class="week-controls" style="display: flex; gap: 10px; align-items: center;">
                         
@@ -266,15 +282,28 @@ $recentOrders = $conn->query("
                             <option value="monthly" <?php echo $filter_type == 'monthly' ? 'selected' : ''; ?>>Monthly</option>
                         </select>
 
-                        <?php if ($filter_type == 'weekly'): ?>
+                        <!-- PREVIOUS BUTTON -->
+                        <?php if ($filter_type == 'daily'): ?>
+                            <a href="?filter=daily&day=<?php echo $dayOffset - 1; ?>" class="btn" style="text-decoration:none; padding: 5px 10px;">&#8249;</a>
+                        <?php elseif ($filter_type == 'monthly'): ?>
+                            <a href="?filter=monthly&month=<?php echo $monthOffset - 1; ?>" class="btn" style="text-decoration:none; padding: 5px 10px;">&#8249;</a>
+                        <?php else: ?>
                             <a href="?filter=weekly&week=<?php echo $weekOffset - 1; ?>" class="btn" style="text-decoration:none; padding: 5px 10px;">&#8249;</a>
                         <?php endif; ?>
 
                         <h3>Orders Per <?php echo $filterLabel; ?></h3>
                         
-                        <?php if ($filter_type == 'weekly'): ?>
-                            <?php if ($weekOffset >= 0): ?>
-                                <span class="btn" style="text-decoration:none; padding: 5px 10px; opacity: 0.3; cursor: not-allowed;">&#8250;</span>
+                        <!-- NEXT BUTTON -->
+                        <?php 
+                        $currentOffset = ($filter_type == 'daily') ? $dayOffset : (($filter_type == 'monthly') ? $monthOffset : $weekOffset);
+                        ?>
+                        <?php if ($currentOffset >= 0): ?>
+                            <span class="btn" style="text-decoration:none; padding: 5px 10px; opacity: 0.3; cursor: not-allowed;">&#8250;</span>
+                        <?php else: ?>
+                            <?php if ($filter_type == 'daily'): ?>
+                                <a href="?filter=daily&day=<?php echo $dayOffset + 1; ?>" class="btn" style="text-decoration:none; padding: 5px 10px;">&#8250;</a>
+                            <?php elseif ($filter_type == 'monthly'): ?>
+                                <a href="?filter=monthly&month=<?php echo $monthOffset + 1; ?>" class="btn" style="text-decoration:none; padding: 5px 10px;">&#8250;</a>
                             <?php else: ?>
                                 <a href="?filter=weekly&week=<?php echo $weekOffset + 1; ?>" class="btn" style="text-decoration:none; padding: 5px 10px;">&#8250;</a>
                             <?php endif; ?>
@@ -288,7 +317,6 @@ $recentOrders = $conn->query("
                     </div>
                 </section>
 
-                <!-- 4. RECENT ORDERS (With Pagination) -->
                 <section class="table-section" style="margin-top: 24px;">
                     <h3>Recent Orders (<?php echo $dateLabel; ?>)</h3>
                     <div class="table-responsive">
@@ -296,11 +324,11 @@ $recentOrders = $conn->query("
                             <thead>
                                 <tr>
                                     <th>Order ID</th>
-                                    <th><a href="?filter=<?php echo $filter_type; ?>&sort=retailer_asc" style="text-decoration:none; color:inherit;">Name ↕</a></th>
+                                    <th><a href="?<?php echo $urlParams; ?>&sort=retailer_asc" style="text-decoration:none; color:inherit;">Name ↕</a></th>
                                     <th>Items</th>
                                     <th>Total</th>
-                                    <th><a href="?filter=<?php echo $filter_type; ?>&sort=driver_asc" style="text-decoration:none; color:inherit;">Driver ↕</a></th>
-                                    <th><a href="?filter=<?php echo $filter_type; ?>&sort=status_asc" style="text-decoration:none; color:inherit;">Status ↕</a></th>
+                                    <th><a href="?<?php echo $urlParams; ?>&sort=driver_asc" style="text-decoration:none; color:inherit;">Driver ↕</a></th>
+                                    <th><a href="?<?php echo $urlParams; ?>&sort=status_asc" style="text-decoration:none; color:inherit;">Status ↕</a></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -329,7 +357,7 @@ $recentOrders = $conn->query("
                     <?php if ($totalPages > 1): ?>
                     <div class="pagination">
                         <?php if ($page > 1): ?>
-                            <a href="?filter=<?php echo $filter_type; ?>&sort=<?php echo $sort; ?>&page=<?php echo $page - 1; ?>">Prev</a>
+                            <a href="?<?php echo $urlParams; ?>&sort=<?php echo $sort; ?>&page=<?php echo $page - 1; ?>">Prev</a>
                         <?php else: ?>
                             <span class="disabled">Prev</span>
                         <?php endif; ?>
@@ -338,12 +366,12 @@ $recentOrders = $conn->query("
                             <?php if ($i == $page): ?>
                                 <span class="active"><?php echo $i; ?></span>
                             <?php else: ?>
-                                <a href="?filter=<?php echo $filter_type; ?>&sort=<?php echo $sort; ?>&page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                <a href="?<?php echo $urlParams; ?>&sort=<?php echo $sort; ?>&page=<?php echo $i; ?>"><?php echo $i; ?></a>
                             <?php endif; ?>
                         <?php endfor; ?>
 
                         <?php if ($page < $totalPages): ?>
-                            <a href="?filter=<?php echo $filter_type; ?>&sort=<?php echo $sort; ?>&page=<?php echo $page + 1; ?>">Next</a>
+                            <a href="?<?php echo $urlParams; ?>&sort=<?php echo $sort; ?>&page=<?php echo $page + 1; ?>">Next</a>
                         <?php else: ?>
                             <span class="disabled">Next</span>
                         <?php endif; ?>
@@ -351,7 +379,6 @@ $recentOrders = $conn->query("
                     <?php endif; ?>
                 </section>
 
-                <!-- 5. INVENTORY ALERTS -->
                 <section class="panel" style="margin-top: 24px;">
                     <div class="panel-head">
                         <h3>Inventory Alerts</h3>
@@ -382,7 +409,6 @@ $recentOrders = $conn->query("
                     </div>
                 </section>
 
-                <!-- 6. DELIVERY MONITORING -->
                 <section class="panel" style="margin-top: 24px;">
                     <div class="panel-head">
                         <h3>Delivery Monitoring</h3>
@@ -415,7 +441,6 @@ $recentOrders = $conn->query("
         </div>
     </div>
 
-    <!-- Chart Script -->
     <script>
         const ctx = document.getElementById('ordersChart').getContext('2d');
         const chartData = <?php echo json_encode($chartData); ?>;
@@ -459,7 +484,6 @@ $recentOrders = $conn->query("
         });
     </script>
 
-    <!-- KimFresh mobile burger menu script -->
     <script>
     (function () {
         var sidebar = document.querySelector('.sidebar');
@@ -508,6 +532,35 @@ $recentOrders = $conn->query("
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
         window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) { if (e.matches) setOpen(false); });
     })();
+    </script>
+
+    <!-- SCROLL MEMORY SCRIPT -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function(event) { 
+            var scrollpos = sessionStorage.getItem('scrollpos');
+            if (scrollpos) {
+                window.scrollTo(0, scrollpos);
+                sessionStorage.removeItem('scrollpos');
+            }
+        });
+
+        window.onbeforeunload = function(e) {
+            sessionStorage.setItem('scrollpos', window.scrollY);
+        };
+    </script>
+    <!-- SECURITY: Force reload on back button & hide body on leave -->
+    <script>
+        // 1. Force refresh if loaded from cache (Back button)
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted || (typeof window.performance != "undefined" && window.performance.navigation.type === 2)) {
+                window.location.reload();
+            }
+        });
+
+        // 2. Hide body instantly if the user navigates away
+        window.addEventListener('pagehide', function (event) {
+            document.body.style.display = 'none';
+        });
     </script>
 </body>
 </html>
