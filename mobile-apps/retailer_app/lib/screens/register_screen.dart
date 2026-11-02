@@ -49,6 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       emailController.text.trim(),
       passwordController.text,
       phoneController.text.trim(),
+      '',
     );
 
     if (!mounted) return;
@@ -85,6 +86,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 email,
                 passwordController.text,
                 phoneController.text.trim(),
+                '', // Address is required by the API now
               );
 
               setDialogState(() {
