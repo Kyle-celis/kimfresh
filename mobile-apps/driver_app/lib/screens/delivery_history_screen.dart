@@ -22,9 +22,11 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
 
   Future<void> loadHistory() async {
     setState(() => loading = true);
+
+    // Fetch ALL deliveries (the API now sends active + past)
     final allDeliveries = await ApiService.getDeliveries(widget.driverId);
 
-    // Filter only delivered orders
+    // Filter only delivered orders for the history page
     final delivered = allDeliveries.where((d) {
       if (d is Map) {
         return d['delivery_status'] == 'delivered';

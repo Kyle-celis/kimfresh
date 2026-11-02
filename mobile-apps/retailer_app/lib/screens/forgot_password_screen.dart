@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../services/api.dart'; // 👈 Use the central API
 import '../theme/colors.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -24,9 +23,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String _errorMessage = '';
   String _userEmail = '';
 
-  // Replace with your actual API URL
-  final String API = 'http://192.168.0.117:5000';
-
   Future<void> _requestOTP() async {
     if (_isLoading) return;
     FocusScope.of(context).unfocus();
@@ -38,34 +34,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       _errorMessage = '';
     });
 
-    try {
-      final res = await http.post(
-        Uri.parse('$API/api/forgot-password'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': emailController.text.trim()}),
-      ).timeout(const Duration(seconds: 10));
+    // 🔥 USE ApiService INSTEAD OF HTTP
+    final result = await ApiService.forgotPassword(emailController.text.trim());
 
-      final data = jsonDecode(res.body);
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-      if (!mounted) return;
-
-      if (res.statusCode == 200 && data['success'] == true) {
-        setState(() {
-          _isLoading = false;
-          _userEmail = emailController.text.trim();
-          _isEmailVerified = true; // Move to step 2
-        });
-      } else {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = data['message'] ?? 'Failed to send OTP';
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
+    if (result['success'] == true) {
       setState(() {
-        _isLoading = false;
-        _errorMessage = 'Network error. Please try again.';
+        _userEmail = emailController.text.trim();
+        _isEmailVerified = true; // Move to step 2
+      });
+    } else {
+      setState(() {
+        _errorMessage = result['message'] ?? 'Failed to send OTP';
       });
     }
   }
@@ -86,40 +68,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       _errorMessage = '';
     });
 
-    try {
-      final res = await http.post(
-        Uri.parse('$API/api/reset-password'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': _userEmail,
-          'otp': otpController.text.trim(),
-          'new_password': newPasswordController.text,
-        }),
-      ).timeout(const Duration(seconds: 10));
+    // 🔥 USE ApiService INSTEAD OF HTTP
+    final result = await ApiService.resetPassword(
+        _userEmail,
+        otpController.text.trim(),
+        newPasswordController.text
+    );
 
-      final data = jsonDecode(res.body);
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      if (res.statusCode == 200 && data['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password reset successfully! Please log in.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
-      } else {
-        setState(() {
-          _errorMessage = data['message'] ?? 'Failed to reset password';
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
+    if (result['success'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset successfully! Please log in.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context);
+    } else {
       setState(() {
-        _isLoading = false;
-        _errorMessage = 'Network error. Please try again.';
+        _errorMessage = result['message'] ?? 'Failed to reset password';
       });
     }
   }
@@ -127,11 +96,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background, // ✅ FIXED
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.text), // ✅ FIXED
+        iconTheme: const IconThemeData(color: AppColors.text),
       ),
       body: SafeArea(
         child: Center(
@@ -144,7 +113,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
-  // Step 1: Ask for Email
   Widget _buildEmailForm() {
     return Form(
       key: _emailFormKey,
@@ -152,18 +120,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.lock_reset_rounded, size: 80, color: AppColors.brand), // ✅ FIXED
+          const Icon(Icons.lock_reset_rounded, size: 80, color: AppColors.brand),
           const SizedBox(height: 24),
           const Text(
             'Forgot Password?',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.text), // ✅ FIXED
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.text),
           ),
           const SizedBox(height: 12),
           const Text(
             'Enter your email address to receive a 1-minute OTP.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: AppColors.muted), // ✅ FIXED
+            style: TextStyle(fontSize: 14, color: AppColors.muted),
           ),
           const SizedBox(height: 32),
 
@@ -183,7 +151,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
           if (_errorMessage.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Text(_errorMessage, style: const TextStyle(color: AppColors.error, fontSize: 13)), // ✅ FIXED
+            Text(_errorMessage, style: const TextStyle(color: AppColors.error, fontSize: 13)),
           ],
 
           const SizedBox(height: 24),
@@ -205,7 +173,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
-  // Step 2: Enter OTP & New Password
   Widget _buildResetForm() {
     return Form(
       key: _resetFormKey,
@@ -213,18 +180,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.password_rounded, size: 80, color: AppColors.success), // ✅ FIXED
+          const Icon(Icons.password_rounded, size: 80, color: AppColors.success),
           const SizedBox(height: 24),
           const Text(
             'Create New Password',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.text), // ✅ FIXED
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.text),
           ),
           const SizedBox(height: 12),
           Text(
             'Enter the OTP sent to\n$_userEmail',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, color: AppColors.muted), // ✅ FIXED
+            style: const TextStyle(fontSize: 14, color: AppColors.muted),
           ),
           const SizedBox(height: 32),
 
@@ -285,7 +252,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
           if (_errorMessage.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Text(_errorMessage, style: const TextStyle(color: AppColors.error, fontSize: 13)), // ✅ FIXED
+            Text(_errorMessage, style: const TextStyle(color: AppColors.error, fontSize: 13)),
           ],
 
           const SizedBox(height: 24),

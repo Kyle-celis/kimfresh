@@ -1,127 +1,95 @@
 import 'dart:async';
-import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class BleService {
-  BluetoothDevice? _device;
-  BluetoothCharacteristic? _characteristic;
-  BluetoothCharacteristic? _commandCharacteristic;
-  bool isConnected = false;
-  String latestReading = '';
-  double? temperature;
-  double? humidity;
-  bool isAlert = false;
-  List<Map<String, dynamic>> storedReadings = [];
+  BluetoothDevice? _connectedDevice;
+  BluetoothCharacteristic? _tempCharacteristic;
+  BluetoothCharacteristic? _humCharacteristic;
 
   final _readingController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get readingStream => _readingController.stream;
 
-  Future<void> scanAndConnect() async {
-    print('=== BLE SCAN STARTED ===');
-    await FlutterBluePlus.startScan(timeout: Duration(seconds: 15));
-
-    FlutterBluePlus.scanResults.listen((results) async {
-      for (ScanResult r in results) {
-        final name = r.device.platformName;
-        final id = r.device.remoteId.toString();
-        print('Device: "$name" | ID: $id');
-
-        if (name == 'Kimchi_Monitor' || id == '30:76:F5:93:83:F2') {
-          print('=== FOUND ESP32! CONNECTING... ===');
-          FlutterBluePlus.stopScan();
-          await _connect(r.device);
-          return;
-        }
-      }
-    });
+  // 1. SCAN FOR DEVICES
+  Stream<List<ScanResult>> scanForDevices() {
+    FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+    return FlutterBluePlus.scanResults;
   }
 
-  Future<void> _connect(BluetoothDevice device) async {
-    _device = device;
-    await device.connect();
-    isConnected = true;
-
-    List<BluetoothService> services = await device.discoverServices();
-    for (var service in services) {
-      if (service.uuid.toString().toUpperCase().contains('ABCD')) {
-        for (var c in service.characteristics) {
-          if (c.uuid.toString().toUpperCase().contains('1234')) {
-            _characteristic = c;
-            await c.setNotifyValue(true);
-            c.onValueReceived.listen(_parseData);
-            print('=== SUBSCRIBED TO 1234 ===');
-          }
-          if (c.uuid.toString().toUpperCase().contains('5678')) {
-            _commandCharacteristic = c;
-            print('=== FOUND COMMAND CHARACTERISTIC 5678 ===');
-          }
-        }
-      }
-    }
-
-    // Wait for connection to stabilize, then request stored readings
-    await Future.delayed(Duration(seconds: 1));
-    await requestStoredReadings();
+  void stopScan() {
+    FlutterBluePlus.stopScan();
   }
 
-  Future<void> requestStoredReadings() async {
-    if (_commandCharacteristic == null) {
-      print('Command characteristic not found');
-      return;
-    }
-    await _commandCharacteristic!.write(utf8.encode('REQUEST_STORED'));
-    print('=== SENT REQUEST_STORED ===');
-  }
+  // 2. CONNECT TO A SPECIFIC DEVICE
+  Future<bool> connectToDevice(BluetoothDevice device) async {
+    try {
+      await device.connect(timeout: const Duration(seconds: 15));
+      _connectedDevice = device;
 
-  void _parseData(List<int> data) {
-    final text = utf8.decode(data);
-    print('BLE Received: $text');
-
-    if (text.startsWith('CONNECTED|')) {
-      return;
-    }
-
-    if (text.startsWith('S')) {
-      final colonIndex = text.indexOf(':');
-      if (colonIndex == -1) return;
-      final readingsStr = text.substring(colonIndex + 1);
-      final parts = readingsStr.split(',');
-      storedReadings.clear();
-      for (var p in parts) {
-        final alert = p.endsWith('!');
-        final clean = p.replaceAll('!', '');
-        final values = clean.split('/');
-        if (values.length == 2) {
-          storedReadings.add({
-            'temperature': double.tryParse(values[0]),
-            'humidity': double.tryParse(values[1]),
-            'is_alert': alert,
-          });
+      // Listen for disconnection
+      device.connectionState.listen((state) {
+        if (state == BluetoothConnectionState.disconnected) {
+          _readingController.add({'type': 'disconnected'});
+          _connectedDevice = null;
         }
-      }
-      _readingController.add({'type': 'stored', 'readings': storedReadings});
-      return;
-    }
-
-    if (text.startsWith('T:')) {
-      final tempMatch = RegExp(r'T:([\d.]+)').firstMatch(text);
-      final humMatch = RegExp(r'H:([\d.]+)').firstMatch(text);
-      if (tempMatch != null) temperature = double.tryParse(tempMatch.group(1)!);
-      if (humMatch != null) humidity = double.tryParse(humMatch.group(1)!);
-      isAlert = text.contains('!');
-      latestReading = text;
-
-      _readingController.add({
-        'type': 'live',
-        'temperature': temperature,
-        'humidity': humidity,
-        'is_alert': isAlert,
       });
+
+      _readingController.add({'type': 'connected'});
+      await _discoverServices(device);
+      return true;
+    } catch (e) {
+      debugPrint('Connection failed: $e');
+      return false;
     }
   }
 
+  // 3. DISCOVER SERVICES & CHARACTERISTICS
+  Future<void> _discoverServices(BluetoothDevice device) async {
+    List<BluetoothService> services = await device.discoverServices();
+
+    for (var service in services) {
+      for (var characteristic in service.characteristics) {
+        // We need to match this UUID with the one in your ESP32 code!
+        // If you are using the standard environmental sensing UUID, it looks like this:
+        if (characteristic.uuid.toString().toLowerCase().contains('181a')) {
+
+          // Subscribe to notifications
+          if (characteristic.properties.notify) {
+            await characteristic.setNotifyValue(true);
+
+            // We need to distinguish between Temp and Hum.
+            // Usually, ESP32 sends them as a single JSON string or comma-separated string.
+            characteristic.onValueReceived.listen((value) {
+              String rawData = String.fromCharCodes(value);
+
+              // Example parse: "Temp:25.5,Hum:60.2"
+              try {
+                // Adjust this parsing based on exactly what your ESP32 sends
+                final parts = rawData.split(',');
+                double temp = double.parse(parts[0].split(':')[1]);
+                double hum = double.parse(parts[1].split(':')[1]);
+
+                _readingController.add({
+                  'type': 'live',
+                  'temperature': temp,
+                  'humidity': hum,
+                  'is_alert': temp > 10.0, // Example alert logic
+                });
+              } catch (e) {
+                debugPrint('Error parsing BLE data: $e');
+              }
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 4. DISCONNECT
   Future<void> disconnect() async {
-    await _device?.disconnect();
-    isConnected = false;
+    if (_connectedDevice != null) {
+      await _connectedDevice!.disconnect();
+      _connectedDevice = null;
+    }
   }
 }

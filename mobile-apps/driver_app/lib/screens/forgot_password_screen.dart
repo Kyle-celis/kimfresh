@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../services/api.dart'; // 👈 Use ApiService instead of raw http
 import '../theme/app_theme.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -24,9 +23,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String _errorMessage = '';
   String _userEmail = '';
 
-  // Replace with your actual API URL
-  final String API = 'http://192.168.0.117:5000';
-
   Future<void> _requestOTP() async {
     if (_isLoading) return;
     FocusScope.of(context).unfocus();
@@ -38,35 +34,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       _errorMessage = '';
     });
 
-    try {
-      final res = await http.post(
-        Uri.parse('$API/api/forgot-password'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': emailController.text.trim()}),
-      ).timeout(const Duration(seconds: 10));
+    // 🔥 Use ApiService
+    final result = await ApiService.forgotPassword(emailController.text.trim());
 
-      final data = jsonDecode(res.body);
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-      if (!mounted) return;
-
-      if (res.statusCode == 200 && data['success'] == true) {
-        setState(() {
-          _isLoading = false;
-          _userEmail = emailController.text.trim();
-          _isEmailVerified = true; // Move to step 2
-        });
-
-      } else {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = data['message'] ?? 'Failed to send OTP';
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
+    if (result['success'] == true) {
       setState(() {
-        _isLoading = false;
-        _errorMessage = 'Network error. Please try again.';
+        _userEmail = emailController.text.trim();
+        _isEmailVerified = true; // Move to step 2
+      });
+    } else {
+      setState(() {
+        _errorMessage = result['message'] ?? 'Failed to send OTP';
       });
     }
   }
@@ -87,40 +68,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       _errorMessage = '';
     });
 
-    try {
-      final res = await http.post(
-        Uri.parse('$API/api/reset-password'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': _userEmail,
-          'otp': otpController.text.trim(),
-          'new_password': newPasswordController.text,
-        }),
-      ).timeout(const Duration(seconds: 10));
+    // 🔥 Use ApiService
+    final result = await ApiService.resetPassword(
+        _userEmail,
+        otpController.text.trim(),
+        newPasswordController.text
+    );
 
-      final data = jsonDecode(res.body);
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      if (res.statusCode == 200 && data['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password reset successfully! Please log in.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
-      } else {
-        setState(() {
-          _errorMessage = data['message'] ?? 'Failed to reset password';
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
+    if (result['success'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset successfully! Please log in.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context);
+    } else {
       setState(() {
-        _isLoading = false;
-        _errorMessage = 'Network error. Please try again.';
+        _errorMessage = result['message'] ?? 'Failed to reset password';
       });
     }
   }

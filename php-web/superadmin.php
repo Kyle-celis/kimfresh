@@ -1,21 +1,25 @@
 <?php
 session_start();
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-header("Cache-Control: post-check=0, pre-check=0", false);
-header("Pragma: no-cache");
 require 'db.php';
 require 'log_helper.php';
-date_default_timezone_set('Asia/Manila');
 
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
     exit();
 }
 
-// STRICT SUPERADMIN CHECK
-if ($_SESSION['admin_id'] != 1) {
-    header("Location: dashboard.php");
-    exit();
+// --- SECURITY CHECK: DYNAMIC SUPERADMIN CHECK ---
+$stmt = $conn->prepare("SELECT is_superadmin FROM admin WHERE admin_id = ?");
+$stmt->bind_param("i", $_SESSION['admin_id']);
+$stmt->execute();
+$current_admin = $stmt->get_result()->fetch_assoc();
+
+if (!$current_admin || $current_admin['is_superadmin'] != 1) {
+    die("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'>
+            <h2 style='color:#dc2626;'>Access Denied</h2>
+            <p>You do not have Superadmin privileges.</p>
+            <a href='dashboard.php' style='color:#C34200; font-weight:bold;'>Back to Dashboard</a>
+         </div>");
 }
 
 $error_msg = "";
@@ -28,11 +32,13 @@ if (isset($_POST['create_admin'])) {
     $new_email = trim($_POST['new_email']);
     $new_password = $_POST['new_password'];
     
+    // Combine first and last name
     $full_name = $first_name . ' ' . $last_name;
 
     if (empty($first_name) || empty($last_name) || empty($new_email) || empty($new_password)) {
         $error_msg = "All fields are required.";
     } else {
+        // Check if email exists
         $check = $conn->prepare("SELECT admin_id FROM admin WHERE email = ?");
         $check->bind_param("s", $new_email);
         $check->execute();
@@ -41,7 +47,7 @@ if (isset($_POST['create_admin'])) {
             $error_msg = "Email is already registered.";
         } else {
             $hash = password_hash($new_password, PASSWORD_DEFAULT);
-            $stmt = $conn->prepare("INSERT INTO admin (name, email, password_hash) VALUES (?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO admin (name, email, password_hash, is_superadmin) VALUES (?, ?, ?, 0)");
             $stmt->bind_param("sss", $full_name, $new_email, $hash);
             
             if ($stmt->execute()) {
@@ -54,19 +60,53 @@ if (isset($_POST['create_admin'])) {
     }
 }
 
+// --- HANDLE DEACTIVATE/ACTIVATE ---
+if (isset($_POST['toggle_status'])) {
+    $target_admin = $_POST['target_admin'];
+    $new_status = $_POST['new_status']; 
+    
+    if ($target_admin == $_SESSION['admin_id']) {
+        $error_msg = "You cannot deactivate your own account!";
+    } else {
+        $stmt = $conn->prepare("UPDATE admin SET status = ? WHERE admin_id = ?");
+        $stmt->bind_param("si", $new_status, $target_admin);
+        $stmt->execute();
+        
+        $action = ($new_status == 'inactive') ? "Deactivated Admin #" : "Activated Admin #";
+        logActivity($conn, $_SESSION['admin_id'], $action . $target_admin);
+        
+        header("Location: superadmin.php");
+        exit();
+    }
+}
+
 // --- HANDLE EDIT ---
 if (isset($_POST['save_admin'])) {
-    $target_admin = $_POST['admin_id'];
-    $new_name = $_POST['name'];
-    $new_email = $_POST['email'];
-    
-    $stmt = $conn->prepare("UPDATE admin SET name = ?, email = ? WHERE admin_id = ?");
-    $stmt->bind_param("ssi", $new_name, $new_email, $target_admin);
-    $stmt->execute();
-    
-    logActivity($conn, $_SESSION['admin_id'], "Edited Admin #" . $target_admin);
-    header("Location: superadmin.php");
-    exit();
+    $target_admin = (int)$_POST['admin_id'];
+    $new_name     = trim($_POST['name']);
+    $new_email    = trim($_POST['email']);
+
+    if (!filter_var($new_email, FILTER_VALIDATE_EMAIL)) {
+        $error_msg = "Please enter a valid email address.";
+    } else {
+        $dupe = $conn->prepare("SELECT admin_id FROM admin WHERE email = ? AND admin_id != ?");
+        $dupe->bind_param("si", $new_email, $target_admin);
+        $dupe->execute();
+
+        if ($dupe->get_result()->num_rows > 0) {
+            $error_msg = "Email already in use by another admin.";
+        } else {
+            $stmt = $conn->prepare("UPDATE admin SET name = ?, email = ? WHERE admin_id = ?");
+            $stmt->bind_param("ssi", $new_name, $new_email, $target_admin);
+            if ($stmt->execute()) {
+                logActivity($conn, $_SESSION['admin_id'], "Edited Admin #$target_admin");
+                header("Location: superadmin.php");
+                exit();
+            } else {
+                $error_msg = "Update failed: " . $conn->error;
+            }
+        }
+    }
 }
 
 $admins = $conn->query("SELECT * FROM admin ORDER BY admin_id ASC");
@@ -76,37 +116,41 @@ $admins = $conn->query("SELECT * FROM admin ORDER BY admin_id ASC");
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KimFresh - Manage Admins</title>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <title>Superadmin - Manage Admins</title>
+    <link rel="stylesheet" href="css/theme.css">
     <style>
         :root { --primary: #C34200; --primary-dark: #9a3400; }
         
         body { font-family: 'Nunito Sans', Arial, sans-serif; background: #F5F6FA; margin: 0; padding: 0; }
         
+                .top-bar { background: #C34200; padding: 15px 40px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .top-bar h2 { margin: 0; font-size: 18px; color: white; }
+        .top-bar .user-name { font-weight: 700; font-size: 14px; color: white; }
+        .top-bar .user-info { display: flex; align-items: center; gap: 15px; }
+        .logout-btn { background: white; color: #C34200; text-decoration: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; font-size: 13px; }
+
         .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
         
         .page-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .page-head h1 { margin: 0; font-size: 28px; color: #333; }
         .page-head p { margin: 5px 0 0 0; color: #777; font-size: 14px; }
-        
-        .nav-actions { display: flex; gap: 10px; }
         .btn-add { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-add:hover { background: #9a3400; }
-        .btn-logout { background: #f0f0f0; color: #333; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 14px; }
-        .btn-logout:hover { background: #e0e0e0; }
-
+        
         .table-section { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         table { width: 100%; border-collapse: collapse; }
         th { text-align: left; padding: 15px; font-size: 13px; color: #666; border-bottom: 1px solid #eee; font-weight: 700; background: #f8f9fa; }
         td { padding: 15px; border-bottom: 1px solid #f5f5f5; font-size: 13px; vertical-align: middle; }
         
         .status { padding: 4px 12px; font-size: 11px; font-weight: 700; border-radius: 20px; }
-        .status.superadmin { color: #800020; background: #fdf2f4; }
         .status.active { color: #15803d; background: #dcfce7; }
+        .status.inactive { color: #666; background: #eee; }
+        .status.superadmin { color: #800020; background: #fdf2f4; }
 
         .actions { display: flex; gap: 8px; align-items: center; }
         .btn-edit { padding: 7px 16px; font-size: 12px; font-weight: 700; color: #333; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
+        .btn-hide { padding: 7px 16px; font-size: 12px; font-weight: 700; color: #C34200; background: #fff; border: 1px solid #C34200; border-radius: 8px; cursor: pointer; }
+        .btn-restore { padding: 7px 16px; font-size: 12px; font-weight: 700; color: #fff; background: #C34200; border: 1px solid #C34200; border-radius: 8px; cursor: pointer; }
         
         .log-btn { padding: 7px 16px; font-size: 12px; font-weight: 700; color: #333; background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
         .admin-log-row td { background: #fdfaf8; padding: 0; }
@@ -133,16 +177,24 @@ $admins = $conn->query("SELECT * FROM admin ORDER BY admin_id ASC");
 </head>
 <body>
 
+    <div class="top-bar">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="logo.png" alt="KimFresh" style="height: 35px;">
+            <h2>Superadmin Portal</h2>
+        </div>
+        <div class="user-info">
+            <span class="user-name"><?php echo htmlspecialchars($_SESSION['admin_name']); ?></span>
+            <a href="logout.php" class="logout-btn">Logout</a>
+        </div>
+    </div>
+
     <div class="container">
         <div class="page-head">
             <div>
                 <h1>Manage Admins</h1>
                 <p>View, edit, deactivate, and audit other admin accounts.</p>
             </div>
-            <div class="nav-actions">
-                <button class="btn-add" onclick="openCreateModal()">+ Add Admin</button>
-                <a href="logout.php" class="btn-logout">Logout</a>
-            </div>
+            <button class="btn-add" onclick="openCreateModal()">+ Add Admin</button>
         </div>
 
         <?php if(!empty($error_msg)): ?>
@@ -165,7 +217,8 @@ $admins = $conn->query("SELECT * FROM admin ORDER BY admin_id ASC");
                 </thead>
                 <tbody>
                     <?php while($row = $admins->fetch_assoc()): 
-                        $isSuper = ($row['admin_id'] == 1);
+                        $isSuper = ($row['is_superadmin'] == 1);
+                        $isActive = !isset($row['status']) || $row['status'] == 'active'; 
                     ?>
                         <tr>
                             <td><?php echo $row['admin_id']; ?></td>
@@ -174,8 +227,10 @@ $admins = $conn->query("SELECT * FROM admin ORDER BY admin_id ASC");
                             <td>
                                 <?php if($isSuper): ?>
                                     <span class="status superadmin">Superadmin</span>
-                                <?php else: ?>
+                                <?php elseif($isActive): ?>
                                     <span class="status active">Active</span>
+                                <?php else: ?>
+                                    <span class="status inactive">Inactive</span>
                                 <?php endif; ?>
                             </td>
                             <td>
@@ -183,6 +238,20 @@ $admins = $conn->query("SELECT * FROM admin ORDER BY admin_id ASC");
                                     <button class="btn-edit" onclick='openAdminModal(<?php echo json_encode($row); ?>)'>Edit</button>
                                     
                                     <?php if(!$isSuper): ?>
+                                        <?php if($isActive): ?>
+                                            <form method='POST' style='margin:0;'>
+                                                <input type='hidden' name='target_admin' value='<?php echo $row['admin_id']; ?>'>
+                                                <input type='hidden' name='new_status' value='inactive'>
+                                                <button type='submit' name='toggle_status' class='btn-hide'>Deactivate</button>
+                                            </form>
+                                        <?php else: ?>
+                                            <form method='POST' style='margin:0;'>
+                                                <input type='hidden' name='target_admin' value='<?php echo $row['admin_id']; ?>'>
+                                                <input type='hidden' name='new_status' value='active'>
+                                                <button type='submit' name='toggle_status' class='btn-restore'>Activate</button>
+                                            </form>
+                                        <?php endif; ?>
+
                                         <button class="log-btn" onclick="toggleLogs(<?php echo $row['admin_id']; ?>)">Activity Logs</button>
                                     <?php endif; ?>
                                 </div>
@@ -284,13 +353,6 @@ $admins = $conn->query("SELECT * FROM admin ORDER BY admin_id ASC");
                 row.style.display = 'none';
             }
         }
-    </script>
-    <script>
-        window.addEventListener('pageshow', function (event) {
-            if (event.persisted || (typeof window.performance != "undefined" && window.performance.navigation.type === 2)) {
-                window.location.reload();
-            }
-        });
     </script>
 </body>
 </html>

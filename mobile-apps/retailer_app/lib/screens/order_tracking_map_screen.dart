@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import '../services/api.dart';
 import '../theme/colors.dart';
@@ -32,11 +34,14 @@ class OrderTrackingMapScreen extends StatefulWidget {
 class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
   final MapController _mapController = MapController();
   final Distance _distance = const Distance();
-
   final DraggableScrollableController _sheetController = DraggableScrollableController();
+
+  final String _orsApiKey =
+      'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjgzMTc3NzM5ZGYxYTQ2NzdhZTI1NTBlNmJkNmQ1ODJmIiwiaCI6Im11cm11cjY0In0=';
 
   LatLng? _dest;
   LatLng? _driverLocation;
+  List<LatLng> _routePoints = []; // Holds the road coordinates
 
   bool _isLoading = true;
   bool _isFetching = false;
@@ -88,9 +93,15 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
       if (loc != null) {
         final dLat = loc['driver_lat'] as double?;
         final dLng = loc['driver_lng'] as double?;
+
         if (dLat != null && dLng != null) {
           _driverLocation = LatLng(dLat, dLng);
           _hasDriver = true;
+
+          // Fetch the road route if we have both driver and destination
+          if (_dest != null) {
+            _fetchRoadRoute(_driverLocation!, _dest!);
+          }
         }
 
         final rLat = loc['retailer_lat'] as double?;
@@ -103,7 +114,10 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
       } else if (!_hasDriver) {
         _hasError = false;
       }
-      _isLoading = false;
+
+      if (_dest != null || _hasDriver) {
+        _isLoading = false;
+      }
     });
 
     if (_hasDriver && !_autoFitDone) {
@@ -114,6 +128,37 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
     }
 
     _isFetching = false;
+  }
+
+  // ── FETCH REAL ROAD ROUTE ──
+  Future<void> _fetchRoadRoute(LatLng driver, LatLng store) async {
+    try {
+      final url = 'https://api.heigit.org/openrouteservice/v2/directions/driving-car'
+          '?api_key=$_orsApiKey'
+          '&start=${driver.longitude},${driver.latitude}'
+          '&end=${store.longitude},${store.latitude}';
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> coords = data['features'][0]['geometry']['coordinates'];
+
+        final points = coords
+            .map((c) => LatLng(c[1].toDouble(), c[0].toDouble()))
+            .toList();
+
+        if (mounted) {
+          setState(() {
+            _routePoints = points;
+          });
+        }
+      } else {
+        debugPrint('ORS Error: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('ORS Route Error: $e');
+    }
   }
 
   void _fitCameraToMarkers() {
@@ -137,18 +182,31 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: AppColors.brand)),
+      );
+    }
+
     final dest = _dest;
     if (dest == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Tracking')),
-        body: const Center(child: Text('No destination on file')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.location_off, size: 48, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              const Text('Waiting for store location...', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+        ),
       );
     }
 
     return Scaffold(
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.brand))
-          : Stack(
+      body: Stack(
         children: [
           GestureDetector(
             onTap: () {
@@ -190,10 +248,13 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
           PolylineLayer(
             polylines: [
               Polyline(
-                points: [_driverLocation!, dest],
-                strokeWidth: 4,
-                color: AppColors.brand.withOpacity(0.5),
-                pattern: StrokePattern.dashed(segments: const [10, 10]),
+                // Draw the road route if we have it, otherwise fallback to straight line
+                points: _routePoints.isNotEmpty
+                    ? _routePoints
+                    : [_driverLocation!, dest],
+                strokeWidth: 5,
+                color: AppColors.brand.withOpacity(0.8),
+                // Removed the dashed pattern so it looks like a real road
               ),
             ],
           ),
@@ -422,8 +483,6 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
 
   Widget _buildProductList() {
     final String rawNames = widget.productName ?? 'Kimchi Product';
-
-    // Splits the string by comma in case there are multiple products
     final List<String> items = rawNames.split(',');
 
     return Container(
@@ -447,7 +506,6 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          // Loop through each product and show it
           ...items.map((item) {
             final cleanName = item.trim();
             if (cleanName.isEmpty) return const SizedBox.shrink();

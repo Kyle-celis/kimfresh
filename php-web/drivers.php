@@ -1,158 +1,140 @@
 <?php
 session_start();
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-header("Cache-Control: post-check=0, pre-check=0", false);
-header("Pragma: no-cache");
 require 'db.php';
 require 'log_helper.php';
-require 'mailer.php'; 
 
-// FIX: Session security
 if (!isset($_SESSION['admin_id'])) { header("Location: login.php"); exit(); }
+
+// --- HANDLE PDF EXPORT (FPDF) ---
+if (isset($_GET['export_pdf'])) {
+    logActivity($conn, $_SESSION['admin_id'], "Exported Drivers to PDF");
+    require('fpdf/fpdf.php');
+
+    class PDF extends FPDF {
+        function Header() {
+            $this->SetFont('Arial', 'B', 15);
+            $this->SetTextColor(195, 66, 0); 
+            $this->Cell(0, 10, 'KimFresh Driver Roster', 0, 1, 'C');
+            $this->SetFont('Arial', 'I', 10);
+            $this->SetTextColor(100, 100, 100);
+            $this->Cell(0, 5, 'Generated on: ' . date('F j, Y, g:i A'), 0, 1, 'C');
+            $this->Ln(10);
+            
+            $this->SetFont('Arial', 'B', 10);
+            $this->SetFillColor(195, 66, 0);
+            $this->SetTextColor(255, 255, 255);
+            $this->Cell(50, 8, 'Driver Name', 1, 0, 'C', true);
+            $this->Cell(40, 8, 'License', 1, 0, 'C', true);
+            $this->Cell(50, 8, 'Email', 1, 0, 'C', true);
+            $this->Cell(30, 8, 'Status', 1, 1, 'C', true);
+        }
+        function Footer() {
+            $this->SetY(-15);
+            $this->SetFont('Arial', 'I', 8);
+            $this->SetTextColor(128);
+            $this->Cell(0, 10, 'Page ' . $this->PageNo() . ' - KimFresh IoT System', 0, 0, 'C');
+        }
+    }
+
+    $pdf = new PDF();
+    $pdf->AddPage();
+    $pdf->SetFont('Arial', '', 10);
+    $pdf->SetTextColor(0, 0, 0);
+
+    $print_query = $conn->query("SELECT * FROM driver ORDER BY name ASC");
+
+    while($row = $print_query->fetch_assoc()) {
+        $status = ($row['status'] === 'hidden') ? 'INACTIVE' : strtoupper($row['status']);
+        $pdf->Cell(50, 8, htmlspecialchars($row['name']), 1, 0, 'L');
+        $pdf->Cell(40, 8, htmlspecialchars($row['license_number'] ?? 'N/A'), 1, 0, 'L');
+        $pdf->Cell(50, 8, htmlspecialchars($row['email'] ?? 'N/A'), 1, 0, 'L');
+        $pdf->Cell(30, 8, $status, 1, 1, 'C');
+    }
+
+    $pdf->Output('D', 'KimFresh_Drivers.pdf');
+    exit();
+}
 
 // --- HANDLE ACTIVATE/DEACTIVATE ---
 if (isset($_POST['toggle_status'])) {
-    $driver_id = (int)$_POST['driver_id'];
+    $driver_id  = (int)$_POST['driver_id'];
     $new_status = $_POST['new_status'];
-    
+
     $stmt = $conn->prepare("UPDATE driver SET status = ? WHERE driver_id = ?");
     $stmt->bind_param("si", $new_status, $driver_id);
     $stmt->execute();
-    
-    $action = ($new_status == 'hidden') ? "Deactivated Driver #" : "Activated Driver #";
+
+    $action = ($new_status === 'hidden') ? "Deactivated Driver #" : "Activated Driver #";
     logActivity($conn, $_SESSION['admin_id'], $action . $driver_id);
-    
+
+    if ($new_status === 'available') { assignWaitingOrders($conn); }
     header("Location: drivers.php");
     exit();
 }
 
 // --- HANDLE MANUAL ASSIGN ---
 if (isset($_POST['assign_order'])) {
-    $order_id = (int)$_POST['order_id'];
+    $order_id  = (int)$_POST['order_id'];
     $driver_id = (int)$_POST['driver_id'];
-    
-    // Check if order already has a delivery
-    $check = $conn->prepare("SELECT delivery_id FROM delivery WHERE order_id = ?");
-    $check->bind_param("i", $order_id);
-    $check->execute();
-    
-    if ($check->get_result()->num_rows > 0) {
-        header("Location: drivers.php?error=already_assigned");
-        exit();
-    }
 
-    // Create delivery record
-    $stmt = $conn->prepare("INSERT INTO delivery (order_id, driver_id, delivery_status) VALUES (?, ?, 'assigned')");
-    $stmt->bind_param("ii", $order_id, $driver_id);
-    $stmt->execute();
-    
-    // Mark driver as busy
-    $conn->query("UPDATE driver SET status = 'on_delivery' WHERE driver_id = $driver_id");
-    
-    // Mark order as approved
-    $conn->query("UPDATE `order` SET order_status = 'approved' WHERE order_id = $order_id AND order_status = 'pending'");
-    
-    logActivity($conn, $_SESSION['admin_id'], "Manually assigned Order #$order_id to Driver #$driver_id");
-    
-    header("Location: drivers.php");
-    exit();
-}
-
-// --- HANDLE BULK DRIVER APPROVAL ---
-if (isset($_POST['bulk_approve_drivers'])) {
-    if (!empty($_POST['driver_ids'])) {
-        foreach ($_POST['driver_ids'] as $driver_id) {
-            $driver_id = (int)$driver_id;
-            $stmt = $conn->prepare("UPDATE driver SET account_status = 'approved', status = 'available' WHERE driver_id = ?");
-            $stmt->bind_param("i", $driver_id);
-            $stmt->execute();
-            logActivity($conn, $_SESSION['admin_id'], "Bulk Approved Driver Registration #$driver_id");
-        }
-    }
-    header("Location: drivers.php");
-    exit();
-}
-
-// --- HANDLE SINGLE APPROVAL/REJECTION ---
-if (isset($_POST['approve_driver']) || isset($_POST['reject_driver'])) {
-    $driver_id = (int)$_POST['driver_id'];
-    $is_approve = isset($_POST['approve_driver']);
-    
-    if ($is_approve) {
-        $res = $conn->query("SELECT name, email FROM driver WHERE driver_id = $driver_id");
-        $driver = $res->fetch_assoc();
-        
-        $otp = sprintf("%06d", mt_rand(1, 999999));
-        $expiry = date('Y-m-d H:i:s', strtotime('+5 minutes'));
-        
-        $stmt = $conn->prepare("UPDATE driver SET account_status = 'otp_pending', otp_code = ?, otp_expires_at = ? WHERE driver_id = ?");
-        $stmt->bind_param("ssi", $otp, $expiry, $driver_id);
-        $stmt->execute();
-        
-        sendOTPEmail($driver['email'], $driver['name'], $otp, 'Driver');
-        logActivity($conn, $_SESSION['admin_id'], "Approved Driver #$driver_id and generated OTP");
+    if (manualAssignDriver($conn, $order_id, $driver_id)) {
+        logActivity($conn, $_SESSION['admin_id'], "Manually assigned Order #$order_id to Driver #$driver_id");
     } else {
-        $stmt = $conn->prepare("UPDATE driver SET account_status = 'rejected', status = 'hidden', rejected_at = NOW() WHERE driver_id = ?");
-        $stmt->bind_param("i", $driver_id);
-        $stmt->execute();
-        logActivity($conn, $_SESSION['admin_id'], "Rejected Driver Registration #$driver_id");
+        logActivity($conn, $_SESSION['admin_id'], "Manual assign FAILED for Order #$order_id → Driver #$driver_id");
     }
-    
     header("Location: drivers.php");
     exit();
 }
 
-// --- FETCH PENDING DRIVERS (PAGINATED) ---
-$pending_limit = 5;
-$pending_page = isset($_GET['p_page']) && is_numeric($_GET['p_page']) ? (int)$_GET['p_page'] : 1;
-if ($pending_page < 1) $pending_page = 1;
-$pending_offset = ($pending_page - 1) * $pending_limit;
+// --- STATS FOR HEADER ---
+$total_drivers = $conn->query("SELECT COUNT(*) AS c FROM driver WHERE status != 'hidden'")->fetch_assoc()['c'];
+$available_drivers = $conn->query("SELECT COUNT(*) AS c FROM driver WHERE status = 'available' AND account_status = 'approved'")->fetch_assoc()['c'];
+$on_delivery = $conn->query("SELECT COUNT(*) AS c FROM driver WHERE status = 'on_delivery'")->fetch_assoc()['c'];
 
-$total_pending = $conn->query("SELECT COUNT(*) as total FROM driver WHERE account_status = 'pending'")->fetch_assoc()['total'];
-$total_pending_pages = ceil($total_pending / $pending_limit);
-
-$pendingDrivers = $conn->query("
-    SELECT * FROM driver 
-    WHERE account_status = 'pending' 
-    ORDER BY created_at ASC
-    LIMIT $pending_limit OFFSET $pending_offset
-");
-
-// --- FILTER LOGIC FOR ACTIVE DRIVERS ---
+// --- FILTER & SEARCH LOGIC ---
 $filter = isset($_GET['filter']) ? $_GET['filter'] : 'all'; 
-$orderBy = "d.name ASC"; 
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+
+$baseSql = " FROM driver d WHERE 1=1 ";
+
+if ($filter === 'all') {
+    $baseSql .= " AND d.status != 'hidden'";
+} elseif ($filter === 'available') {
+    $baseSql .= " AND (SELECT COUNT(*) FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered') = 0 AND d.status != 'hidden'";
+} elseif ($filter === 'assigned') {
+    $baseSql .= " AND (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) = 'assigned'";
+} elseif ($filter === 'on_delivery') {
+    $baseSql .= " AND (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) IN ('in_transit', 'picked_up')";
+} elseif ($filter === 'inactive') {
+    $baseSql .= " AND d.status = 'hidden'";
+} 
+
+if (!empty($search)) {
+    $safe_search = $conn->real_escape_string($search);
+    $baseSql .= " AND (d.name LIKE '%$safe_search%' OR d.email LIKE '%$safe_search%' OR d.license_number LIKE '%$safe_search%')";
+}
+
+// --- PAGINATION LOGIC (6 per page) ---
+$limit = 6;
+$page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $limit;
+
+$countQuery = $conn->query("SELECT COUNT(*) AS total $baseSql");
+$total_rows = $countQuery->fetch_assoc()['total'];
+$total_pages = ceil($total_rows / $limit);
 
 $sql = "
     SELECT d.*,
-           (SELECT dl.delivery_status 
-            FROM delivery dl 
-            INNER JOIN `order` o ON o.order_id = dl.order_id
-            WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' 
-            ORDER BY dl.delivery_id DESC LIMIT 1) AS active_delivery_status,
-           (SELECT COUNT(*) 
-            FROM delivery dl 
-            INNER JOIN `order` o ON o.order_id = dl.order_id
-            WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered') AS active_orders
-    FROM driver d
-    WHERE d.account_status = 'approved'
+           (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) AS active_delivery_status,
+           (SELECT COUNT(*) FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered') AS active_orders
+    $baseSql 
+    ORDER BY d.name ASC 
+    LIMIT $limit OFFSET $offset
 ";
-
-if ($filter === 'all') {
-    $sql .= " AND d.status != 'hidden'";
-} elseif ($filter === 'available') {
-    $sql .= " AND (SELECT COUNT(*) FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered') = 0 AND d.status != 'hidden'";
-} elseif ($filter === 'assigned') {
-    $sql .= " AND (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) = 'assigned'";
-} elseif ($filter === 'on_delivery') {
-    $sql .= " AND (SELECT dl.delivery_status FROM delivery dl INNER JOIN `order` o ON o.order_id = dl.order_id WHERE dl.driver_id = d.driver_id AND o.order_status != 'delivered' ORDER BY dl.delivery_id DESC LIMIT 1) IN ('in_transit', 'picked_up')";
-} elseif ($filter === 'inactive') {
-    $sql .= " AND d.status = 'hidden'";
-} 
-
-$sql .= " ORDER BY $orderBy";
 $drivers = $conn->query($sql);
 
-// --- FETCH UNASSIGNED ORDERS (For Manual Assign) ---
+// --- FETCH UNASSIGNED ORDERS ---
 $unassigned = $conn->query("
     SELECT o.order_id, r.name AS retailer_name 
     FROM `order` o
@@ -176,6 +158,7 @@ if ($histRes) {
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -190,6 +173,14 @@ if ($histRes) {
     <style>
         :root { --primary: #C34200; --primary-dark: #9a3400; }
         
+        /* STATS CARDS */
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 24px; }
+        .stat-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid #C34200; }
+        .stat-card.green { border-left-color: #15803d; }
+        .stat-card.orange { border-left-color: #f59e0b; }
+        .stat-card p { margin: 0; color: #666; font-size: 13px; font-weight: 700; }
+        .stat-card h2 { margin: 5px 0 0; font-size: 28px; color: #333; }
+
         .status.available { color: #15803d; background: #dcfce7; }
         .status.assigned { color: #1d4ed8; background: #dbeafe; }
         .status.on-delivery { color: #b45309; background: #fef3c7; }
@@ -215,9 +206,10 @@ if ($histRes) {
         .btn-activate { padding: 8px 16px; font-size: 12px; font-weight: 700; color: #fff; background: #15803d; border: 1px solid #15803d; border-radius: 8px; cursor: pointer; width: 100%; }
         .btn-activate:hover { background: #166534; }
 
-        .filters { display: flex; gap: 12px; margin-top: 24px; margin-bottom: 24px; justify-content: flex-end; }
-        .filters select { width: 220px; height: 44px; padding: 0 16px; border: 1px solid #ddd; border-radius: 10px; font-size: 13px; outline: none; background: #fff; font-weight: bold; color: #333; }
-        .filters select:focus { border-color: #C34200; }
+        .toolbar { display: flex; gap: 12px; margin-top: 10px; margin-bottom: 24px; justify-content: space-between; flex-wrap: wrap; }
+        .search-box { flex: 1; max-width: 300px; }
+        .search-box input { width: 100%; height: 44px; padding: 0 16px; border: 1px solid #ddd; border-radius: 10px; font-size: 13px; outline: none; }
+        .filter-box select { width: 220px; height: 44px; padding: 0 16px; border: 1px solid #ddd; border-radius: 10px; font-size: 13px; outline: none; background: #fff; font-weight: bold; color: #333; }
 
         .profile-menu { position: relative; }
         .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
@@ -233,27 +225,82 @@ if ($histRes) {
         .btn-export { background: #C34200; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; }
         .btn-export:hover { background: #9a3400; }
 
-        th a {
-    text-decoration: none !important;
-}
-
         .assign-form { display: flex; gap: 5px; margin-top: 5px; }
         .assign-form select { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; outline: none; }
         .assign-form button { padding: 8px 12px; background: #C34200; color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; }
 
+        /* PAGINATION */
+        .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 24px; }
+        .pagination a, .pagination span { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 700; text-decoration: none; border: 1px solid #ddd; color: #555; background: white; transition: 0.2s; }
+        .pagination a:hover { background: #fdf0e6; border-color: #C34200; color: #C34200; }
+        .pagination .active { background: #C34200; border-color: #C34200; color: white; }
+        .pagination .disabled { opacity: 0.5; pointer-events: none; }
+
         @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: 1fr; }
             .page-head { flex-direction: column !important; align-items: stretch !important; gap: 15px !important; }
-            .page-head form { width: 100% !important; }
-            .page-head .btn-export { width: 100% !important; padding: 12px !important; text-align: center !important; }
-            .filters { justify-content: stretch !important; margin-top: 10px !important; margin-bottom: 10px !important; }
-            .filters select { width: 100% !important; height: 48px; }
-            .driver-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
-            .driver-card { padding: 16px !important; }
-            .assign-form { flex-direction: column !important; gap: 8px !important; }
-            .assign-form select { width: 100% !important; padding: 10px !important; }
-            .assign-form button { width: 100% !important; padding: 10px !important; }
-            .btn-export, .history-btn, .btn-activate, .btn-deactivate { padding: 12px !important; font-size: 13px !important; }
+            .page-head .btn-export { width: 100% !important; text-align: center !important; }
+            .toolbar { flex-direction: column; }
+            .search-box, .filter-box select { max-width: 100%; width: 100%; }
+            .driver-grid { grid-template-columns: 1fr !important; }
+            .assign-form { flex-direction: column; }
         }
+
+        /* =========================================
+           NOTIFICATION DROPDOWN (LIGHT THEME)
+           ========================================= */
+        .notification-container { position: relative; margin-right: 15px; }
+        
+        .notification-bell {
+            position: relative; display: flex; align-items: center; justify-content: center;
+            width: 44px; height: 44px; border-radius: 50%; background: transparent; cursor: pointer; transition: background 0.2s;
+        }
+        .notification-bell:hover { background: #f0f0f0; }
+        
+        .notif-badge {
+            position: absolute; top: 2px; right: 2px; background: #dc2626; color: white;
+            font-size: 11px; font-weight: 800; width: 20px; height: 20px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .notif-dropdown {
+            position: absolute; top: 55px; right: 0; width: 320px;
+            background: white; border-radius: 12px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); border: 1px solid #eee;
+            display: none; z-index: 1000; color: #333; overflow: hidden;
+        }
+        .notif-dropdown.show { display: block; }
+        
+        .notif-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px; border-bottom: 1px solid #eee;
+        }
+        .notif-header h3 { margin: 0; font-size: 16px; font-weight: 800; color: #333; }
+        .notif-mark-read { color: #C34200; text-decoration: none; font-size: 13px; font-weight: 600; }
+        .notif-mark-read:hover { text-decoration: underline; }
+
+        .notif-list { max-height: 350px; overflow-y: auto; }
+        
+        .notif-item {
+            display: flex; gap: 12px; padding: 12px 15px;
+            border-bottom: 1px solid #f5f5f5; text-decoration: none; color: #333;
+            transition: background 0.2s;
+        }
+        .notif-item:hover { background: #fdf0e6; }
+        
+        .notif-icon {
+            width: 45px; height: 45px; border-radius: 50%;
+            background: #C34200; color: white; 
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; font-weight: bold; font-size: 16px;
+        }
+        
+        .notif-content { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .notif-content p { margin: 0 0 4px 0; font-size: 13px; line-height: 1.3; color: #444; }
+        .notif-content strong { font-weight: 800; color: #333; }
+        .notif-time { color: #888; font-size: 11px; font-weight: 600; }
+        
+        .notif-empty { padding: 20px; text-align: center; color: #888; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -268,7 +315,8 @@ if ($histRes) {
                 <a href="orders.php">Orders</a>
                 <a href="products.php">Products</a>
                 <a href="drivers.php" class="active">Drivers</a>
-                <?php if ($_SESSION['admin_id'] == 1): ?>
+                 <a href="analytics.php">Analytics</a>
+                <?php if (!empty($_SESSION['is_superadmin'])): ?>
                     <a href="superadmin.php">Manage Admins</a>
                 <?php endif; ?>
             </nav>
@@ -276,19 +324,41 @@ if ($histRes) {
 
         <div class="main-area">
             <header class="top-header">
+                
+                <!-- NOTIFICATION BELL & DROPDOWN -->
+                <div class="notification-container" id="notifContainer">
+                    <div class="notification-bell" onclick="toggleNotifications(event)">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
+                        <span id="notif-badge" class="notif-badge" style="display: none;">0</span>
+                    </div>
+                    
+                    <div class="notif-dropdown" id="notifDropdown">
+                        <div class="notif-header">
+                            <h3>Notifications</h3>
+                            <a href="orders.php?status=pending" class="notif-mark-read">View All</a>
+                        </div>
+                        <div class="notif-list" id="notifList">
+                            <div class="notif-empty">No new orders</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="profile-menu" id="profileMenu">
                     <button type="button" class="profile-trigger" onclick="toggleProfileMenu(event)">
                         <div class="avatar">A</div>
                         <div class="user-info" style="text-align: left;">
-                            <p class="user-name" style="margin: 0;"><?php echo $_SESSION['admin_name']; ?></p>
+                            <p class="user-name" style="margin: 0;"><?php echo htmlspecialchars($_SESSION['admin_name']); ?></p>
                             <p class="user-role" style="margin: 0;">Administrator</p>
                         </div>
                         <span style="font-size: 18px; color: #999; margin-left: 5px;">⌄</span>
                     </button>
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
-                            <strong><?php echo $_SESSION['admin_name']; ?></strong>
-                            <span><?php echo $_SESSION['admin_email'] ?? 'admin@kimfresh.com'; ?></span>
+                            <strong><?php echo htmlspecialchars($_SESSION['admin_name']); ?></strong>
+                            <span><?php echo htmlspecialchars($_SESSION['admin_email'] ?? 'admin@kimfresh.com'); ?></span>
                         </div>
                         <a href="settings.php" class="dropdown-item">Settings</a>
                         <a href="logs.php" class="dropdown-item">Activity Logs</a>
@@ -298,90 +368,52 @@ if ($histRes) {
             </header>
 
             <main class="main-content">
-                <div class="page-head" style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div class="page-head" style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
                     <div>
                         <p class="overview-label">Manage</p>
                         <h1 style="margin:0;">Drivers</h1>
                     </div>
-                    <a href="?export_pdf=1" download="KimFresh_Drivers.pdf" class="btn-export">Export to PDF</a>
+                    <a href="?export_pdf=1" download="KimFresh_Drivers.pdf" class="btn-export">Export PDF</a>
                 </div>
 
-                <!-- PENDING DRIVERS SECTION (PAGINATED) -->
-                <?php if ($total_pending > 0): ?>
-                    <div class="pending-section" style="margin-bottom: 30px; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #fde047; box-shadow: 0 4px 12px rgba(253, 224, 71, 0.15);">
-                        
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                            <h2 style="margin: 0; color: #b45309; font-size: 18px;">
-                                Pending Driver Approvals (<?php echo $total_pending; ?>)
-                            </h2>
-                            <form id="bulk-driver-form" method="POST">
-                                <button type="submit" name="bulk_approve_drivers" style="background: #15803d; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;">
-                                    Approve Selected
-                                </button>
-                            </form>
-                        </div>
-                        
-                        <p style="font-size: 13px; color: #666; margin-bottom: 16px;">These drivers cannot log in to the mobile app until approved.</p>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                                <input type="checkbox" id="selectAllDrivers" style="width: 16px; height: 16px; cursor: pointer;">
-                                <label for="selectAllDrivers" style="font-size: 13px; font-weight: bold; color: #555; cursor: pointer;">Select All on this page</label>
-                            </div>
-
-                            <?php while($pd = $pendingDrivers->fetch_assoc()): ?>
-                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border: 1px solid #fef08a; background: #fefce8; border-radius: 8px;">
-                                    <div style="display: flex; align-items: center; gap: 15px;">
-                                        <input type="checkbox" form="bulk-driver-form" name="driver_ids[]" value="<?php echo $pd['driver_id']; ?>" class="driver-checkbox" style="width: 16px; height: 16px; cursor: pointer;">
-                                        <div>
-                                            <strong style="display: block; font-size: 16px; color: #333;"><?php echo htmlspecialchars($pd['name']); ?></strong>
-                                            <span style="font-size: 13px; color: #666;"><?php echo htmlspecialchars($pd['email']); ?> | License: <?php echo htmlspecialchars($pd['license_number'] ?? 'N/A'); ?></span>
-                                            <div style="font-size: 11px; color: #999; margin-top: 4px;">Registered: <?php echo date('M d, Y g:i A', strtotime($pd['created_at'])); ?></div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div style="display: flex; gap: 8px;">
-                                        <form method="POST" style="margin:0;">
-                                            <input type="hidden" name="driver_id" value="<?php echo $pd['driver_id']; ?>">
-                                            <button type="submit" name="reject_driver" style="background: #dc2626; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;" onclick="return confirm('Reject this driver?');">Reject</button>
-                                        </form>
-                                        <form method="POST" style="margin:0;">
-                                            <input type="hidden" name="driver_id" value="<?php echo $pd['driver_id']; ?>">
-                                            <button type="submit" name="approve_driver" style="background: #15803d; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;">Approve & Send OTP</button>
-                                        </form>
-                                    </div>
-                                </div>
-                            <?php endwhile; ?>
-                        </div>
-
-                        <?php if ($total_pending_pages > 1): ?>
-                        <div style="display: flex; justify-content: center; gap: 6px; margin-top: 20px;">
-                            <?php if ($pending_page > 1): ?>
-                                <a href="?p_page=<?php echo $pending_page - 1; ?>" style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; text-decoration: none; color: #555; background: white;">Prev</a>
-                            <?php endif; ?>
-
-                            <span style="padding: 6px 12px; background: #C34200; color: white; border-radius: 6px; font-weight: bold;">
-                                Page <?php echo $pending_page; ?> of <?php echo $total_pending_pages; ?>
-                            </span>
-
-                            <?php if ($pending_page < $total_pending_pages): ?>
-                                <a href="?p_page=<?php echo $pending_page + 1; ?>" style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; text-decoration: none; color: #555; background: white;">Next</a>
-                            <?php endif; ?>
-                        </div>
-                        <?php endif; ?>
+                <!-- STATS CARDS -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <p>Total Drivers</p>
+                        <h2><?php echo $total_drivers; ?></h2>
                     </div>
-                <?php endif; ?>
+                    <div class="stat-card green">
+                        <p>Available</p>
+                        <h2><?php echo $available_drivers; ?></h2>
+                    </div>
+                    <div class="stat-card orange">
+                        <p>On Delivery</p>
+                        <h2><?php echo $on_delivery; ?></h2>
+                    </div>
+                </div>
 
-                <!-- ACTIVE DRIVERS GRID -->
-                <form method="GET" class="filters no-print">
-                    <select name="filter" onchange="this.form.submit()">
-                        <option value="all" <?php echo $filter == 'all' ? 'selected' : ''; ?>>All Drivers</option>
-                        <option value="available" <?php echo $filter == 'available' ? 'selected' : ''; ?>>Available</option>
-                        <option value="assigned" <?php echo $filter == 'assigned' ? 'selected' : ''; ?>>Assigned</option>
-                        <option value="on_delivery" <?php echo $filter == 'on_delivery' ? 'selected' : ''; ?>>On Delivery</option>
-                        <option value="inactive" <?php echo $filter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                    </select>
-                </form>
+                <!-- SEARCH & FILTER -->
+                <div class="toolbar no-print">
+                    <div class="search-box">
+                        <form method="GET" action="drivers.php" style="margin:0; display:flex; gap: 10px;">
+                            <input type="hidden" name="filter" value="<?php echo htmlspecialchars($filter); ?>">
+                            <input type="text" name="search" placeholder="Search by name, email, or license..." value="<?php echo htmlspecialchars($search); ?>" style="flex: 1;">
+                            <button type="submit" style="background: #C34200; color: white; border: none; padding: 0 15px; border-radius: 10px; font-weight: bold; cursor: pointer;">Search</button>
+                        </form>
+                    </div>
+                    <div class="filter-box">
+                        <form method="GET" action="drivers.php" style="margin:0;">
+                            <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                            <select name="filter" onchange="this.form.submit()">
+                                <option value="all" <?php echo $filter == 'all' ? 'selected' : ''; ?>>All Drivers</option>
+                                <option value="available" <?php echo $filter == 'available' ? 'selected' : ''; ?>>Available</option>
+                                <option value="assigned" <?php echo $filter == 'assigned' ? 'selected' : ''; ?>>Assigned</option>
+                                <option value="on_delivery" <?php echo $filter == 'on_delivery' ? 'selected' : ''; ?>>On Delivery</option>
+                                <option value="inactive" <?php echo $filter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                            </select>
+                        </form>
+                    </div>
+                </div>
 
                 <div class="driver-grid" style="margin-top: 20px;">
                     <?php if ($drivers->num_rows > 0): ?>
@@ -391,29 +423,26 @@ if ($histRes) {
                             $isInactive = $row['status'] === 'hidden';
 
                             if ($isInactive) {
-                                $statusClass = 'inactive';
-                                $statusLabel = 'Inactive';
+                                $statusClass = 'inactive'; $statusLabel = 'Inactive';
                             } elseif ($activeCount == 0) {
-                                $statusClass = 'available';
-                                $statusLabel = 'Available';
-                            } elseif ($deliveryStatus == 'assigned') {
-                                $statusClass = 'assigned';
-                                $statusLabel = 'Assigned';
+                                $statusClass = 'available'; $statusLabel = 'Available';
+                            } elseif ($deliveryStatus == 'in_transit') {
+                                $statusClass = 'on-delivery'; $statusLabel = 'On Delivery';
                             } else {
-                                $statusClass = 'on-delivery';
-                                $statusLabel = 'On Delivery';
+                                // If they have an order but haven't started transit, they are Assigned
+                                $statusClass = 'assigned'; $statusLabel = 'Assigned';
                             }
 
-                            $initial     = strtoupper(substr($row['name'], 0, 1));
-                            $driverId    = (int)$row['driver_id'];
-                            $driverPast  = $histories[$driverId] ?? [];
+                            $initial = strtoupper(substr($row['name'], 0, 1));
+                            $driverId = (int)$row['driver_id'];
+                            $driverPast = $histories[$driverId] ?? [];
                         ?>
                             <div class='driver-card'>
                                 <div class='driver-top'>
                                     <div class='driver-avatar'><?php echo $initial; ?></div>
                                     <div class='driver-title'>
                                         <div class='driver-name'><?php echo htmlspecialchars($row['name']); ?></div>
-                                        <div class='driver-license' style="font-weight: 500; color: #666; margin-top: 2px;">License: <?php echo htmlspecialchars($row['license_number'] ?? 'N/A'); ?></div>
+                                        <div class='driver-license'><?php echo htmlspecialchars($row['license_number'] ?? 'No license'); ?></div>
                                     </div>
                                     <span class='status <?php echo $statusClass; ?>'><?php echo $statusLabel; ?></span>
                                 </div>
@@ -427,8 +456,6 @@ if ($histRes) {
                                 </div>
 
                                 <div class="driver-actions no-print" style="display:flex; flex-direction:column; gap:8px;">
-                                    
-                                    <!-- MANUAL ASSIGN FORM -->
                                     <?php if ($activeCount == 0 && !$isInactive && $unassigned->num_rows > 0): ?>
                                         <form method="POST" class="assign-form">
                                             <input type="hidden" name="driver_id" value="<?php echo $driverId; ?>">
@@ -445,27 +472,21 @@ if ($histRes) {
                                         </form>
                                     <?php endif; ?>
 
-                                    <button
-                                        class="history-btn"
-                                        type="button"
-                                        data-driver-id="<?php echo $driverId; ?>"
-                                        data-driver-name="<?php echo htmlspecialchars($row['name']); ?>"
-                                        <?php if (empty($driverPast)) echo 'disabled title="No past deliveries for this driver"'; ?>
-                                    >
-                                        View Delivery History
+                                    <button class="history-btn" type="button" data-driver-id="<?php echo $driverId; ?>" data-driver-name="<?php echo htmlspecialchars($row['name']); ?>" <?php if (empty($driverPast)) echo 'disabled title="No past deliveries"'; ?>>
+                                        View History
                                     </button>
 
                                     <?php if ($isInactive): ?>
                                         <form method='POST' style='margin:0;'>
                                             <input type='hidden' name='driver_id' value='<?php echo $driverId; ?>'>
                                             <input type='hidden' name='new_status' value='available'>
-                                            <button type='submit' name='toggle_status' class='btn-activate'>Activate Driver</button>
+                                            <button type='submit' name='toggle_status' class='btn-activate'>Activate</button>
                                         </form>
                                     <?php else: ?>
                                         <form method='POST' style='margin:0;'>
                                             <input type='hidden' name='driver_id' value='<?php echo $driverId; ?>'>
                                             <input type='hidden' name='new_status' value='hidden'>
-                                            <button type='submit' name='toggle_status' class='btn-deactivate'>Deactivate Driver</button>
+                                            <button type='submit' name='toggle_status' class='btn-deactivate'>Deactivate</button>
                                         </form>
                                     <?php endif; ?>
                                 </div>
@@ -474,30 +495,17 @@ if ($histRes) {
                             <template id="history-tpl-<?php echo $driverId; ?>">
                                 <?php if (!empty($driverPast)): ?>
                                     <table class="history-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Order</th>
-                                                <th>Retailer</th>
-                                                <th>Items</th>
-                                                <th>Total</th>
-                                                <th>Order Status</th>
-                                                <th>Delivery Status</th>
-                                                <th>Assigned</th>
-                                            </tr>
-                                        </thead>
+                                        <thead><tr><th>Order</th><th>Retailer</th><th>Items</th><th>Total</th><th>Status</th><th>Delivery</th><th>Date</th></tr></thead>
                                         <tbody>
-                                        <?php foreach ($driverPast as $h):
-                                            $orderClass    = strtolower(str_replace(' ', '_', $h['order_status']));
-                                            $deliveryClass = strtolower(str_replace(' ', '_', $h['delivery_status']));
-                                        ?>
+                                        <?php foreach ($driverPast as $h): ?>
                                             <tr>
                                                 <td><span class="order-no">#<?php echo (int)$h['order_id']; ?></span></td>
                                                 <td><?php echo htmlspecialchars($h['retailer_name'] ?? '—'); ?></td>
                                                 <td><?php echo (int)($h['total_items'] ?? 0); ?></td>
                                                 <td>₱<?php echo number_format((float)$h['total_amount'], 2); ?></td>
-                                                <td><span class="status-pill <?php echo $orderClass; ?>"><?php echo strtoupper(str_replace('_', ' ', $h['order_status'])); ?></span></td>
-                                                <td><span class="status-pill <?php echo $deliveryClass; ?>"><?php echo strtoupper(str_replace('_', ' ', $h['delivery_status'])); ?></span></td>
-                                                <td><?php echo htmlspecialchars($h['assigned_at'] ?? $h['order_date']); ?></td>
+                                                <td><span class="status-pill <?php echo strtolower($h['order_status']); ?>"><?php echo strtoupper($h['order_status']); ?></span></td>
+                                                <td><?php echo strtoupper($h['delivery_status']); ?></td>
+                                                <td><?php echo date('M d, Y', strtotime($h['assigned_at'] ?? $h['order_date'])); ?></td>
                                             </tr>
                                         <?php endforeach; ?>
                                         </tbody>
@@ -508,14 +516,40 @@ if ($histRes) {
                             </template>
                         <?php endwhile; ?>
                     <?php else: ?>
-                        <p style="text-align:center; padding: 20px;">No drivers found matching your filter.</p>
+                        <p style="text-align:center; padding: 20px; grid-column: 1/-1; color:#777;">No drivers found matching your filter.</p>
                     <?php endif; ?>
                 </div>
+
+                <!-- PAGINATION -->
+                <?php if ($total_pages > 1): ?>
+                <div class="pagination no-print">
+                    <?php if ($page > 1): ?>
+                        <a href="?filter=<?php echo $filter; ?>&search=<?php echo urlencode($search); ?>&page=<?php echo $page - 1; ?>">Prev</a>
+                    <?php else: ?>
+                        <span class="disabled">Prev</span>
+                    <?php endif; ?>
+
+                    <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                        <?php if ($i == $page): ?>
+                            <span class="active"><?php echo $i; ?></span>
+                        <?php else: ?>
+                            <a href="?filter=<?php echo $filter; ?>&search=<?php echo urlencode($search); ?>&page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                        <?php endif; ?>
+                    <?php endfor; ?>
+
+                    <?php if ($page < $total_pages): ?>
+                        <a href="?filter=<?php echo $filter; ?>&search=<?php echo urlencode($search); ?>&page=<?php echo $page + 1; ?>">Next</a>
+                    <?php else: ?>
+                        <span class="disabled">Next</span>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+
             </main>
         </div>
     </div>
 
-    <!-- Order History Modal -->
+    <!-- ORDER HISTORY MODAL -->
     <div class="modal-backdrop no-print" id="historyModal">
         <div class="modal modal-wide">
             <h3 style="margin-top:0; color: #C34200;">Order History — <span id="historyDriverName">—</span></h3>
@@ -527,17 +561,30 @@ if ($histRes) {
         </div>
     </div>
 
-    <script>
-        // --- SELECT ALL DRIVERS LOGIC ---
-        const selectAllDrivers = document.getElementById('selectAllDrivers');
-        if (selectAllDrivers) {
-            selectAllDrivers.addEventListener('change', function() {
-                const checkboxes = document.querySelectorAll('.driver-checkbox');
-                checkboxes.forEach(cb => cb.checked = this.checked);
-            });
-        }
+    <!-- CUSTOM CTRL+F FIND BAR -->
+    <div id="customFindBar" class="no-print" style="display: none; position: fixed; top: 10px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; border: 1px solid #ddd;">
+        <input type="text" id="findInput" placeholder="Find driver..." style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; outline: none; width: 200px;">
+        <button id="closeFind" style="padding: 8px 12px; margin-left: 5px; background: #eee; border: none; border-radius: 4px; cursor: pointer;">X</button>
+    </div>
 
-        // --- HISTORY MODAL LOGIC ---
+    <script>
+        // PAGE ANIMATION
+        if (sessionStorage.getItem('scrollPos')) { document.documentElement.style.visibility = 'hidden'; }
+        window.addEventListener('load', function() {
+            const savedPosition = sessionStorage.getItem('scrollPos');
+            if (savedPosition) {
+                window.scrollTo(0, parseInt(savedPosition));
+                document.documentElement.style.visibility = 'visible';
+                sessionStorage.removeItem('scrollPos');
+            }
+        });
+        document.addEventListener('mousedown', function(event) {
+            if (event.target.closest('th a') || event.target.closest('.pagination a') || event.target.closest('.filter-box select')) {
+                sessionStorage.setItem('scrollPos', window.scrollY);
+            }
+        });
+
+        // HISTORY MODAL
         const historyModal = document.getElementById('historyModal');
         const historyName  = document.getElementById('historyDriverName');
         const historyBody  = document.getElementById('historyBody');
@@ -558,24 +605,9 @@ if ($histRes) {
         });
 
         function closeHistory() { historyModal.classList.remove('open'); }
+        historyModal.addEventListener('click', e => { if (e.target === historyModal) closeHistory(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHistory(); });
 
-        historyModal.addEventListener('click', e => {
-            if (e.target === historyModal) closeHistory();
-        });
-
-        function toggleProfileMenu(event) {
-            event.stopPropagation();
-            document.getElementById('profileDropdown').classList.toggle('show');
-        }
-
-        document.addEventListener('click', function(event) {
-            const menu = document.getElementById('profileMenu');
-            if (!menu.contains(event.target)) {
-                document.getElementById('profileDropdown').classList.remove('show');
-            }
-        });
-
-        // --- FIX PDF EXPORT ---
         function exportHistoryPDF() {
             const driverName = historyName.textContent;
             const tableHTML = historyBody.innerHTML;
@@ -608,17 +640,219 @@ if ($histRes) {
             `);
             printWindow.document.close();
         }
-    </script>
-    <!-- SECURITY: Force reload on back button & hide body on leave -->
-    <script>
-        window.addEventListener('pageshow', function (event) {
-            if (event.persisted || (typeof window.performance != "undefined" && window.performance.navigation.type === 2)) {
-                window.location.reload();
+
+        // PROFILE MENU
+        function toggleProfileMenu(event) {
+            event.stopPropagation();
+            document.getElementById('profileDropdown').classList.toggle('show');
+        }
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (!menu.contains(event.target)) {
+                document.getElementById('profileDropdown').classList.remove('show');
             }
         });
-        window.addEventListener('pagehide', function (event) {
-            document.body.style.display = 'none';
+
+        // CTRL+F FIND BAR
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault(); 
+                const findBar = document.getElementById('customFindBar');
+                findBar.style.display = 'flex';
+                document.getElementById('findInput').focus();
+            }
+            if (e.key === 'Escape') {
+                const findBar = document.getElementById('customFindBar');
+                if (findBar.style.display === 'flex') {
+                    findBar.style.display = 'none';
+                    document.getElementById('findInput').value = '';
+                    document.querySelectorAll('.driver-card').forEach(card => card.style.display = '');
+                    e.stopImmediatePropagation();
+                }
+            }
         });
+
+        document.getElementById('closeFind').addEventListener('click', function() {
+            document.getElementById('customFindBar').style.display = 'none';
+            document.getElementById('findInput').value = '';
+            document.querySelectorAll('.driver-card').forEach(card => card.style.display = '');
+        });
+
+        document.getElementById('findInput').addEventListener('keyup', function() {
+            const query = this.value.toLowerCase();
+            const cards = document.querySelectorAll('.driver-card');
+            cards.forEach(card => {
+                const text = card.innerText.toLowerCase();
+                card.style.display = text.includes(query) ? '' : 'none';
+            });
+        });
+
+    let lastNotifCount = 0;
+    // 🔥 NEW: Built-in browser beep synthesizer
+function playBeep() {
+    try {
+        let context = new (window.AudioContext || window.webkitAudioContext)();
+        let osc = context.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = 800; // 800Hz pitch
+        osc.connect(context.destination);
+        osc.start();
+        osc.stop(context.currentTime + 0.15); // Beep for 0.15 seconds
+    } catch (e) {
+        console.log('Audio not supported in this browser.');
+    }
+}
+
+    function toggleNotifications(event) {
+        event.stopPropagation();
+        const dropdown = document.getElementById('notifDropdown');
+        // Just toggle the open/close state
+        dropdown.classList.toggle('show');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        const container = document.getElementById('notifContainer');
+        const dropdown = document.getElementById('notifDropdown');
+        if (container && !container.contains(event.target)) {
+            if(dropdown) dropdown.classList.remove('show');
+        }
+    });
+
+    function checkNotifications() {
+        fetch('get_notifications.php')
+            .then(response => response.json())
+            .then(data => {
+                const badge = document.getElementById('notif-badge');
+                const list = document.getElementById('notifList');
+                
+                if (badge && list) {
+                    let readIds = JSON.parse(localStorage.getItem('readNotifIds') || '[]');
+                    let unreadCount = 0;
+
+                    // 1. Count unread
+                    data.orders.forEach(item => {
+                        const itemId = item.type === 'order' ? 'order-' + item.order_id : 'log-' + item.log_id;
+                        if (!readIds.includes(itemId)) {
+                            unreadCount++;
+                        }
+                    });
+
+                    // 2. Update Badge
+                    if (unreadCount > 0) {
+                        badge.style.display = 'flex';
+                        badge.textContent = unreadCount;
+                        
+if (unreadCount > lastNotifCount) {
+    playBeep(); // 👈 Call our new beep function
+}
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                    lastNotifCount = unreadCount;
+
+                    // 3. Re-render list
+                    list.innerHTML = ''; 
+                    data.orders.forEach(item => {
+                        const date = new Date(item.type === 'order' ? item.order_date : item.timestamp);
+                        const timeAgo = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                        
+                        const itemId = item.type === 'order' ? 'order-' + item.order_id : 'log-' + item.log_id;
+                        const isRead = readIds.includes(itemId);
+                        const readStyle = isRead ? 'opacity: 0.6;' : '';
+
+                        if (item.type === 'order') {
+                            list.innerHTML += `
+                                <a href="view_order.php?id=${item.order_id}" class="notif-item" style="${readStyle}" data-notif-id="${itemId}" onclick="markAsRead('${itemId}')">
+                                    <div class="notif-icon">#${item.order_id}</div>
+                                    <div class="notif-content">
+                                        <p><strong>${item.retailer_name}</strong> placed a new order.</p>
+                                        <span class="notif-time">${timeAgo} &middot; ₱${Number(item.total_amount).toFixed(2)}</span>
+                                    </div>
+                                </a>
+                            `;
+                        } else {
+                            list.innerHTML += `
+                                <a href="drivers.php?search=${encodeURIComponent(item.driver_name)}" class="notif-item" style="${readStyle}" data-notif-id="${itemId}" onclick="markAsRead('${itemId}')">
+                                    <div class="notif-icon" style="background: #15803d; border-radius: 50%;">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    </div>
+                                    <div class="notif-content">
+                                        <p>${item.action}</p>
+                                        <span class="notif-time">${timeAgo} &middot; Click to view driver</span>
+                                    </div>
+                                </a>
+                            `;
+                        }
+                    });
+                }
+            })
+            .catch(err => console.error('Error fetching notifications:', err));
+    }
+
+    // 🔥 NEW FUNCTION: Marks only the clicked item as read
+    function markAsRead(itemId) {
+        let readIds = JSON.parse(localStorage.getItem('readNotifIds') || '[]');
+        if (!readIds.includes(itemId)) {
+            readIds.push(itemId);
+            localStorage.setItem('readNotifIds', JSON.stringify(readIds));
+        }
+        // The badge will automatically update on the next polling interval
+    }
+
+    checkNotifications();
+    setInterval(checkNotifications, 15000);
+</script>
+
+    <!-- KimFresh mobile burger menu script -->
+    <script>
+    (function () {
+        var sidebar = document.querySelector('.sidebar');
+        var header = document.querySelector('.top-header');
+        if (!sidebar || !header) return;
+
+        sidebar.id = sidebar.id || 'sidebar';
+
+        var burger = document.createElement('button');
+        burger.type = 'button';
+        burger.className = 'menu-toggle';
+        burger.setAttribute('aria-label', 'Open menu');
+        burger.setAttribute('aria-controls', sidebar.id);
+        burger.setAttribute('aria-expanded', 'false');
+        burger.innerHTML = '<span></span><span></span><span></span>';
+        header.insertBefore(burger, header.firstChild);
+
+        var logo = sidebar.querySelector('.logo');
+        if (logo) {
+            var mobileLogo = logo.cloneNode(true);
+            mobileLogo.className = 'mobile-logo';
+            header.insertBefore(mobileLogo, burger.nextSibling);
+        }
+
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'sidebar-close';
+        closeBtn.setAttribute('aria-label', 'Close menu');
+        closeBtn.innerHTML = '&times;';
+        sidebar.appendChild(closeBtn);
+
+        var overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+
+        function setOpen(open) {
+            sidebar.classList.toggle('open', open);
+            document.body.classList.toggle('sidebar-open', open);
+            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        burger.addEventListener('click', function () { setOpen(!sidebar.classList.contains('open')); });
+        closeBtn.addEventListener('click', function () { setOpen(false); });
+        overlay.addEventListener('click', function () { setOpen(false); });
+        sidebar.addEventListener('click', function (e) { if (e.target.closest('a')) setOpen(false); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+        window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) { if (e.matches) setOpen(false); });
+    })();
     </script>
 </body>
 </html>

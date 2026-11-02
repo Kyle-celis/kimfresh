@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import '../services/api.dart';
+import '../services/foreground_service.dart';
 import '../theme/app_theme.dart';
 
 class DriverMapScreen extends StatefulWidget {
@@ -26,81 +30,140 @@ class DriverMapScreen extends StatefulWidget {
 class _DriverMapScreenState extends State<DriverMapScreen> {
   final MapController _mapController = MapController();
   final Distance _distance = const Distance();
+  final DraggableScrollableController _sheetController =
+  DraggableScrollableController();
 
-  // Controls the bottom sheet size
-  final DraggableScrollableController _sheetController = DraggableScrollableController();
+  // YOUR NEW API KEY
+  final String _orsApiKey =
+      'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjgzMTc3NzM5ZGYxYTQ2NzdhZTI1NTBlNmJkNmQ1ODJmIiwiaCI6Im11cm11cjY0In0=';
 
   LatLng? _driverLocation;
   LatLng? _retailerLocation;
+  List<LatLng> _routePoints = [];
 
   bool _isLoading = true;
-  bool _isFetching = false;
-  bool _hasRetailer = false;
-  Timer? _pollingTimer;
   bool _autoFitDone = false;
+  double _routeDistanceKm = 0;
+  int _routeDurationMin = 0;
+
+  StreamSubscription<Position>? _positionStream;
 
   @override
   void initState() {
     super.initState();
-    if (widget.orderStatus.toLowerCase() == 'delivered') {
-      _isLoading = false;
-    } else {
-      _startPolling();
-    }
+    ForegroundService.pauseTracking();
+    _startTracking();
   }
 
   @override
   void dispose() {
-    _pollingTimer?.cancel();
+    ForegroundService.resumeTracking();
+    _positionStream?.cancel();
     _sheetController.dispose();
     super.dispose();
   }
 
-  void _startPolling() {
-    _fetchLocations();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      _fetchLocations();
-    });
-  }
-
-  Future<void> _fetchLocations() async {
-    if (_isFetching) return;
-    _isFetching = true;
-
-    final loc = await ApiService.getDriverLocation(widget.orderId);
-
-    if (!mounted) {
-      _isFetching = false;
+  Future<void> _startTracking() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() => _isLoading = false);
       return;
     }
 
-    setState(() {
-      if (loc != null) {
-        final dLat = loc['driver_lat'] as double?;
-        final dLng = loc['driver_lng'] as double?;
-        if (dLat != null && dLng != null) {
-          _driverLocation = LatLng(dLat, dLng);
-        }
-
-        final rLat = loc['retailer_lat'] as double?;
-        final rLng = loc['retailer_lng'] as double?;
-        if (rLat != null && rLng != null) {
-          _retailerLocation = LatLng(rLat, rLng);
-          _hasRetailer = true;
-        }
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        setState(() => _isLoading = false);
+        return;
       }
-      _isLoading = false;
-    });
-
-    if (!_autoFitDone &&
-        (_driverLocation != null || _retailerLocation != null)) {
-      _autoFitDone = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _fitCamera();
-      });
     }
 
-    _isFetching = false;
+    _fetchRetailerLocation();
+
+    _positionStream = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10, // Changed to 10m to save API calls
+      ),
+    ).listen((Position position) {
+      final newLatLng = LatLng(position.latitude, position.longitude);
+
+      setState(() {
+        _driverLocation = newLatLng;
+        _isLoading = false;
+      });
+
+      if (_retailerLocation != null && _routePoints.isEmpty) {
+        _fetchRoadRoute(newLatLng, _retailerLocation!);
+      }
+
+      if (!_autoFitDone) {
+        _autoFitDone = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _fitCamera();
+        });
+      }
+    });
+  }
+
+  Future<void> _fetchRetailerLocation() async {
+    final loc = await ApiService.getDriverLocation(widget.orderId);
+    if (!mounted) return;
+
+    if (loc != null) {
+      final rLat = loc['retailer_lat'] as double?;
+      final rLng = loc['retailer_lng'] as double?;
+      if (rLat != null && rLng != null) {
+        setState(() {
+          _retailerLocation = LatLng(rLat, rLng);
+        });
+
+        if (_driverLocation != null && _routePoints.isEmpty) {
+          _fetchRoadRoute(_driverLocation!, _retailerLocation!);
+        }
+      }
+    }
+  }
+
+  // ── EXACT SAME LOGIC AS THE RETAILER APP ──
+  Future<void> _fetchRoadRoute(LatLng driver, LatLng store) async {
+    try {
+      final url = 'https://api.heigit.org/openrouteservice/v2/directions/driving-car'
+          '?api_key=$_orsApiKey'
+          '&start=${driver.longitude},${driver.latitude}'
+          '&end=${store.longitude},${store.latitude}';
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        // Handle if the response is an array or object
+        final List<dynamic> coords = data['features'][0]['geometry']['coordinates'];
+
+        final points = coords
+            .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+            .toList();
+
+        if (mounted) {
+          setState(() {
+            _routePoints = points;
+
+            // Calculate ETA from the successful API call
+            final summary = data['features'][0]['properties']['summary'];
+            final double distanceMeters = (summary['distance'] as num).toDouble();
+            final double durationSeconds = (summary['duration'] as num).toDouble();
+            _routeDistanceKm = distanceMeters / 1000;
+            _routeDurationMin = (durationSeconds / 60).ceil();
+          });
+        }
+      } else {
+        debugPrint('ORS Error: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('ORS Route Error: $e');
+    }
   }
 
   void _fitCamera() {
@@ -119,8 +182,12 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       _mapController.fitCamera(
         CameraFit.bounds(
           bounds: LatLngBounds.fromPoints(points),
-          // Added bottom padding so it fits above the bottom sheet
-          padding: const EdgeInsets.only(top: 60, bottom: 250, left: 60, right: 60),
+          padding: const EdgeInsets.only(
+            top: 60,
+            bottom: 250,
+            left: 60,
+            right: 60,
+          ),
         ),
       );
     } catch (_) {}
@@ -146,12 +213,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       )
           : Stack(
         children: [
-          // Wrap map in GestureDetector so tapping it hides the sheet
           GestureDetector(
             onTap: () {
               if (_sheetController.isAttached) {
                 _sheetController.animateTo(
-                  0.12, // Snap to hidden (approx height of the handle)
+                  0.12,
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeOut,
                 );
@@ -166,41 +232,32 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   }
 
   Widget _buildMap() {
-    final center = _driverLocation ??
-        _retailerLocation ??
-        const LatLng(14.5995, 120.9842);
-
-    final points = <LatLng>[
-      if (_driverLocation != null) _driverLocation!,
-      if (_retailerLocation != null) _retailerLocation!,
-    ];
+    final center =
+        _driverLocation ?? _retailerLocation ?? const LatLng(14.5995, 120.9842);
 
     return FlutterMap(
       mapController: _mapController,
-      // 👇 RESTORED MAP OPTIONS HERE 👇
       options: MapOptions(
         initialCenter: center,
-        initialZoom: 14,
+        initialZoom: 15,
         minZoom: 4,
         maxZoom: 18,
         interactionOptions: const InteractionOptions(
           flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
         ),
       ),
-      // 👆 ------------------------- 👆
       children: [
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.kimfresh.driver_app',
         ),
-        if (points.length == 2)
+        if (_routePoints.isNotEmpty)
           PolylineLayer(
             polylines: [
               Polyline(
-                points: points,
-                strokeWidth: 4,
-                color: AppColors.burgundy.withOpacity(0.5),
-                pattern: StrokePattern.dashed(segments: const [10, 10]),
+                points: _routePoints,
+                strokeWidth: 6,
+                color: AppColors.burgundy.withOpacity(0.8),
               ),
             ],
           ),
@@ -241,43 +298,29 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   }
 
   Widget _buildInfoCard() {
-    double distanceMeters = 0;
-    int etaMinutes = 0;
-
-    if (_driverLocation != null && _retailerLocation != null) {
-      final d = _distance.as(
-        LengthUnit.Meter,
-        _driverLocation!,
-        _retailerLocation!,
-      );
-      // d < 100000 (100km) prevents the crazy 11,432,127 meter bug from showing
-      if (d.isFinite && d >= 0 && d < 100000) {
-        distanceMeters = d;
-        etaMinutes = (distanceMeters / 8.33 / 60).round();
-      }
-    }
-
     String statusText;
-    if (_hasRetailer && _driverLocation != null) {
-      if (etaMinutes < 1) {
-        statusText = '< 1 min · ${distanceMeters.toStringAsFixed(0)} m away';
+
+    if (_retailerLocation != null && _routePoints.isNotEmpty) {
+      if (_routeDurationMin < 1) {
+        statusText = '< 1 min · ${_routeDistanceKm.toStringAsFixed(1)} km away';
       } else {
-        statusText = '$etaMinutes min · ${distanceMeters.toStringAsFixed(0)} m away';
+        statusText =
+        '$_routeDurationMin min · ${_routeDistanceKm.toStringAsFixed(1)} km away';
       }
-    } else if (_hasRetailer && _driverLocation == null) {
-      statusText = 'Waiting for your GPS…';
-    } else if (!_hasRetailer && _driverLocation != null) {
+    } else if (_retailerLocation != null && _driverLocation != null) {
+      statusText = 'Calculating route...';
+    } else if (_retailerLocation == null) {
       statusText = 'Retailer hasn\'t shared their location yet';
     } else {
-      statusText = 'Waiting for GPS data…';
+      statusText = 'Waiting for your GPS…';
     }
 
     return DraggableScrollableSheet(
       controller: _sheetController,
-      initialChildSize: 0.25, // Starts lower because the card is shorter
-      minChildSize: 0.12,     // Drag all the way down
-      maxChildSize: 0.55,     // Drag up
-      snap: true,             // Smoothly snaps into place
+      initialChildSize: 0.25,
+      minChildSize: 0.12,
+      maxChildSize: 0.55,
+      snap: true,
       snapSizes: const [0.12, 0.25, 0.55],
       builder: (context, scrollController) {
         return Container(
@@ -313,8 +356,11 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                         color: Colors.green.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.store,
-                          color: Colors.green, size: 24),
+                      child: const Icon(
+                        Icons.store,
+                        color: Colors.green,
+                        size: 24,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -352,7 +398,9 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.burgundy.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(10),
@@ -363,7 +411,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
                   child: Row(
                     children: [
                       Icon(
-                        _hasRetailer && _driverLocation != null
+                        _retailerLocation != null && _routePoints.isNotEmpty
                             ? Icons.route_rounded
                             : Icons.hourglass_top_rounded,
                         size: 18,
