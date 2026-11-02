@@ -1,0 +1,159 @@
+﻿<?php
+// app/Controllers/OrderController.php — strict MVC Controller
+class OrderController extends Controller
+{
+    private $model;
+
+    private function boot()
+    {
+        require_once __DIR__ . '/../Models/Order.php';
+        $this->model = new Order($this->conn);
+    }
+
+    public function index()
+    {
+        $this->requireAuth();
+        $this->boot();
+
+        // --- POST handlers ---
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            if (isset($_POST['bulk_action']) && isset($_POST['selected_orders'])) { $this->handleBulk(); return; }
+            if (isset($_POST['approve_order']))  { $this->handleApprove(); return; }
+            if (isset($_POST['reject_order']))   { $this->handleReject(); return; }
+        }
+
+        // --- PDF export ---
+        if (isset($_GET['export_pdf'])) { $this->handlePdfExport(); return; }
+
+        // --- Status counts ---
+        $counts = $this->model->getStatusCounts();
+
+        // --- Filter ---
+        $current_filter = $_GET['status'] ?? 'all';
+        $statusWhere = $this->model->buildFilter($current_filter);
+
+        // --- Sorting ---
+        $sort = $_GET['sort'] ?? 'date_desc';
+        $sortMap = [
+            'date_asc'    => "o.order_date ASC",
+            'date_desc'   => "o.order_date DESC",
+            'total_asc'   => "o.total_amount ASC",
+            'total_desc'  => "o.total_amount DESC",
+            'status_asc'  => "o.order_status ASC",
+            'status_desc' => "o.order_status DESC",
+        ];
+        $orderBy = $sortMap[$sort] ?? "o.order_date DESC";
+
+        // --- Pagination ---
+        $limit  = 10;
+        $page   = max(1, (int)($_GET['page'] ?? 1));
+        $offset = ($page - 1) * $limit;
+        $total_rows  = $this->model->count($statusWhere);
+        $total_pages = (int)ceil($total_rows / $limit);
+        $orders      = $this->model->getAll($statusWhere, $orderBy, $limit, $offset);
+
+        $this->view('orders/index', [
+            'counts'         => $counts,
+            'current_filter' => $current_filter,
+            'sort'           => $sort,
+            'page'           => $page,
+            'total_pages'    => $total_pages,
+            'total_rows'     => $total_rows,
+            'orders'         => $orders,
+        ]);
+    }
+
+    private function handleBulk()
+    {
+        $action   = $_POST['bulk_action'];
+        $selected = $_POST['selected_orders'] ?? [];
+        $success_count = 0;
+        $fail_count    = 0;
+
+        if (is_array($selected)) {
+            foreach ($selected as $id) {
+                $order_id = (int)$id;
+                if ($action === 'approve') {
+                    if ($this->model->approveOrder($order_id)) {
+                        autoAssignDriver($this->conn, $order_id);
+                        $success_count++;
+                    } else {
+                        $fail_count++;
+                    }
+                } elseif ($action === 'reject') {
+                    if ($this->model->rejectOrder($order_id)) $success_count++;
+                    else $fail_count++;
+                }
+            }
+        }
+
+        assignWaitingOrders($this->conn);
+        logActivity($this->conn, $_SESSION['admin_id'], "Bulk $action: $success_count success, $fail_count failed");
+
+        $status = $_GET['status'] ?? 'all';
+        $this->redirect("/php-web/public/orders?status=$status&bulk_success=$success_count");
+    }
+
+    private function handleApprove()
+    {
+        $order_id = (int)$_POST['order_id'];
+
+        if ($this->model->approveOrder($order_id)) {
+            autoAssignDriver($this->conn, $order_id);
+            assignWaitingOrders($this->conn);
+            logActivity($this->conn, $_SESSION['admin_id'], "Approved Order #$order_id");
+            $this->redirect("/php-web/public/orders/view?id=$order_id");
+        }
+
+        logActivity($this->conn, $_SESSION['admin_id'], "Approve FAILED Order #$order_id");
+        $this->redirect("/php-web/public/orders/view?id=$order_id&error=stock");
+    }
+
+    private function handleReject()
+    {
+        $order_id = (int)$_POST['order_id'];
+        if ($this->model->rejectOrder($order_id)) {
+            logActivity($this->conn, $_SESSION['admin_id'], "Rejected Order #$order_id");
+        }
+        $this->redirect("/php-web/public/orders/view?id=$order_id");
+    }
+
+    private function handlePdfExport()
+    {
+        logActivity($this->conn, $_SESSION['admin_id'], "Exported Orders to PDF");
+
+        require_once __DIR__ . '/../../lib/fpdf/fpdf.php';
+        require_once __DIR__ . '/../helpers/KimFreshPdf.php';
+
+        $pdf = new KimFreshPdf();
+        $pdf->title = 'KimFresh Orders Report';
+        $pdf->AddPage();
+        $pdf->SetFont('Arial', '', 9);
+        $pdf->SetTextColor(0, 0, 0);
+
+        $pdf->SetFont('Arial', 'B', 9);
+        $pdf->SetFillColor(195, 66, 0);
+        $pdf->SetTextColor(255, 255, 255);
+        $pdf->Cell(15, 7, 'ID', 1, 0, 'C', true);
+        $pdf->Cell(55, 7, 'Retailer', 1, 0, 'L', true);
+        $pdf->Cell(30, 7, 'Status', 1, 0, 'C', true);
+        $pdf->Cell(25, 7, 'Total', 1, 0, 'R', true);
+        $pdf->Cell(45, 7, 'Driver', 1, 0, 'L', true);
+        $pdf->Cell(30, 7, 'Date', 1, 1, 'C', true);
+
+        $pdf->SetFont('Arial', '', 8);
+        $pdf->SetTextColor(0, 0, 0);
+        $rows = $this->model->getAllForPdf();
+        while ($row = $rows->fetch_assoc()) {
+            $pdf->Cell(15, 6, $row['order_id'], 1, 0, 'C');
+            $pdf->Cell(55, 6, substr(htmlspecialchars($row['retailer_name'] ?? '-'), 0, 30), 1, 0, 'L');
+            $pdf->Cell(30, 6, strtoupper($row['order_status']), 1, 0, 'C');
+            $pdf->Cell(25, 6, 'PHP ' . number_format($row['total_amount'], 2), 1, 0, 'R');
+            $pdf->Cell(45, 6, substr(htmlspecialchars($row['driver_name'] ?? '-'), 0, 25), 1, 0, 'L');
+            $pdf->Cell(30, 6, date('M d, Y', strtotime($row['order_date'])), 1, 1, 'C');
+        }
+
+        $pdf->Output('D', 'KimFresh_Orders.pdf');
+        exit();
+    }
+}
