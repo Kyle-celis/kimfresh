@@ -10,7 +10,7 @@ class LogsController extends Controller
         $model = new Log($this->conn);
 
         $current_admin_id = (int)$_SESSION['admin_id'];
-        $is_superadmin = ($current_admin_id == 1);
+        $is_superadmin = !empty($_SESSION['is_superadmin']); // PATCH-2: use session flag, not hardcoded id
 
         // --- PDF export ---
         if (isset($_GET['export_pdf'])) {

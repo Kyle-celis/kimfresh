@@ -142,7 +142,6 @@
                             <p class="user-name" style="margin: 0;"><?php echo htmlspecialchars($_SESSION['admin_name']); ?></p>
                             <p class="user-role" style="margin: 0;">Administrator</p>
                         </div>
-                        <span style="font-size: 18px; color: #999; margin-left: 5px;">⌄</span>
                     </button>
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">

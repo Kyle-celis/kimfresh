@@ -230,6 +230,7 @@
                             <div class="driver-actions no-print" style="display:flex; flex-direction:column; gap:8px;">
                                 <?php if ($activeCount === 0 && !$isInactive && $unassigned->num_rows > 0): ?>
                                     <form method="POST" class="assign-form">
+                                        <?= csrf_field() ?>
                                         <input type="hidden" name="driver_id" value="<?= $driverId ?>">
                                         <select name="order_id" required>
                                             <option value="">Assign an order...</option>
@@ -245,12 +246,14 @@
 
                                 <?php if ($isInactive): ?>
                                     <form method="POST" style="margin:0;">
+                                        <?= csrf_field() ?>
                                         <input type="hidden" name="driver_id" value="<?= $driverId ?>">
                                         <input type="hidden" name="new_status" value="available">
                                         <button type="submit" name="toggle_status" class="btn-activate">Activate</button>
                                     </form>
                                 <?php else: ?>
                                     <form method="POST" style="margin:0;">
+                                        <?= csrf_field() ?>
                                         <input type="hidden" name="driver_id" value="<?= $driverId ?>">
                                         <input type="hidden" name="new_status" value="hidden">
                                         <button type="submit" name="toggle_status" class="btn-deactivate">Deactivate</button>

@@ -34,3 +34,39 @@ php-web/.env.local_backup
 php-web/db.php.local_backup
 php-web/mailer.php
 php-web/local_otps.txt
+
+# ============================================================
+# Patch backups and runtime files (added Session 1)
+# ============================================================
+*.bak
+*.bak2
+*.bak3
+*.p2bak
+*.p2fixbak
+*.p5bak
+*.isobak
+*.testbak
+*.session_bak
+*.old
+*.orig
+
+# PHP runtime
+php-web/storage/logs/*
+!php-web/storage/logs/.gitkeep
+*.log
+
+# Local config (never commit)
+php-web/config/local.php
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace

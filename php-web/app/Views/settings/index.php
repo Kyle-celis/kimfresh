@@ -147,7 +147,6 @@
                             <p class="user-name" style="margin: 0;"><?php echo htmlspecialchars($_SESSION['admin_name']); ?></p>
                             <p class="user-role" style="margin: 0;">Administrator</p>
                         </div>
-                        <span style="font-size: 18px; color: #999; margin-left: 5px;">⌄</span>
                     </button>
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
@@ -173,6 +172,7 @@
                 <div class="settings-box">
                     <h3>Admin Profile</h3>
                     <form method="POST">
+                        <?= csrf_field() ?>
                         <label>Email Address (Read-Only)</label>
                         <input type="email" value="<?php echo htmlspecialchars($admin['email']); ?>" maxlength="50" disabled>
                         <p class="readonly-text">Email cannot be changed.</p>
@@ -191,6 +191,7 @@
                 <div class="settings-box">
                     <h3>Store Operating Hours</h3>
                     <form method="POST">
+                        <?= csrf_field() ?>
                         <div style="display: flex; gap: 20px; margin-bottom: 20px;">
                             <div style="flex: 1;">
                                 <label>Opening Time</label>

@@ -7,9 +7,15 @@ $dbname = 'kimfresh';
 $username = 'root';
 $password = ''; // XAMPP default is blank
 
-$conn = new mysqli($host, $username, $password, $dbname);
-if ($conn->connect_error) {
-    die("Database connection failed: " . $conn->connect_error);
+// Fail fast if MySQL is dead — 3s timeout instead of OS TCP timeout (~120s)
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+try {
+    $conn = new mysqli();
+    $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 3);
+    $conn->real_connect($host, $username, $password, $dbname);
+} catch (mysqli_sql_exception $e) {
+    http_response_code(503);
+    die("Database unavailable. Is MySQL running in XAMPP? (" . $e->getMessage() . ")");
 }
 $conn->set_charset('utf8mb4');
 

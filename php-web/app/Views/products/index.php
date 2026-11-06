@@ -227,10 +227,12 @@
                     <div style="display: flex; gap: 10px;">
                         <?php if ($store['manual_override'] !== null): ?>
                             <form method="POST" style="margin:0;">
+                                <?= csrf_field() ?>
                                 <button type="submit" name="reset_schedule" class="btn-store" style="background: #555;">Reset to Schedule</button>
                             </form>
                         <?php endif; ?>
                         <form method="POST" style="margin:0;">
+                            <?= csrf_field() ?>
                             <input type="hidden" name="override_value" value="<?= $is_store_open ? 0 : 1 ?>">
                             <button type="submit" name="toggle_manual" class="btn-store <?= $is_store_open ? 'open' : 'closed' ?>">
                                 <?= $is_store_open ? 'Deactivate' : 'Activate' ?>
@@ -324,6 +326,7 @@
     <dialog id="productModal">
         <h2 id="modalTitle">Add Product</h2>
         <form method="POST">
+            <?= csrf_field() ?>
             <input type="hidden" name="product_id" id="form_id" value="">
             <label>Product Name</label>
             <input type="text" name="name" id="form_name" maxlength="50" required>
@@ -353,6 +356,7 @@
             Are you sure you want to permanently delete <strong id="deleteProductName"></strong>? This action cannot be undone.
         </p>
         <form method="POST" id="deleteForm">
+            <?= csrf_field() ?>
             <input type="hidden" name="product_id" id="delete_product_id" value="">
             <div class="dialog-buttons">
                 <button type="button" class="cancel-btn" onclick="closeDeleteModal()">Cancel</button>
@@ -368,6 +372,7 @@
             Upload a CSV to bulk-add or update. Required columns: <code>product_id, name, sku, unit_price, stock_quantity, reorder_level, status</code>.
         </p>
         <form action="/php-web/public/products/import-csv" method="POST" enctype="multipart/form-data">
+            <?= csrf_field() ?>
             <input type="file" name="csv_file" accept=".csv" required style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; margin-bottom:20px;">
             <div style="display: flex; justify-content: flex-end; gap: 10px;">
                 <button type="button" onclick="document.getElementById('importModal').close()" style="padding: 10px 20px; background: #eee; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Cancel</button>

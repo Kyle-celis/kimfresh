@@ -213,7 +213,7 @@
                             <p class="user-name" style="margin: 0;"><?php echo htmlspecialchars($_SESSION['admin_name']); ?></p>
                             <p class="user-role" style="margin: 0;">Administrator</p>
                         </div>
-                        <span style="font-size: 18px; color: #999; margin-left: 5px;">&#8964;</span>
+                        
                     </button>
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
@@ -264,6 +264,7 @@
 
                 <div class="orders-box">
                     <form method="POST" id="bulkForm">
+                        <?= csrf_field() ?>
                         <table class="orders-table">
                             <thead>
                                 <tr>
@@ -503,10 +504,7 @@
         }
 
         // PROFILE & FIND BAR
-        function toggleProfileMenu(event) {
-            event.stopPropagation();
-            document.getElementById('profileDropdown').classList.toggle('show');
-        }
+        
         document.addEventListener('click', function(event) {
             const menu = document.getElementById('profileMenu');
             if (menu && !menu.contains(event.target)) {
@@ -775,7 +773,20 @@ if (unreadCount > lastNotifCount) {
     }
     checkNotifications();
     setInterval(checkNotifications, 15000);
+
+    // --- PROFILE MENU FIX ---
+    function toggleProfileMenu(event) {
+        event.stopPropagation();
+        const dd = document.getElementById('profileDropdown');
+        if (dd) dd.classList.toggle('show');
+    }
+    document.addEventListener('click', function(event) {
+        const menu = document.getElementById('profileMenu');
+        if (menu && !menu.contains(event.target)) {
+            const dd = document.getElementById('profileDropdown');
+            if (dd) dd.classList.remove('show');
+        }
+    });
 </script>
 </body>
 </html>
-

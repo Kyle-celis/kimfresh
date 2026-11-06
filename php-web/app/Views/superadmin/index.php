@@ -127,12 +127,14 @@
                                     <?php if(!$isSuper): ?>
                                         <?php if($isActive): ?>
                                             <form method='POST' style='margin:0;'>
+                                                <?= csrf_field() ?>
                                                 <input type='hidden' name='target_admin' value='<?php echo $row['admin_id']; ?>'>
                                                 <input type='hidden' name='new_status' value='inactive'>
                                                 <button type='submit' name='toggle_status' class='btn-hide'>Deactivate</button>
                                             </form>
                                         <?php else: ?>
                                             <form method='POST' style='margin:0;'>
+                                                <?= csrf_field() ?>
                                                 <input type='hidden' name='target_admin' value='<?php echo $row['admin_id']; ?>'>
                                                 <input type='hidden' name='new_status' value='active'>
                                                 <button type='submit' name='toggle_status' class='btn-restore'>Activate</button>
@@ -175,6 +177,7 @@
     <dialog id="createModal">
         <h2 style="margin-bottom: 15px;">Add New Admin</h2>
         <form method="POST">
+            <?= csrf_field() ?>
             <label>Full Name</label>
             <div class="name-row">
                 <input type="text" name="first_name" placeholder="First Name" required>
@@ -198,6 +201,7 @@
     <dialog id="adminModal">
         <h2 style="margin-bottom: 15px;">Edit Admin</h2>
         <form method="POST">
+            <?= csrf_field() ?>
             <input type="hidden" name="admin_id" id="form_admin_id">
             
             <label>Full Name</label>
@@ -266,6 +270,5 @@
 </script>
 </body>
 </html>
-
 
 

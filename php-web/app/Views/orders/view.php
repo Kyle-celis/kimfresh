@@ -170,10 +170,12 @@
                     <div style="display: flex; gap: 10px;">
                         <?php if ($order['order_status'] === 'pending'): ?>
                             <form method="POST" id="rejectForm" style="margin:0;">
+                                <?= csrf_field() ?>
                                 <input type="hidden" name="reject_order" value="1">
                                 <button type="button" class="btn-reject" onclick="openRejectModal(event)">Reject</button>
                             </form>
                             <form method="POST" style="margin:0;">
+                                <?= csrf_field() ?>
                                 <button type="submit" name="approve_order" class="btn-approve">Approve Order</button>
                             </form>
                         <?php endif; ?>

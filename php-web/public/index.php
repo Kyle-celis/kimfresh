@@ -7,6 +7,7 @@ error_reporting(E_ALL);
 session_start();
 
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../core/Csrf.php';
 require_once __DIR__ . '/../app/helpers/log_helper.php';
 require_once __DIR__ . '/../core/Controller.php';
 require_once __DIR__ . '/../core/Model.php';
@@ -19,39 +20,36 @@ if (strpos($uri, $base) === 0) {
 $uri = '/' . trim($uri, '/');
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Route format: [Controller, method, meta]
+//   meta['auth'] = false         → public route (no login required)
+//   meta['auth'] = true          → login required (DEFAULT if meta missing)
+//   meta['role'] = 'superadmin'  → requires $_SESSION['is_superadmin'] == 1
 $routes = [
     'GET'  => [
-        '/'                    => ['DashboardController', 'index'],
-        '/dashboard'           => ['DashboardController', 'index'],
-        '/login'               => ['AuthController', 'showLogin'],
-        '/logout'              => ['LogoutController', 'index'],
-        '/orders'              => ['OrderController', 'index'],
-        '/orders/view'         => ['ViewOrderController', 'show'],
-        '/orders/cancel'       => ['CancelOrderController', 'index'],
-        '/products'            => ['ProductController', 'index'],
-        '/drivers'              => ['DriverController', 'index'],
-        '/analytics'           => ['AnalyticsController', 'index'],
-        '/settings'            => ['SettingsController', 'index'],
-        '/logs'                => ['LogsController', 'index'],
-        '/products/export-csv'     => ['CsvController', 'exportProducts'],
-        '/superadmin'          => ['SuperAdminController', 'index'],
-        '/track'               => ['TrackingController', 'index'],
-        '/notifications'       => ['NotificationController', 'index'],
-        '/save-location'       => ['SaveLocationController', 'index'],
-        '/save-retailer-location' => ['SaveRetailerLocationController', 'index'],
+        '/'                       => ['DashboardController', 'index'],
+        '/dashboard'              => ['DashboardController', 'index'],
+        '/login'                  => ['AuthController', 'showLogin',         ['auth' => false]],
+        '/logout'                 => ['LogoutController', 'index'],
+        '/orders'                 => ['OrderController', 'index'],
+        '/orders/view'            => ['ViewOrderController', 'show'],
+        '/products'               => ['ProductController', 'index'],
+        '/drivers'                => ['DriverController', 'index'],
+        '/analytics'              => ['AnalyticsController', 'index'],
+        '/settings'               => ['SettingsController', 'index'],
+        '/logs'                   => ['LogsController', 'index'],
+        '/products/export-csv'    => ['CsvController', 'exportProducts'],
+        '/superadmin'             => ['SuperAdminController', 'index',       ['auth' => true, 'role' => 'superadmin']],
+        '/notifications'          => ['NotificationController', 'index'],
     ],
     'POST' => [
-        '/superadmin'              => ['SuperAdminController', 'index'],
-        '/login'                   => ['AuthController', 'login'],
-        '/products'                => ['ProductController', 'index'],
-        '/drivers'              => ['DriverController', 'index'],
-        '/orders/view'             => ['ViewOrderController', 'show'],
-        '/orders'                  => ['OrderController', 'index'],
-        '/settings'                => ['SettingsController', 'index'],
-        '/settings'                => ['SettingsController', 'index'],
-        '/products/import-csv'     => ['CsvController', 'importProducts'],
-        '/orders/cancel'           => ['CancelOrderController', 'index'],
-        '/save-retailer-location'  => ['SaveRetailerLocationController', 'index'],
+        '/superadmin'             => ['SuperAdminController', 'index',       ['auth' => true, 'role' => 'superadmin']],
+        '/login'                  => ['AuthController', 'login',             ['auth' => false]],
+        '/products'               => ['ProductController', 'index'],
+        '/drivers'                => ['DriverController', 'index'],
+        '/orders/view'            => ['ViewOrderController', 'show'],
+        '/orders'                 => ['OrderController', 'index'],
+        '/settings'               => ['SettingsController', 'index'],
+        '/products/import-csv'    => ['CsvController', 'importProducts'],
     ],
 ];
 
@@ -69,6 +67,22 @@ if (!isset($routes[$method][$uri])) {
 }
 
 list($controllerName, $action) = $routes[$method][$uri];
+$meta = $routes[$method][$uri][2] ?? [];
+
+// ---- AUTH GUARD (Patch 2) ----
+$needsAuth = $meta['auth'] ?? true;
+if ($needsAuth && !isset($_SESSION['admin_id'])) {
+    header('Location: /php-web/public/login');
+    exit;
+}
+
+$needsRole = $meta['role'] ?? null;
+if ($needsRole === 'superadmin' && empty($_SESSION['is_superadmin'])) {
+    http_response_code(403);
+    die('403 — Superadmin access required.');
+}
+// ---- END AUTH GUARD ----
+
 $file = __DIR__ . '/../app/Controllers/' . $controllerName . '.php';
 
 if (!file_exists($file)) {
@@ -91,5 +105,3 @@ if (!method_exists($controller, $action)) {
 }
 
 $controller->$action();
-
-

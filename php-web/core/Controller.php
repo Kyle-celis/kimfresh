@@ -1,5 +1,5 @@
 <?php
-// core/Controller.php — strict, framework-free
+// core/Controller.php â€” strict, framework-free
 
 class Controller
 {
@@ -8,6 +8,7 @@ class Controller
     public function __construct($conn)
     {
         $this->conn = $conn;
+        $this->verifyCsrf();
     }
 
     // Render a view from app/Views/
@@ -34,6 +35,18 @@ class Controller
     {
         if (!isset($_SESSION['admin_id'])) {
             $this->redirect('/php-web/public/login');
+        }
+    }
+
+    // Guard: verify CSRF on every state-changing request
+    protected function verifyCsrf(): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+        require_once __DIR__ . '/Csrf.php';
+        $token = $_POST['_csrf'] ?? '';
+        if (!Csrf::verify($token)) {
+            http_response_code(419);
+            die('CSRF token missing or invalid. Go back, refresh the page, and try again.');
         }
     }
 

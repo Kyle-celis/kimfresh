@@ -43,6 +43,7 @@
                     <?php endif; ?>
 
                     <form method="POST" action="/php-web/public/login">
+                        <?= csrf_field() ?>
                         <label for="email">Email</label>
                         <div class="input-box">
                             <input type="email" name="email" placeholder="admin@kimfresh.com" required>
