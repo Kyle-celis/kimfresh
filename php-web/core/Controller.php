@@ -58,4 +58,24 @@ class Controller
         echo json_encode($data);
         exit();
     }
+    // ============================================================
+    // PATCH-3: Flash Messages (One-time session alerts)
+    // ============================================================
+    protected function flash(string $type, string $message): void
+    {
+        $_SESSION['_flash'] = ['type' => $type, 'message' => $message];
+    }
+
+    public static function getFlash(): ?array
+    {
+        if (empty($_SESSION['_flash'])) return null;
+        $f = $_SESSION['_flash'];
+        unset($_SESSION['_flash']);
+        return $f;
+    }
+}
+
+function flash_get(): ?array
+{
+    return Controller::getFlash();
 }

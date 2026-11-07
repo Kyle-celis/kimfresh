@@ -64,6 +64,7 @@
         .status.assigned { color: #1d4ed8; background: #dbeafe; }
         .status.on-delivery { color: #b45309; background: #fef3c7; }
         .status.inactive { color: #666; background: #eee; }
+        .status.offline { color: #991b1b; background: #fee2e2; }
         .driver-contact { font-size: 13px; color: #555; }
         .driver-contact p { margin: 2px 0; }
         .driver-section { border-top: 1px solid #eee; padding-top: 10px; }
@@ -182,6 +183,7 @@
                                 <option value="available"   <?= $filter === 'available'   ? 'selected' : '' ?>>Available</option>
                                 <option value="assigned"    <?= $filter === 'assigned'    ? 'selected' : '' ?>>Assigned</option>
                                 <option value="on_delivery" <?= $filter === 'on_delivery' ? 'selected' : '' ?>>On Delivery</option>
+                                <option value="offline" <?= $filter === 'offline' ? 'selected' : '' ?>>Offline</option>
                                 <option value="inactive"    <?= $filter === 'inactive'    ? 'selected' : '' ?>>Inactive</option>
                             </select>
                         </form>
@@ -197,10 +199,10 @@
 
                             if ($isInactive) {
                                 $statusClass = 'inactive'; $statusLabel = 'Inactive';
+                            } elseif ($row['status'] === 'offline') {              // <--- ADD THIS
+                                $statusClass = 'offline'; $statusLabel = 'Offline (On Break)';  // <--- ADD THIS
                             } elseif ($activeCount === 0) {
                                 $statusClass = 'available'; $statusLabel = 'Available';
-                            } elseif ($deliveryStatus === 'in_transit') {
-                                $statusClass = 'on-delivery'; $statusLabel = 'On Delivery';
                             } else {
                                 $statusClass = 'assigned'; $statusLabel = 'Assigned';
                             }
@@ -394,6 +396,14 @@
         }
         checkNotifications();
         setInterval(checkNotifications, 15000);
-    </script>
+            
+        // --- AUTO REFRESH 15s ---
+        // Pause auto-refresh if a modal is open so the admin doesn't get interrupted
+        let autoRefreshTimer = setInterval(function() {
+            const modal = document.getElementById('historyModal');
+            if (!modal || !modal.classList.contains('open')) {
+                location.reload();
+            }
+        }, 15000);</script>
 </body>
 </html>

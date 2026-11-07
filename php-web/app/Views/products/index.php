@@ -1,3 +1,5 @@
+
+
 <?php /* Products view — variables provided by ProductController::index() */ ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -169,6 +171,7 @@
             </header>
 
             <main class="main-content">
+                <?php require __DIR__ . '/../partials/flash.php'; ?>
                 <?php if (!empty($_GET['import_success'])): ?>
                     <div style="background:#dcfce7;color:#166534;padding:12px;border-radius:8px;margin-bottom:20px;font-weight:bold;border:1px solid #bbf7d0;">
                         Successfully imported/updated <?= (int)$_GET['import_success'] ?> products!
@@ -253,6 +256,7 @@
                             <thead>
                                 <tr>
                                     <th><a href="?sort=<?= $sort === 'name_asc' ? 'name_desc' : 'name_asc' ?>">Product &#8597;</a></th>
+                                    <th>SKU</th>
                                     <th><a href="?sort=<?= $sort === 'price_asc' ? 'price_desc' : 'price_asc' ?>">Price &#8597;</a></th>
                                     <th><a href="?sort=<?= $sort === 'stock_asc' ? 'stock_desc' : 'stock_asc' ?>">Stock &#8597;</a></th>
                                     <th>Reorder Level</th>
@@ -272,8 +276,14 @@
                                     <tr <?= $rowStyle ?>>
                                         <td>
                                             <div class="product-name"><?= htmlspecialchars($row['name']) ?></div>
-                                            <div class="product-sku"><?= htmlspecialchars($row['sku']) ?></div>
+                                            
+                                            <?php if (!empty($row['description'])): ?>
+                                                <div style="font-size: 11px; color: #777; margin-top: 4px; max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= htmlspecialchars($row['description']) ?>">
+                                                    <?= htmlspecialchars($row['description']) ?>
+                                                </div>
+                                            <?php endif; ?>
                                         </td>
+                                        <td style="color: #666; font-size: 12px; font-weight: 600;"><?= htmlspecialchars($row['sku']) ?></td>
                                         <td class="price">&#8369;<?= number_format($row['unit_price'], 2) ?></td>
                                         <td><?= $row['stock_quantity'] ?> <span class="status <?= $stockClass ?>"><?= $stockLabel ?></span></td>
                                         <td><?= $row['reorder_level'] ?></td>
@@ -290,7 +300,7 @@
                                         </td>
                                     </tr>
                                 <?php endwhile; else: ?>
-                                    <tr><td colspan="6" style="text-align:center;">No products found</td></tr>
+                                    <tr><td colspan="7" style="text-align:center;">No products found</td></tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -330,6 +340,10 @@
             <input type="hidden" name="product_id" id="form_id" value="">
             <label>Product Name</label>
             <input type="text" name="name" id="form_name" maxlength="50" required>
+            
+            <label>Description</label>
+<textarea name="description" id="form_description" maxlength="255" rows="2" placeholder="Brief description..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; resize: vertical; font-family: inherit;"></textarea>
+            
             <div class="row">
                 <div>
                     <label>Price (&#8369;)</label>
@@ -369,7 +383,7 @@
     <dialog id="importModal">
         <h2 style="margin-top:0;">Import Products (CSV)</h2>
         <p style="font-size: 13px; color: #555; margin-bottom: 15px;">
-            Upload a CSV to bulk-add or update. Required columns: <code>product_id, name, sku, unit_price, stock_quantity, reorder_level, status</code>.
+            Upload a CSV to bulk-add or update. Required columns: <code>product_id, name, description, sku, unit_price, stock_quantity, reorder_level, status</code>.
         </p>
         <form action="/php-web/public/products/import-csv" method="POST" enctype="multipart/form-data">
             <?= csrf_field() ?>
@@ -400,6 +414,7 @@
                 document.getElementById('modalTitle').textContent = 'Edit Product';
                 document.getElementById('form_id').value = product.product_id;
                 document.getElementById('form_name').value = product.name;
+                document.getElementById('form_description').value = product.description || '';
                 document.getElementById('form_price').value = product.unit_price;
                 document.getElementById('form_reorder').value = product.reorder_level;
                 document.getElementById('form_stock').value = product.stock_quantity;
@@ -407,6 +422,7 @@
                 document.getElementById('modalTitle').textContent = 'Add Product';
                 document.getElementById('form_id').value = '';
                 document.getElementById('form_name').value = '';
+                document.getElementById('form_description').value = '';
                 document.getElementById('form_price').value = '';
                 document.getElementById('form_reorder').value = '';
                 document.getElementById('form_stock').value = '';

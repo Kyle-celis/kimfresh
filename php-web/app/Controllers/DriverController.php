@@ -12,6 +12,10 @@ class DriverController extends Controller
 
     public function index()
     {
+        // Prevent the browser from caching the page so auto-refresh pulls live data
+        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+        header("Pragma: no-cache");
+        header("Expires: 0");
         $this->requireAuth();
         $this->boot();
 
@@ -66,7 +70,7 @@ class DriverController extends Controller
 
         $this->model->setStatus($driver_id, $new_status);
 
-        $action = ($new_status === 'hidden') ? "Deactivated Driver #" : "Activated Driver #";
+        $action = ($new_status === 'hidden') ? "Suspended/Deactivated Driver #" : "Manually Set Available Driver #";
         logActivity($this->conn, $_SESSION['admin_id'], $action . $driver_id);
 
         if ($new_status === 'available') { assignWaitingOrders($this->conn); }

@@ -1,4 +1,4 @@
-<?php /* Orders view - vars from OrderController::index() */ ?>
+﻿<?php /* Orders view - vars from OrderController::index() */ ?>
 <!DOCTYPE html>
 <html>
 <head>
@@ -264,6 +264,7 @@
 
                 <div class="orders-box">
                     <form method="POST" id="bulkForm">
+                            <?= csrf_field() ?>
                         <?= csrf_field() ?>
                         <table class="orders-table">
                             <thead>
@@ -477,28 +478,41 @@
             const isApprove = action === 'approve';
             openConfirmModal(
                 isApprove ? "Approve Orders" : "Reject Orders",
-                `Are you sure you want to ${action} these ${count} orders?`,
+                "Are you sure you want to " + action + " these " + count + " orders?",
                 isApprove ? "Approve Selected" : "Reject Selected",
                 isApprove ? "#15803d" : "#dc2626",
-                function() { bulkActionInput.value = action; bulkForm.submit(); }
+                function() {
+                    document.getElementById('bulkActionInput').value = action;
+                    document.getElementById('bulkForm').submit();
+                }
             );
         }
+
 
         function submitSingle(action, orderId) {
             const isApprove = action === 'approve';
             openConfirmModal(
                 isApprove ? "Approve Order" : "Reject Order",
-                `Are you sure you want to ${action} Order #${orderId}?`,
+                "Are you sure you want to " + action + " Order #" + orderId + "?",
                 isApprove ? "Approve" : "Reject",
                 isApprove ? "#15803d" : "#dc2626",
                 function() {
-                    const form = document.createElement('form');
-                    form.method = 'POST'; form.style.display = 'none';
+                    // Use the existing form that already has the CSRF token
+                    const form = document.getElementById('bulkForm');
+                    
                     const actionInput = document.createElement('input');
-                    actionInput.type = 'hidden'; actionInput.name = action + '_order'; form.appendChild(actionInput);
+                    actionInput.type = 'hidden'; 
+                    actionInput.name = action + '_order'; 
+                    actionInput.value = '1';
+                    form.appendChild(actionInput);
+                    
                     const idInput = document.createElement('input');
-                    idInput.type = 'hidden'; idInput.name = 'order_id'; idInput.value = orderId; form.appendChild(idInput);
-                    document.body.appendChild(form); form.submit();
+                    idInput.type = 'hidden'; 
+                    idInput.name = 'order_id'; 
+                    idInput.value = orderId; 
+                    form.appendChild(idInput);
+                    
+                    form.submit();
                 }
             );
         }
@@ -516,16 +530,10 @@
             if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
                 e.preventDefault(); 
                 const findBar = document.getElementById('customFindBar');
-                findBar.style.display = 'flex'; 
-
-        
-
-        
+                if (findBar) findBar.style.display = 'flex'; 
+            }
         });
 
-               // =========================================
-        // REAL-TIME NOTIFICATIONS & DROPDOWN (MARK AS READ)
-        // =========================================
     let lastNotifCount = 0;
     // NEW: Built-in browser beep synthesizer
 function playBeep() {
@@ -702,91 +710,6 @@ if (unreadCount > lastNotifCount) {
     });
 </script>
 <!-- NOTIFICATIONS SCRIPT -->
-<script>
-    let lastNotifCount = 0;
-    function playBeep() {
-        try {
-            let context = new (window.AudioContext || window.webkitAudioContext)();
-            let osc = context.createOscillator();
-            osc.type = 'sine';
-            osc.frequency.value = 800;
-            osc.connect(context.destination);
-            osc.start();
-            osc.stop(context.currentTime + 0.15);
-        } catch (e) {}
-    }
-    function toggleNotifications(event) {
-        event.stopPropagation();
-        document.getElementById('notifDropdown').classList.toggle('show');
-    }
-    document.addEventListener('click', function(event) {
-        const container = document.getElementById('notifContainer');
-        const dropdown = document.getElementById('notifDropdown');
-        if (container && !container.contains(event.target)) {
-            if(dropdown) dropdown.classList.remove('show');
-        }
-    });
-    function checkNotifications() {
-        fetch('/php-web/public/notifications', { credentials: 'same-origin' })
-            .then(response => response.json())
-            .then(data => {
-                const badge = document.getElementById('notif-badge');
-                const list = document.getElementById('notifList');
-                if (badge && list) {
-                    let readIds = JSON.parse(localStorage.getItem('readNotifIds') || '[]');
-                    let unreadCount = 0;
-                    data.orders.forEach(item => {
-                        const itemId = item.type === 'order' ? 'order-' + item.order_id : 'log-' + item.log_id;
-                        if (!readIds.includes(itemId)) unreadCount++;
-                    });
-                    if (unreadCount > 0) {
-                        badge.style.display = 'flex';
-                        badge.textContent = unreadCount;
-                        if (unreadCount > lastNotifCount) playBeep();
-                    } else {
-                        badge.style.display = 'none';
-                    }
-                    lastNotifCount = unreadCount;
-                    list.innerHTML = '';
-                    data.orders.forEach(item => {
-                        const date = new Date(item.type === 'order' ? item.order_date : item.timestamp);
-                        const timeAgo = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                        const itemId = item.type === 'order' ? 'order-' + item.order_id : 'log-' + item.log_id;
-                        const isRead = readIds.includes(itemId);
-                        const readStyle = isRead ? 'opacity: 0.6;' : '';
-                        if (item.type === 'order') {
-                            list.innerHTML += `<a href="/php-web/public/orders/view?id=${item.order_id}" class="notif-item" style="${readStyle}" data-notif-id="${itemId}" onclick="markAsRead('${itemId}')"><div class="notif-icon">#${item.order_id}</div><div class="notif-content"><p><strong>${item.retailer_name}</strong> placed a new order.</p><span class="notif-time">${timeAgo} &middot; &#8369;${Number(item.total_amount).toFixed(2)}</span></div></a>`;
-                        } else {
-                            list.innerHTML += `<a href="/php-web/public/drivers?search=${encodeURIComponent(item.driver_name)}" class="notif-item" style="${readStyle}" data-notif-id="${itemId}" onclick="markAsRead('${itemId}')"><div class="notif-icon" style="background: #15803d; border-radius: 50%;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div class="notif-content"><p>${item.action}</p><span class="notif-time">${timeAgo} &middot; Click to view driver</span></div></a>`;
-                        }
-                    });
-                }
-            })
-            .catch(err => console.error('Error fetching notifications:', err));
-    }
-    function markAsRead(itemId) {
-        let readIds = JSON.parse(localStorage.getItem('readNotifIds') || '[]');
-        if (!readIds.includes(itemId)) {
-            readIds.push(itemId);
-            localStorage.setItem('readNotifIds', JSON.stringify(readIds));
-        }
-    }
-    checkNotifications();
-    setInterval(checkNotifications, 15000);
 
-    // --- PROFILE MENU FIX ---
-    function toggleProfileMenu(event) {
-        event.stopPropagation();
-        const dd = document.getElementById('profileDropdown');
-        if (dd) dd.classList.toggle('show');
-    }
-    document.addEventListener('click', function(event) {
-        const menu = document.getElementById('profileMenu');
-        if (menu && !menu.contains(event.target)) {
-            const dd = document.getElementById('profileDropdown');
-            if (dd) dd.classList.remove('show');
-        }
-    });
-</script>
 </body>
 </html>

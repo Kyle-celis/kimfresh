@@ -1,5 +1,5 @@
-﻿<?php
-// app/Controllers/ProductController.php — strict MVC Controller
+<?php
+// app/Controllers/ProductController.php Ã¢â‚¬â€ strict MVC Controller
 class ProductController extends Controller
 {
     private $productModel;
@@ -55,8 +55,7 @@ class ProductController extends Controller
         $total_pages = (int)ceil($total_rows / $limit);
         $products = $this->productModel->getAll($orderBy, $limit, $offset);
 
-        $error_msg = $_SESSION['product_error'] ?? '';
-        unset($_SESSION['product_error']);
+        
 
         $this->view('products/index', [
             'store'             => $store,
@@ -68,7 +67,7 @@ class ProductController extends Controller
             'sort'              => $sort,
             'page'              => $page,
             'total_pages'       => $total_pages,
-            'error_msg'         => $error_msg,
+            
         ]);
     }
 
@@ -103,25 +102,28 @@ class ProductController extends Controller
     private function handleSave()
     {
         $product_id = $_POST['product_id'] ?? '';
-        $name    = $_POST['name'];
-        $sku     = $_POST['sku'] ?? '';
+        $name        = $_POST['name'];
+        $description = trim($_POST['description'] ?? '');
+        $sku         = $_POST['sku'] ?? '';
         $price   = $_POST['unit_price'];
         $stock   = $_POST['stock_quantity'];
         $reorder = $_POST['reorder_level'];
 
         if ($price < 0 || $stock < 0 || $reorder < 0) {
-            $_SESSION['product_error'] = "Error: Price, Stock, and Reorder level cannot be negative!";
+            $this->flash('error', "Error: Price, Stock, and Reorder level cannot be negative!");
             $this->redirect('/php-web/public/products');
         }
 
         if (empty($product_id)) {
             $sku = $this->productModel->nextSku();
-            $newId = $this->productModel->create($name, $sku, $price, $stock, $reorder);
+            $newId = $this->productModel->create($name, $description, $sku, $price, $stock, $reorder);
             logActivity($this->conn, $_SESSION['admin_id'], "Added new product: " . $name);
+            $this->flash('success', "Product successfully added.");
             $_SESSION['highlight_products'] = [$newId];
         } else {
-            $this->productModel->update($product_id, $name, $sku, $price, $stock, $reorder);
+            $this->productModel->update($product_id, $name, $description, $sku, $price, $stock, $reorder);
             logActivity($this->conn, $_SESSION['admin_id'], "Updated product: " . $name);
+            $this->flash('success', "Product successfully updated.");
             $_SESSION['highlight_products'] = [$product_id];
         }
         $this->redirect('/php-web/public/products');
@@ -133,12 +135,17 @@ class ProductController extends Controller
         $product = $this->productModel->findById($product_id);
         $this->productModel->delete($product_id);
         logActivity($this->conn, $_SESSION['admin_id'], "Permanently Deleted Product: " . ($product['name'] ?? 'Unknown'));
+        $this->flash('success', "Product successfully deleted.");
         $this->redirect('/php-web/public/products');
     }
 
-    private function handlePdfExport()
+            private function handlePdfExport()
     {
         logActivity($this->conn, $_SESSION['admin_id'], "Exported Products to PDF");
+
+        // Clear buffers
+        if (ob_get_length()) ob_end_clean();
+        ob_start();
 
         require_once __DIR__ . '/../../lib/fpdf/fpdf.php';
         require_once __DIR__ . '/../helpers/KimFreshPdf.php';
@@ -149,7 +156,7 @@ class ProductController extends Controller
         $pdf->SetFont('Arial', '', 10);
         $pdf->SetTextColor(0, 0, 0);
 
-        // Header row
+        // Header
         $pdf->SetFont('Arial', 'B', 10);
         $pdf->SetFillColor(195, 66, 0);
         $pdf->SetTextColor(255, 255, 255);
@@ -160,20 +167,32 @@ class ProductController extends Controller
         $pdf->Cell(25, 8, 'Reorder',      1, 0, 'C', true);
         $pdf->Cell(25, 8, 'Status',       1, 1, 'C', true);
 
-        // Data rows
-        $pdf->SetFont('Arial', '', 10);
+        // Data
+        $pdf->SetFont('Arial', '', 9);
         $pdf->SetTextColor(0, 0, 0);
         $rows = $this->productModel->getAllForPdf();
+        
         while ($row = $rows->fetch_assoc()) {
-            $pdf->Cell(60, 8, htmlspecialchars($row['name']), 1, 0, 'L');
-            $pdf->Cell(30, 8, htmlspecialchars($row['sku']),  1, 0, 'C');
-            $pdf->Cell(30, 8, 'PHP ' . number_format($row['unit_price'], 2), 1, 0, 'R');
-            $pdf->Cell(20, 8, $row['stock_quantity'], 1, 0, 'C');
-            $pdf->Cell(25, 8, $row['reorder_level'], 1, 0, 'C');
-            $pdf->Cell(25, 8, strtoupper($row['status']), 1, 1, 'C');
+            $pdf->Cell(60, 8, substr(htmlspecialchars($row['name'] ?? ''), 0, 35), 1, 0, 'L');
+            $pdf->Cell(30, 8, htmlspecialchars($row['sku'] ?? ''),  1, 0, 'C');
+            $pdf->Cell(30, 8, 'PHP ' . number_format($row['unit_price'] ?? 0, 2), 1, 0, 'R');
+            $pdf->Cell(20, 8, $row['stock_quantity'] ?? 0, 1, 0, 'C');
+            $pdf->Cell(25, 8, $row['reorder_level'] ?? 0, 1, 0, 'C');
+            $pdf->Cell(25, 8, strtoupper($row['status'] ?? 'available'), 1, 1, 'C');
         }
 
-        $pdf->Output('D', 'KimFresh_Products.pdf');
-        exit();
+        // Capture output as a string to prevent corruption
+        $pdfData = $pdf->Output('S', 'KimFresh_Products.pdf');
+        ob_end_clean();
+
+        // Send headers and raw data
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="KimFresh_Products.pdf"');
+        header('Content-Length: ' . strlen($pdfData));
+        header('Cache-Control: private, max-age=0, must-revalidate');
+        header('Pragma: public');
+        
+        echo $pdfData;
+        exit;
     }
 }

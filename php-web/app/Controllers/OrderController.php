@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Controllers/OrderController.php — strict MVC Controller
 class OrderController extends Controller
 {
@@ -99,23 +99,23 @@ class OrderController extends Controller
         $order_id = (int)$_POST['order_id'];
 
         if ($this->model->approveOrder($order_id)) {
-            autoAssignDriver($this->conn, $order_id);
-            assignWaitingOrders($this->conn);
             logActivity($this->conn, $_SESSION['admin_id'], "Approved Order #$order_id");
-            $this->redirect("/php-web/public/orders/view?id=$order_id");
+            $this->flash('success', "Order #$order_id approved successfully.");
+            $this->redirect("/php-web/public/orders");
+        } else {
+            logActivity($this->conn, $_SESSION['admin_id'], "Approve FAILED Order #$order_id");
+            $this->redirect("/php-web/public/orders?error=stock");
         }
-
-        logActivity($this->conn, $_SESSION['admin_id'], "Approve FAILED Order #$order_id");
-        $this->redirect("/php-web/public/orders/view?id=$order_id&error=stock");
     }
 
     private function handleReject()
     {
         $order_id = (int)$_POST['order_id'];
-        if ($this->model->rejectOrder($order_id)) {
-            logActivity($this->conn, $_SESSION['admin_id'], "Rejected Order #$order_id");
-        }
-        $this->redirect("/php-web/public/orders/view?id=$order_id");
+        $this->model->rejectOrder($order_id);
+        logActivity($this->conn, $_SESSION['admin_id'], "Rejected Order #$order_id");
+
+        $this->flash('success', "Order #$order_id rejected.");
+        $this->redirect("/php-web/public/orders");
     }
 
     private function handlePdfExport()

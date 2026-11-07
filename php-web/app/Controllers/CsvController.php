@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Controllers/CsvController.php — strict MVC Controller for CSV import/export
 class CsvController extends Controller
 {
@@ -15,7 +15,7 @@ class CsvController extends Controller
         header('Content-Disposition: attachment; filename=KimFresh_Products_' . date('Y-m-d') . '.csv');
 
         $output = fopen('php://output', 'w');
-        fputcsv($output, ['product_id', 'name', 'sku', 'unit_price', 'stock_quantity', 'reorder_level', 'status']);
+        fputcsv($output, ['product_id', 'name', 'description', 'sku', 'unit_price', 'stock_quantity', 'reorder_level', 'status']);
 
         $rows = $model->getAllForExport();
         while ($row = $rows->fetch_assoc()) {
@@ -54,10 +54,10 @@ class CsvController extends Controller
             $next_id = ($max_res['max_id'] ?? 0) + 1;
 
             $stmt = $this->conn->prepare("
-                INSERT INTO product (product_id, name, sku, unit_price, stock_quantity, reorder_level, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO product (product_id, name, description, sku, unit_price, stock_quantity, reorder_level, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
-                name=VALUES(name), sku=VALUES(sku), unit_price=VALUES(unit_price),
+                name=VALUES(name), description=VALUES(description), sku=VALUES(sku), unit_price=VALUES(unit_price),
                 stock_quantity=VALUES(stock_quantity), reorder_level=VALUES(reorder_level), status=VALUES(status)
             ");
 
@@ -71,6 +71,7 @@ class CsvController extends Controller
                 $name       = $row['name'] ?? '';
                 if (trim($name) === '') continue;
 
+                $description = $row['description'] ?? '';
                 $price   = isset($row['unit_price'])   ? (float)$row['unit_price']   : 0.00;
                 $stock   = isset($row['stock_quantity'])? (int)$row['stock_quantity']: 0;
                 $reorder = isset($row['reorder_level']) ? (int)$row['reorder_level'] : 5;

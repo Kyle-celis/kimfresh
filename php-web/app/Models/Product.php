@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Models/Product.php — strict MVC Model
 class Product extends Model
 {
@@ -23,7 +23,7 @@ class Product extends Model
 
     public function getAllForPdf()
     {
-        return $this->conn->query("SELECT * FROM product ORDER BY product_id ASC");
+        return $this->conn->query("SELECT product_id, name, sku, unit_price, stock_quantity, reorder_level, status FROM product ORDER BY product_id ASC");
     }
 
     public function findById($id)
@@ -34,18 +34,18 @@ class Product extends Model
         return $stmt->get_result()->fetch_assoc();
     }
 
-    public function create($name, $sku, $price, $stock, $reorder)
+    public function create($name, $description, $sku, $price, $stock, $reorder)
     {
-        $stmt = $this->conn->prepare("INSERT INTO product (name, sku, unit_price, stock_quantity, reorder_level, status) VALUES (?, ?, ?, ?, ?, 'available')");
-        $stmt->bind_param("ssdii", $name, $sku, $price, $stock, $reorder);
+        $stmt = $this->conn->prepare("INSERT INTO product (name, description, sku, unit_price, stock_quantity, reorder_level, status) VALUES (?, ?, ?, ?, ?, ?, 'available')");
+        $stmt->bind_param("sssdii", $name, $description, $sku, $price, $stock, $reorder);
         $stmt->execute();
         return $this->conn->insert_id;
     }
 
-    public function update($id, $name, $sku, $price, $stock, $reorder)
+    public function update($id, $name, $description, $sku, $price, $stock, $reorder)
     {
-        $stmt = $this->conn->prepare("UPDATE product SET name=?, sku=?, unit_price=?, stock_quantity=?, reorder_level=? WHERE product_id=?");
-        $stmt->bind_param("ssdiii", $name, $sku, $price, $stock, $reorder, $id);
+        $stmt = $this->conn->prepare("UPDATE product SET name=?, description=?, sku=?, unit_price=?, stock_quantity=?, reorder_level=? WHERE product_id=?");
+        $stmt->bind_param("sssdiii", $name, $description, $sku, $price, $stock, $reorder, $id);
         $stmt->execute();
         return $stmt->affected_rows;
     }
@@ -71,6 +71,6 @@ class Product extends Model
 
         public function getAllForExport()
     {
-        return $this->conn->query("SELECT product_id, name, sku, unit_price, stock_quantity, reorder_level, status FROM product ORDER BY product_id ASC");
+        return $this->conn->query("SELECT product_id, name, description, sku, unit_price, stock_quantity, reorder_level, status FROM product ORDER BY product_id ASC");
     }
 }
