@@ -27,6 +27,7 @@
         .status { padding: 4px 12px; font-size: 11px; font-weight: 700; border-radius: 20px; }
         .status.in-stock, .status.available { color: #15803d; background: #dcfce7; }
         .status.low-stock { color: #b45309; background: #fef3c7; }
+        .status.expired { color: #991b1b; background: #fee2e2; border: 1px solid #f87171; }
         .actions { display: flex; gap: 8px; }
         .btn-edit { padding: 7px 16px; font-size: 12px; font-weight: 700; color: #333; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
         .btn-edit:hover { background: #f8f9fa; }
@@ -208,7 +209,11 @@
                                 <button type="button" class="action-menu-item" onclick="document.getElementById('importModal').showModal(); document.getElementById('actionMenuDropdown').classList.remove('show');">Import CSV</button>
                             </div>
                         </div>
-                        <button class="primary-btn" onclick="openProductModal()">+ Add Product</button>
+                        <?php if ($is_store_open): ?>
+    <button class="primary-btn" style="opacity: 0.5; cursor: not-allowed;" disabled title="Close the store first to add products.">+ Add Product</button>
+<?php else: ?>
+    <button class="primary-btn" onclick="openProductModal()">+ Add Product</button>
+<?php endif; ?>
                     </div>
                 </div>
 
@@ -277,20 +282,52 @@
                                         <td>
                                             <div class="product-name"><?= htmlspecialchars($row['name']) ?></div>
                                             
+                                            <?php 
+                                                if (!empty($row['expiry_date'])) {
+                                                    $expiry = new DateTime($row['expiry_date']);
+                                                    $today = new DateTime(date('Y-m-d'));
+                                                    $daysLeft = $today->diff($expiry)->format('%r%a');
+                                                    
+                                                    if ($daysLeft < 0) {
+                                                        $expiryColor = '#dc2626'; // Red
+                                                        $expiryText = "EXPIRED (" . abs($daysLeft) . " days ago)";
+                                                    } elseif ($daysLeft <= 3) {
+                                                        $expiryColor = '#b45309'; // Orange
+                                                        $expiryText = "Expires " . $expiry->format('M d, Y') . " (" . $daysLeft . " days left)";
+                                                    } else {
+                                                        $expiryColor = '#15803d'; // Green
+                                                        $expiryText = "Expires " . $expiry->format('M d, Y') . " (" . $daysLeft . " days left)";
+                                                    }
+                                                    echo "<div style='font-size: 11px; font-weight: bold; color: $expiryColor; margin-top: 4px;'>$expiryText</div>";
+                                                }
+                                            ?>
+
                                             <?php if (!empty($row['description'])): ?>
                                                 <div style="font-size: 11px; color: #777; margin-top: 4px; max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= htmlspecialchars($row['description']) ?>">
                                                     <?= htmlspecialchars($row['description']) ?>
                                                 </div>
                                             <?php endif; ?>
                                         </td>
+                                        
+                                        <!-- THE MISSING COLUMNS -->
                                         <td style="color: #666; font-size: 12px; font-weight: 600;"><?= htmlspecialchars($row['sku']) ?></td>
                                         <td class="price">&#8369;<?= number_format($row['unit_price'], 2) ?></td>
                                         <td><?= $row['stock_quantity'] ?> <span class="status <?= $stockClass ?>"><?= $stockLabel ?></span></td>
                                         <td><?= $row['reorder_level'] ?></td>
-                                        <td><span class="status available">Available</span></td>
+                                        <td>
+    <?php if ($row['status'] === 'expired' || (isset($daysLeft) && $daysLeft < 0)): ?>
+        <span class="status expired">EXPIRED</span>
+    <?php else: ?>
+        <span class="status available">Available</span>
+    <?php endif; ?>
+</td>
                                         <td class="actions-cell">
                                             <div class="actions">
-                                                <button class="btn-edit" onclick='openProductModal(<?= json_encode($row) ?>)'>Edit</button>
+<?php if ($is_store_open): ?>
+    <button class="btn-edit" style="opacity: 0.5; cursor: not-allowed;" disabled title="Close the store first to edit products.">Edit</button>
+<?php else: ?>
+    <button class="btn-edit" onclick='openProductModal(<?= json_encode($row) ?>)'>Edit</button>
+<?php endif; ?>
                                                 <?php if ($is_store_open): ?>
                                                     <button class="btn-delete" style="opacity: 0.5; cursor: not-allowed;" disabled title="Close the store first to delete products.">Delete</button>
                                                 <?php else: ?>
@@ -340,6 +377,8 @@
             <input type="hidden" name="product_id" id="form_id" value="">
             <label>Product Name</label>
             <input type="text" name="name" id="form_name" maxlength="50" required>
+            <label style="margin-top: 15px;">Shelf Life (Days)</label>
+            <input type="number" min="1" name="shelf_life_days" id="form_shelf_life" value="30" required>
             
             <label>Description</label>
 <textarea name="description" id="form_description" maxlength="255" rows="2" placeholder="Brief description..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; resize: vertical; font-family: inherit;"></textarea>
@@ -418,6 +457,7 @@
                 document.getElementById('form_price').value = product.unit_price;
                 document.getElementById('form_reorder').value = product.reorder_level;
                 document.getElementById('form_stock').value = product.stock_quantity;
+                document.getElementById('form_shelf_life').value = product.shelf_life_days || 30;
             } else {
                 document.getElementById('modalTitle').textContent = 'Add Product';
                 document.getElementById('form_id').value = '';
@@ -426,6 +466,7 @@
                 document.getElementById('form_price').value = '';
                 document.getElementById('form_reorder').value = '';
                 document.getElementById('form_stock').value = '';
+                document.getElementById('form_shelf_life').value = 30;
             }
             modal.showModal();
         }
@@ -544,6 +585,32 @@
     }
     checkNotifications();
     setInterval(checkNotifications, 15000);
+</script>
+
+
+<script>
+    // AUTO REFRESH 15s
+    // Pause auto-refresh if the user is currently typing in a modal, 
+    // or if the store is open (to avoid clearing the "success" banners while they work).
+    let autoRefreshTimer = setInterval(function() {
+        // Don't refresh if a modal is open
+        const productModal = document.getElementById('productModal');
+        const deleteModal = document.getElementById('deleteModal');
+        const importModal = document.getElementById('importModal');
+        
+        if (productModal.open || deleteModal.open || importModal.open) {
+            return; 
+        }
+        
+        // Don't refresh if the store is open (prevents interrupting the admin's view)
+        const isStoreOpen = <?= json_encode($is_store_open) ?>;
+        if (isStoreOpen) {
+            return;
+        }
+
+        // Otherwise, silently reload the page
+        location.reload();
+    }, 15000);
 </script>
 </body>
 </html>

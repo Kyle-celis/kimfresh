@@ -11,6 +11,9 @@ class ProductController extends Controller
         require_once __DIR__ . '/../Models/Store.php';
         $this->productModel = new Product($this->conn);
         $this->storeModel   = new Store($this->conn);
+        
+        // AUTO-EXPIRE LOCK: Mark any product past its expiry date as expired
+        $this->conn->query("UPDATE product SET status = 'expired' WHERE expiry_date < CURDATE() AND status != 'expired'");
     }
 
     public function index()
@@ -105,9 +108,17 @@ class ProductController extends Controller
         $name        = $_POST['name'];
         $description = trim($_POST['description'] ?? '');
         $sku         = $_POST['sku'] ?? '';
-        $price   = $_POST['unit_price'];
-        $stock   = $_POST['stock_quantity'];
-        $reorder = $_POST['reorder_level'];
+        $price       = $_POST['unit_price'];
+        $stock       = $_POST['stock_quantity'];
+        $reorder     = $_POST['reorder_level']; // <-- ADDED BACK
+        $shelf_life  = (int)($_POST['shelf_life_days'] ?? 30); // <-- ADDED BACK
+
+        // Prevent adding or editing while the store is open
+        $store = $this->storeModel->get();
+        if ($this->computeStoreOpen($store)) {
+            $this->flash('error', 'You cannot modify products while the store is open. Please deactivate the store first.');
+            $this->redirect('/php-web/public/products');
+        }
 
         if ($price < 0 || $stock < 0 || $reorder < 0) {
             $this->flash('error', "Error: Price, Stock, and Reorder level cannot be negative!");
@@ -116,12 +127,12 @@ class ProductController extends Controller
 
         if (empty($product_id)) {
             $sku = $this->productModel->nextSku();
-            $newId = $this->productModel->create($name, $description, $sku, $price, $stock, $reorder);
+            $newId = $this->productModel->create($name, $description, $sku, $price, $stock, $reorder, $shelf_life);
             logActivity($this->conn, $_SESSION['admin_id'], "Added new product: " . $name);
             $this->flash('success', "Product successfully added.");
             $_SESSION['highlight_products'] = [$newId];
         } else {
-            $this->productModel->update($product_id, $name, $description, $sku, $price, $stock, $reorder);
+            $this->productModel->update($product_id, $name, $description, $sku, $price, $stock, $reorder, $shelf_life);
             logActivity($this->conn, $_SESSION['admin_id'], "Updated product: " . $name);
             $this->flash('success', "Product successfully updated.");
             $_SESSION['highlight_products'] = [$product_id];

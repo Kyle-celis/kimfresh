@@ -175,8 +175,24 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
     if (p == null || _isOutOfStock(p)) return;
 
+    // Check if expired
+    final expiryStr = p['expiry_date'];
+    if (expiryStr != null) {
+      final expiry = DateTime.tryParse(expiryStr.toString());
+      if (expiry != null && expiry.difference(DateTime.now()).inDays < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: _T.error,
+            content: const Text('This product is expired and cannot be ordered.', style: TextStyle(color: Colors.white)),
+          ),
+        );
+        return;
+      }
+    }
+
     final stock = _getStock(p);
     final current = cart[id] ?? 0;
+
     if (stock != null && current >= stock) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -300,92 +316,136 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _T.bg,
-      appBar: AppBar(
-        backgroundColor: _T.bg,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Products', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-            Text('KimFresh · ${widget.retailerName}', style: const TextStyle(fontSize: 12, color: _T.muted)),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.receipt_long_outlined),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => OrdersScreen(retailerId: widget.retailerId),
-            )),
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_outline_rounded),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => ProfileScreen(
-                retailerId: widget.retailerId,
-                retailerName: widget.retailerName,
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: _T.bg,
+          appBar: AppBar(
+            backgroundColor: _T.bg,
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Products', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                Text('KimFresh · ${widget.retailerName}', style: const TextStyle(fontSize: 12, color: _T.muted)),
+              ],
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.receipt_long_outlined),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => OrdersScreen(retailerId: widget.retailerId),
+                )),
               ),
-            )),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            height: _showBanner ? null : 0,
-            child: _showBanner
-                ? Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: _bannerColor,
-              child: Row(
-                children: [
-                  Icon(_bannerIcon, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _storeWarning,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
+              IconButton(
+                icon: const Icon(Icons.person_outline_rounded),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => ProfileScreen(
+                    retailerId: widget.retailerId,
+                    retailerName: widget.retailerName,
                   ),
-                  GestureDetector(
-                    onTap: () => setState(() => _showBanner = false),
-                    child: const Icon(Icons.close, color: Colors.white, size: 18),
-                  )
-                ],
+                )),
               ),
-            )
-                : const SizedBox.shrink(),
+            ],
           ),
+          body: Column(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                height: _showBanner ? null : 0,
+                child: _showBanner
+                    ? Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  color: _bannerColor,
+                  child: Row(
+                    children: [
+                      Icon(_bannerIcon, color: Colors.white, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _storeWarning,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() => _showBanner = false),
+                        child: const Icon(Icons.close, color: Colors.white, size: 18),
+                      )
+                    ],
+                  ),
+                )
+                    : const SizedBox.shrink(),
+              ),
 
-          if (!_showBanner && _storeWarning.isNotEmpty)
-            Container(height: 3, color: _bannerColor),
+              if (!_showBanner && _storeWarning.isNotEmpty)
+                Container(height: 3, color: _bannerColor),
 
-          _searchBar(),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: _T.brand))
-                : products.isEmpty
-                ? _emptyProducts()
-                : RefreshIndicator(
-              color: _T.brand,
-              onRefresh: loadProducts,
-              child: _productList(),
+              _searchBar(),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator(color: _T.brand))
+                    : products.isEmpty
+                    ? _emptyProducts()
+                    : RefreshIndicator(
+                  color: _T.brand,
+                  onRefresh: loadProducts,
+                  child: _productList(),
+                ),
+              ),
+            ],
+          ),
+          bottomNavigationBar: cart.isNotEmpty
+              ? _CartBar(
+            count: _cartCount,
+            total: _cartTotal,
+            placing: _placing,
+            onReview: _confirmOrder,
+            onClear: _clearCart,
+          )
+              : null,
+        ),
+
+        // --- LOADING OVERLAY ---
+        if (_placing)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.6),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: _T.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      )
+                    ],
+                  ),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: _T.brand),
+                      SizedBox(height: 20),
+                      Text(
+                        'Placing Order...',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _T.text),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Please wait while we process your order.',
+                        style: TextStyle(fontSize: 12, color: _T.muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-        ],
-      ),
-      bottomNavigationBar: cart.isNotEmpty
-          ? _CartBar(
-        count: _cartCount,
-        total: _cartTotal,
-        placing: _placing,
-        onReview: _confirmOrder,
-        onClear: _clearCart,
-      )
-          : null,
+      ],
     );
   }
 
@@ -458,6 +518,38 @@ class _ProductCard extends StatelessWidget {
     required this.onSetQuantity,
   });
 
+
+
+  // This is what we will add inside _ProductCard
+  Widget _buildExpiryBadge() {
+    final expiryStr = product['expiry_date'];
+    if (expiryStr == null) return const SizedBox.shrink();
+
+    final expiry = DateTime.tryParse(expiryStr.toString());
+    if (expiry == null) return const SizedBox.shrink();
+
+    final daysLeft = expiry.difference(DateTime.now()).inDays;
+
+    if (daysLeft < 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(4)),
+        child: const Text('EXPIRED', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+      );
+    } else if (daysLeft <= 3) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
+        child: Text('Eat Soon! ($daysLeft days left)', style: TextStyle(color: Colors.orange.shade900, fontSize: 10, fontWeight: FontWeight.bold)),
+      );
+    } else {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)),
+        child: Text('Fresh Batch', style: TextStyle(color: Colors.green.shade800, fontSize: 10, fontWeight: FontWeight.bold)),
+      );
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final id = int.tryParse(product['product_id'].toString()) ?? 0;
@@ -489,7 +581,19 @@ class _ProductCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(product['name'] ?? 'Unnamed', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        product['name'] ?? 'Unnamed',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildExpiryBadge(),
+                  ],
+                ),
                 Text('SKU: ${product['sku'] ?? '-'}', style: const TextStyle(fontSize: 12, color: _T.muted)),
                 const SizedBox(height: 4),
                 Row(
@@ -666,7 +770,13 @@ class _CartBar extends StatelessWidget {
             ElevatedButton(
               onPressed: placing ? null : onReview,
               style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: _T.brand),
-              child: const Text('Review'),
+              child: placing
+                  ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: _T.brand),
+              )
+                  : const Text('Review'),
             ),
           ],
         ),

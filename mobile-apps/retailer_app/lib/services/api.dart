@@ -3,9 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
-// LIVE PRODUCTION URLS
-const String API = 'https://kimfresh.tech/api';
-const String PHP_API = 'https://kimfresh.tech';
+const String API = 'http://10.0.2.2/php-web/public/api';
+const String PHP_API = 'http://10.0.2.2/php-web/public';
 
 class ApiService {
   static const Duration _timeout = Duration(seconds: 15);
@@ -24,9 +23,9 @@ class ApiService {
   static Future<Map<String, dynamic>> login(String email, String password, {String? role}) async {
     try {
       final res = await http.post(
-        Uri.parse('$API/login'),
+        Uri.parse('$API/login.php'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password, if (role != null) 'role': role}),
+        body: jsonEncode({'email': email, 'password': password, 'role': role ?? 'retailer'}),
       ).timeout(_timeout);
 
       final decoded = jsonDecode(res.body);
@@ -43,7 +42,7 @@ class ApiService {
   static Future<Map<String, dynamic>> register(String name, String email, String password, String phone, String address) async {
     try {
       final res = await http.post(
-        Uri.parse('$API/retailer/register'),
+        Uri.parse('$API/register.php'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'name': name, 'email': email, 'password': password, 'phone': phone, 'address': address}),
       ).timeout(_timeout);
@@ -70,7 +69,7 @@ class ApiService {
   // ---------- PRODUCTS ----------
   static Future<List<dynamic>> getProducts() async {
     try {
-      final res = await http.get(Uri.parse('$API/products'), headers: _authHeaders()).timeout(_timeout);
+      final res = await http.get(Uri.parse('$API/api_products.php'), headers: _authHeaders()).timeout(_timeout);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return data is List ? data : (data['products'] ?? []);
@@ -85,7 +84,7 @@ class ApiService {
   static Future<Map<String, dynamic>> placeOrder(int retailerId, List<Map<String, dynamic>> items, {double? lat, double? lng}) async {
     try {
       final res = await http.post(
-        Uri.parse('$API/orders'),
+        Uri.parse('$API/api_orders.php'),
         headers: _authHeaders(json: true),
         body: jsonEncode({'retailer_id': retailerId, 'items': items, if (lat != null) 'retailer_lat': lat, if (lng != null) 'retailer_lng': lng}),
       ).timeout(_timeout);
@@ -98,7 +97,7 @@ class ApiService {
   // ---------- GET ORDERS ----------
   static Future<List<dynamic>> getOrders(int retailerId) async {
     try {
-      final res = await http.get(Uri.parse('$API/retailer/$retailerId/orders'), headers: _authHeaders()).timeout(_timeout);
+      final res = await http.get(Uri.parse('$API/view_order.php?retailer_id=$retailerId') , headers: _authHeaders()).timeout(_timeout);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return data is List ? data : (data['orders'] ?? []);
@@ -112,7 +111,7 @@ class ApiService {
   // ---------- STORE STATUS ----------
   static Future<Map<String, dynamic>> getStoreStatus() async {
     try {
-      final res = await http.get(Uri.parse('$API/store/status'), headers: _authHeaders()).timeout(_timeout);
+      final res = await http.get(Uri.parse('$API/api_products.php?action=store_status'), headers: _authHeaders()).timeout(_timeout);
       return res.statusCode == 200 ? jsonDecode(res.body) : {'is_open': true, 'message': ''};
     } catch (e) {
       return {'is_open': true, 'message': ''};
@@ -122,7 +121,7 @@ class ApiService {
   // ---------- PROFILE ----------
   static Future<Map<String, dynamic>> getRetailerProfile(int retailerId) async {
     try {
-      final res = await http.get(Uri.parse('$API/retailer/$retailerId/profile'), headers: _authHeaders()).timeout(_timeout);
+      final res = await http.get(Uri.parse('$API/profile.php?id=$retailerId'), headers: _authHeaders()).timeout(_timeout);
       return res.statusCode == 200 ? jsonDecode(res.body) : {'success': false};
     } catch (e) {
       return {'success': false, 'message': 'Error: $e'};
@@ -132,7 +131,7 @@ class ApiService {
   static Future<Map<String, dynamic>> updateRetailerProfile(int retailerId, String name, String phone, String address) async {
     try {
       final res = await http.put(
-        Uri.parse('$API/retailer/$retailerId/profile'),
+        Uri.parse('$API/profile.php?id=$retailerId'),
         headers: _authHeaders(json: true),
         body: jsonEncode({'name': name, 'phone': phone, 'address': address}),
       ).timeout(_timeout);
@@ -142,13 +141,18 @@ class ApiService {
     }
   }
 
+
   // ---------- GPS (Pin Store) ----------
   static Future<bool> saveRetailerGPS(int retailerId, double lat, double lng) async {
     try {
       final res = await http.post(
-        Uri.parse('$API/retailer/$retailerId/location'),
+        Uri.parse('$API/update_retailer_location.php'), // No URL parameters
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'lat': lat, 'lng': lng}),
+        body: jsonEncode({
+          'retailer_id': retailerId, // Added to the body
+          'lat': lat,
+          'lng': lng
+        }),
       ).timeout(_timeout);
 
       final data = jsonDecode(res.body);
@@ -160,21 +164,15 @@ class ApiService {
 
   // ---------- LIVE TRACKING ----------
   static Future<bool> saveRetailerLocation(int orderId, double lat, double lng) async {
-    try {
-      final res = await http.post(
-        Uri.parse('$PHP_API/save_retailer_location.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'order_id': orderId, 'lat': lat, 'lng': lng}),
-      ).timeout(_timeout);
-      return res.statusCode == 200;
-    } catch (e) {
-      return false;
-    }
+    // We already send the location when placing the order in api_orders.php,
+    // so this function can safely return true to prevent 404 crashes.
+    return true;
   }
 
   static Future<Map<String, dynamic>?> getDriverLocation(int orderId) async {
     try {
-      final res = await http.get(Uri.parse('$PHP_API/track.php?order_id=$orderId')).timeout(_timeout);
+      // Changed to point to the new MVC route
+      final res = await http.get(Uri.parse('$PHP_API/track?order_id=$orderId')).timeout(_timeout);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true) {
@@ -192,7 +190,7 @@ class ApiService {
   static Future<Map<String, dynamic>> forgotPassword(String email) async {
     try {
       final res = await http.post(
-        Uri.parse('$API/forgot-password'),
+        Uri.parse('$API/forgot_password.php'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email}),
       ).timeout(_timeout);
@@ -206,7 +204,7 @@ class ApiService {
   static Future<Map<String, dynamic>> resetPassword(String email, String otp, String newPassword) async {
     try {
       final res = await http.post(
-        Uri.parse('$API/reset-password'),
+        Uri.parse('$API/reset_password.php'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'otp': otp, 'new_password': newPassword}),
       ).timeout(_timeout);

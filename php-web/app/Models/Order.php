@@ -18,11 +18,11 @@ class Order extends Model
             $items->execute();
             $res = $items->get_result();
 
-            $upd = $this->conn->prepare("UPDATE product SET stock_quantity = stock_quantity - ? WHERE product_id = ? AND stock_quantity >= ?");
+            $upd = $this->conn->prepare("UPDATE product SET stock_quantity = stock_quantity - ? WHERE product_id = ? AND stock_quantity >= ? AND status != 'expired'");
             while ($it = $res->fetch_assoc()) {
                 $upd->bind_param("iii", $it['quantity'], $it['product_id'], $it['quantity']);
                 $upd->execute();
-                if ($upd->affected_rows === 0) throw new Exception("Insufficient stock");
+                if ($upd->affected_rows === 0) throw new Exception("Insufficient stock or product is expired.");
             }
 
             $stmt = $this->conn->prepare("UPDATE `order` SET order_status = 'approved' WHERE order_id = ?");
