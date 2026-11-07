@@ -3,9 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-// LOCAL XAMPP URLS
-const String API = 'http://10.0.2.2/php-web/api';
-const String PHP_API = 'http://10.0.2.2/php-web';
+const String API = 'http://10.0.2.2/php-web/public/api';
+const String PHP_API = 'http://10.0.2.2/php-web/public';
 
 class ApiService {
   static const Duration _timeout = Duration(seconds: 15);
@@ -167,6 +166,29 @@ class ApiService {
     } catch (e) {
       debugPrint("🔍 DELIVERIES ERROR: $e");
       return [];
+    }
+  }
+
+
+  // ---------- UPDATE DRIVER STATUS (ONLINE/OFFLINE) ----------
+  static Future<Map<String, dynamic>> updateDriverStatus(
+      int driverId,
+      String status,
+      ) async {
+    try {
+      final res = await http
+          .post(
+        Uri.parse('$API/driver_status.php'),
+        headers: _authHeaders(),
+        body: jsonEncode({
+          'driver_id': driverId,
+          'status': status, // 'available' or 'offline'
+        }),
+      )
+          .timeout(_timeout);
+      return _safeJson(res);
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
     }
   }
 

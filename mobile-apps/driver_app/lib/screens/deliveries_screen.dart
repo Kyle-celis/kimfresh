@@ -27,9 +27,166 @@ class DeliveriesScreen extends StatefulWidget {
   State<DeliveriesScreen> createState() => _DeliveriesScreenState();
 }
 
+class SlideToActionButton extends StatefulWidget {
+  final String label;
+  final Color color;
+  final VoidCallback onConfirmed;
+
+  const SlideToActionButton({
+    super.key,
+    required this.label,
+    required this.color,
+    required this.onConfirmed,
+  });
+
+  @override
+  State<SlideToActionButton> createState() => _SlideToActionButtonState();
+}
+
+class _SlideToActionButtonState extends State<SlideToActionButton> {
+  double _dragValue = 0.0;
+  final double _thumbSize = 48.0;
+  final double _padding = 4.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        final dragWidth = maxWidth - _thumbSize - (_padding * 2);
+
+        return Container(
+          height: _thumbSize + (_padding * 2),
+          decoration: BoxDecoration(
+            color: widget.color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(_thumbSize),
+            border: Border.all(color: widget.color.withOpacity(0.3)),
+          ),
+          child: Stack(
+            children: [
+              // The Text Label
+              Center(
+                child: AnimatedOpacity(
+                  opacity: _dragValue > 0.1 ? 0.0 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.keyboard_double_arrow_right_rounded, color: widget.color, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          color: widget.color,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // The Draggable Thumb
+              Positioned(
+                left: _padding + (_dragValue * dragWidth),
+                top: _padding,
+                child: GestureDetector(
+                  onHorizontalDragUpdate: (details) {
+                    setState(() {
+                      _dragValue += details.primaryDelta! / dragWidth;
+                      _dragValue = _dragValue.clamp(0.0, 1.0);
+                    });
+                  },
+                  onHorizontalDragEnd: (details) {
+                    if (_dragValue > 0.85) {
+                      // Success! Trigger the action
+                      _dragValue = 1.0;
+                      widget.onConfirmed();
+                      // Reset after a tiny delay
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        if (mounted) setState(() => _dragValue = 0.0);
+                      });
+                    } else {
+                      // Snap back if they didn't slide far enough
+                      setState(() => _dragValue = 0.0);
+                    }
+                  },
+                  child: Container(
+                    width: _thumbSize,
+                    height: _thumbSize,
+                    decoration: BoxDecoration(
+                      color: widget.color,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: widget.color.withOpacity(0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.power_settings_new,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _DeliveriesScreenState extends State<DeliveriesScreen> {
   List<dynamic> deliveries = [];
   int? currentDeliveryId;
+
+  bool _isOnline = false;
+  bool _isUpdatingStatus = false;
+
+
+  Future<void> _toggleOnlineStatus() async {
+    if (_isUpdatingStatus) return;
+
+    final goingOnline = !_isOnline;
+    final newStatus = goingOnline ? 'available' : 'offline';
+
+    setState(() => _isUpdatingStatus = true);
+
+    final res = await ApiService.updateDriverStatus(widget.driverId, newStatus);
+
+    if (!mounted) return;
+
+    if (res['success'] == true) {
+      setState(() {
+        _isOnline = goingOnline;
+        _isUpdatingStatus = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isOnline ? 'You are now ONLINE' : 'You are now OFFLINE'),
+          backgroundColor: _isOnline ? AppColors.success : AppColors.textSecondary,
+        ),
+      );
+
+      if (_isOnline) loadDeliveries();
+    } else {
+      setState(() => _isUpdatingStatus = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message']?.toString() ?? 'Failed to update status'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    }
+  }
 
   final BleService ble = BleService();
   String bleStatus = 'Not connected';
@@ -62,11 +219,20 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    // 1. Force the driver offline on app startup to sync the database with the UI
+    await ApiService.updateDriverStatus(widget.driverId, 'offline');
+
+    // 2. Then initialize the rest of the services
     ForegroundService.init();
     _initQueues();
     _requestPermissions();
     loadDeliveries();
     initBle();
+
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted && !_isFetchingDeliveries) loadDeliveries();
       _gpsQueue.flush();
@@ -669,6 +835,82 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
                     ],
                   ),
                 ),
+
+              // ── ONLINE / OFFLINE TOGGLE ──
+              // ── ONLINE / OFFLINE TOGGLE ──
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _isOnline ? AppColors.success.withOpacity(0.1) : AppColors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _isOnline ? AppColors.success : AppColors.border,
+                    width: 2,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: _isOnline ? AppColors.success : AppColors.textSecondary,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              if (_isOnline)
+                                BoxShadow(
+                                  color: AppColors.success.withOpacity(0.5),
+                                  blurRadius: 8,
+                                  spreadRadius: 2,
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _isOnline ? 'You are Online' : 'You are Offline',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: _isOnline ? AppColors.success : AppColors.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                _isOnline
+                                    ? 'Ready to receive delivery orders'
+                                    : 'Go online to receive orders',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // The Slide Button
+                    if (_isUpdatingStatus)
+                      const Center(child: CircularProgressIndicator())
+                    else
+                      SlideToActionButton(
+                        label: _isOnline ? 'Slide to Go Offline' : 'Slide to Go Online',
+                        color: _isOnline ? AppColors.danger : AppColors.success,
+                        onConfirmed: _toggleOnlineStatus,
+                      ),
+                  ],
+                ),
+              ),
+
               _buildMonitorCard(),
               deliveries.isEmpty
                   ? Container(

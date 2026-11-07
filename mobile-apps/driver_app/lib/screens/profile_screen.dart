@@ -357,7 +357,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _infoRow(
             icon: Icons.verified_user_outlined,
             label: 'Account status',
-            value: profile?['status'],
+            value: profile?['account_status'] ?? 'approved',
+            isPill: true,
+          ),
+          _divider(),
+          _infoRow(
+            icon: Icons.work_outline_rounded,
+            label: 'Working status',
+            value: profile?['status'] ?? 'offline',
             isPill: true,
           ),
         ],
@@ -433,7 +440,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     switch (value) {
       case 'active':
       case 'approved':
+      case 'available': // <-- Add this
         color = AppColors.success;
+        break;
+      case 'offline': // <-- Add this
+        color = AppColors.textSecondary;
         break;
       case 'pending':
         color = AppColors.warning;
