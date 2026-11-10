@@ -1,3 +1,5 @@
+![CI](https://github.com/Kyle-celis/kimfresh/actions/workflows/ci.yml/badge.svg)
+
 # KimFresh: IoT-Based Kimchi Management System
 
 An integrated web and mobile-based system for managing kimchi distribution in Bacolod City.
