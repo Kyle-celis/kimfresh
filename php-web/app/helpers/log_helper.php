@@ -16,4 +16,3 @@ function logActivity($conn, $admin_id, $action) {
         error_log("logActivity failed: " . $e->getMessage());
     }
 }
-<?php broken ?>
