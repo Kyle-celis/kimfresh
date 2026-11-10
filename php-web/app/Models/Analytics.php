@@ -5,7 +5,7 @@ class Analytics extends Model
     public function getTopProducts($limit = 5)
     {
         return $this->conn->query("
-            SELECT p.name, SUM(oi.quantity) as total_sold, SUM(oi.subtotal) as total_revenue
+            SELECT p.name, SUM(oi.quantity) as total_sold, SUM(oi.quantity * oi.unit_price) as total_revenue
             FROM order_item oi
             JOIN product p ON oi.product_id = p.product_id
             JOIN `order` o ON oi.order_id = o.order_id

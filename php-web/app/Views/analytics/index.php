@@ -202,7 +202,7 @@
                                     echo "<td><strong>#" . $rank++ . "</strong></td>";
                                     echo "<td>" . htmlspecialchars($row['name']) . "</td>";
                                     echo "<td>" . $row['total_sold'] . " units</td>";
-                                    echo "<td>₱" . number_format($row['total_revenue'], 2) . "</td>";
+                                    echo "<td>₱" . number_format((float)($row['total_revenue'] ?? 0), 2) . "</td>";
                                     echo "</tr>";
                                 }
                             } else {
