@@ -82,54 +82,58 @@ class _OrderTrackingMapScreenState extends State<OrderTrackingMapScreen> {
     if (_isFetching) return;
     _isFetching = true;
 
-    final loc = await ApiService.getDriverLocation(widget.orderId);
+    try {
+      final loc = await ApiService.getDriverLocation(widget.orderId);
 
-    if (!mounted) {
-      _isFetching = false;
-      return;
-    }
+      if (!mounted) {
+        _isFetching = false;
+        return;
+      }
 
-    setState(() {
-      if (loc != null) {
-        final dLat = loc['driver_lat'] as double?;
-        final dLng = loc['driver_lng'] as double?;
+      setState(() {
+        if (loc != null) {
+          final dLat = loc['driver_lat'] as double?;
+          final dLng = loc['driver_lng'] as double?;
 
-        if (dLat != null && dLng != null) {
-          _driverLocation = LatLng(dLat, dLng);
-          _hasDriver = true;
+          if (dLat != null && dLng != null) {
+            _driverLocation = LatLng(dLat, dLng);
+            _hasDriver = true;
 
-          // Fetch the road route if we have both driver and destination
-          if (_dest != null) {
-            _fetchRoadRoute(_driverLocation!, _dest!);
+            if (_dest != null) {
+              _fetchRoadRoute(_driverLocation!, _dest!);
+            }
           }
+
+          final rLat = loc['retailer_lat'] as double?;
+          final rLng = loc['retailer_lng'] as double?;
+          if (rLat != null && rLng != null) {
+            _dest = LatLng(rLat, rLng);
+          }
+
+          _hasError = false;
         }
 
-        final rLat = loc['retailer_lat'] as double?;
-        final rLng = loc['retailer_lng'] as double?;
-        if (rLat != null && rLng != null) {
-          _dest = LatLng(rLat, rLng);
+        // Show the map as soon as we know where the retailer is
+        if (_dest != null) {
+          _isLoading = false;
         }
-
-        _hasError = false;
-      } else if (!_hasDriver) {
-        _hasError = false;
-      }
-
-      if (_dest != null || _hasDriver) {
-        _isLoading = false;
-      }
-    });
-
-    if (_hasDriver && !_autoFitDone) {
-      _autoFitDone = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _fitCameraToMarkers();
       });
+
+      if (_hasDriver && !_autoFitDone) {
+        _autoFitDone = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _fitCameraToMarkers();
+        });
+      }
+    } catch (e) {
+      debugPrint('Fetch driver location error: $e');
+      if (mounted) {
+        setState(() => _hasError = true);
+      }
+    } finally {
+      _isFetching = false; // ALWAYS reset the flag, even on error
     }
-
-    _isFetching = false;
   }
-
   // ── FETCH REAL ROAD ROUTE ──
   Future<void> _fetchRoadRoute(LatLng driver, LatLng store) async {
     try {

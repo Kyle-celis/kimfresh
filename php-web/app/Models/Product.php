@@ -36,7 +36,8 @@ class Product extends Model
 
     public function create($name, $description, $sku, $price, $stock, $reorder, $shelf_life = 30)
     {
-        $stmt = $this->conn->prepare("INSERT INTO product (name, description, sku, unit_price, stock_quantity, reorder_level, shelf_life_days, expiry_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(CURDATE(), INTERVAL ? DAY), 'available')");
+        $stmt = $this->conn->prepare("INSERT INTO product (name, description, sku, unit_price, stock_quantity, reorder_level, shelf_life_days, 
+        expiry_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(CURDATE(), INTERVAL ? DAY), 'available')");
         $stmt->bind_param("sssdiisii", $name, $description, $sku, $price, $stock, $reorder, $shelf_life, $shelf_life);
         $stmt->execute();
         return $this->conn->insert_id;
@@ -44,7 +45,8 @@ class Product extends Model
 
     public function update($id, $name, $description, $sku, $price, $stock, $reorder, $shelf_life = 30)
     {
-        $stmt = $this->conn->prepare("UPDATE product SET name=?, description=?, sku=?, unit_price=?, stock_quantity=?, reorder_level=?, shelf_life_days=?, expiry_date=DATE_ADD(CURDATE(), INTERVAL ? DAY) WHERE product_id=?");
+        $stmt = $this->conn->prepare("UPDATE product SET name=?, description=?, sku=?, unit_price=?, stock_quantity=?, reorder_level=?, 
+        shelf_life_days=?, expiry_date=DATE_ADD(CURDATE(), INTERVAL ? DAY) WHERE product_id=?");
         $stmt->bind_param("sssdiisii", $name, $description, $sku, $price, $stock, $reorder, $shelf_life, $shelf_life, $id);
         $stmt->execute();
         return $stmt->affected_rows;

@@ -34,6 +34,14 @@
         .btn-reject { background: #dc2626; color: white; padding: 10px 20px; font-size: 13px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
         .btn-reject:hover { background: #b91c1c; }
 
+
+                /* Status Pill Colors for View Order Page */
+        .status-pill.pending { color: #b45309; background: #fef3c7; }
+        .status-pill.approved { color: #15803d; background: #dcfce7; }
+        .status-pill.delivered { color: #1d4ed8; background: #dbeafe; }
+        .status-pill.rejected, .status-pill.cancelled { color: #991b1b; background: #fee2e2; }
+        .status-pill.waiting_for_pickup, .status-pill.in_transit { color: #c2410c; background: #ffedd5; }
+        
         /* =========================================
            NOTIFICATION DROPDOWN (LIGHT THEME)
            ========================================= */
@@ -141,7 +149,6 @@
                             <p class="user-name" style="margin: 0;"><?php echo htmlspecialchars($_SESSION['admin_name']); ?></p>
                             <p class="user-role" style="margin: 0;">Administrator</p>
                         </div>
-                        <span style="font-size: 18px; color: #999; margin-left: 5px;">⌄</span>
                     </button>
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
@@ -228,7 +235,8 @@
                                         echo "<td style='padding: 10px; border-bottom: 1px solid #eee;'>" . htmlspecialchars($item['product_name']) . "</td>";
                                         echo "<td style='padding: 10px; border-bottom: 1px solid #eee;'>" . $item['quantity'] . "</td>";
                                         echo "<td style='padding: 10px; border-bottom: 1px solid #eee;'>₱" . number_format($item['unit_price'], 2) . "</td>";
-                                        echo "<td style='padding: 10px; border-bottom: 1px solid #eee;'>₱" . number_format($item['subtotal'], 2) . "</td>";
+                                        $subtotal = $item['quantity'] * $item['unit_price'];
+echo "<td style='padding: 10px; border-bottom: 1px solid #eee;'>₱" . number_format($subtotal, 2) . "</td>";
                                         echo "</tr>";
                                     }
                                 } else {

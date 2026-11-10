@@ -68,12 +68,27 @@ class DriverController extends Controller
         $driver_id  = (int)$_POST['driver_id'];
         $new_status = $_POST['new_status'];
 
+        // Check if driver has an active delivery before hiding them
+        if ($new_status === 'hidden') {
+            $activeQuery = $this->conn->query("SELECT COUNT(*) AS c FROM delivery WHERE driver_id = $driver_id AND delivery_status IN ('assigned', 'picked_up', 'in_transit')");
+            if ((int)$activeQuery->fetch_assoc()['c'] > 0) {
+                // We will use a URL parameter to show an error message
+                $this->redirect('/php-web/public/drivers?error=active_order');
+                return;
+            }
+        }
+
         $this->model->setStatus($driver_id, $new_status);
 
-        $action = ($new_status === 'hidden') ? "Suspended/Deactivated Driver #" : "Manually Set Available Driver #";
-        logActivity($this->conn, $_SESSION['admin_id'], $action . $driver_id);
+        if ($new_status === 'hidden') {
+            logActivity($this->conn, $_SESSION['admin_id'], "Deactivated Driver #$driver_id");
+        } elseif ($new_status === 'available') {
+            logActivity($this->conn, $_SESSION['admin_id'], "Manually forced Driver #$driver_id to Available");
+            assignWaitingOrders($this->conn);
+        } else {
+            logActivity($this->conn, $_SESSION['admin_id'], "Activated Driver #$driver_id (Set to Offline)");
+        }
 
-        if ($new_status === 'available') { assignWaitingOrders($this->conn); }
         $this->redirect('/php-web/public/drivers');
     }
 

@@ -18,7 +18,8 @@ class Order extends Model
             $items->execute();
             $res = $items->get_result();
 
-            $upd = $this->conn->prepare("UPDATE product SET stock_quantity = stock_quantity - ? WHERE product_id = ? AND stock_quantity >= ? AND status != 'expired'");
+            $upd = $this->conn->prepare("UPDATE product SET stock_quantity = stock_quantity - ? WHERE product_id = ? AND
+             stock_quantity >= ? AND status != 'expired'");
             while ($it = $res->fetch_assoc()) {
                 $upd->bind_param("iii", $it['quantity'], $it['product_id'], $it['quantity']);
                 $upd->execute();

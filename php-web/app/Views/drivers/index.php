@@ -12,9 +12,9 @@
     <style>
         /* --- LAYOUT & HEADER --- */
         body { margin: 0 !important; padding: 0 !important; background: #f4f7f6; }
-        .dashboard-layout { display: flex !important; min-height: 100vh !important; width: 100% !important; overflow-x: hidden; }
-        .sidebar { width: 260px !important; flex-shrink: 0 !important; background: #C34200 !important; min-height: 100vh !important; position: sticky !important; top: 0 !important; }
-        .main-area { flex: 1 !important; display: flex !important; flex-direction: column !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; }
+        .dashboard-layout { display: flex !important; height: 100vh !important; width: 100% !important; overflow: hidden; }
+        .sidebar { width: 260px !important; flex-shrink: 0 !important; background: #C34200 !important; height: 100vh !important; position: sticky !important; top: 0 !important; overflow-y: auto; }
+        .main-area { flex: 1 !important; display: flex !important; flex-direction: column !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; height: 100vh !important; overflow-y: auto !important; }
         .top-header { width: 100% !important; background: #ffffff !important; padding: 15px 40px !important; border-bottom: 1px solid #eaeaea !important; display: flex !important; justify-content: flex-end !important; align-items: center !important; box-sizing: border-box !important; position: sticky; top: 0; z-index: 999; margin: 0 !important; border-radius: 0 !important; box-shadow: none !important;}
         .main-content { padding: 30px 40px !important; flex-grow: 1 !important; margin: 0 !important; max-width: none !important; }
 
@@ -161,6 +161,11 @@
             </header>
 
             <main class="main-content">
+                <?php if (isset($_GET['error']) && $_GET['error'] === 'active_order'): ?>
+                    <div style="background:#fee2e2;color:#991b1b;padding:12px;border-radius:8px;margin-bottom:20px;font-weight:bold;border:1px solid #f87171;">
+                        Error: This driver is currently on an active delivery. You cannot deactivate them until the order is completed or rejected.
+                    </div>
+                <?php endif; ?>
                 <div class="page-head" style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
                     <div>
                         <p class="overview-label" style="color:#C34200; font-weight:bold; font-size:12px; margin:0 0 5px 0;">Manage</p>
@@ -231,16 +236,16 @@
 
                             <div class="driver-actions no-print" style="display:flex; flex-direction:column; gap:8px;">
                                 <?php if ($activeCount === 0 && !$isInactive && $unassigned->num_rows > 0): ?>
-                                    <form method="POST" class="assign-form">
+                                    <form method="POST" class="assign-form" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px;">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="driver_id" value="<?= $driverId ?>">
-                                        <select name="order_id" required>
+                                        <select name="order_id" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; outline: none; font-size: 13px;">
                                             <option value="">Assign an order...</option>
                                             <?php $unassigned->data_seek(0); while ($uo = $unassigned->fetch_assoc()): ?>
                                                 <option value="<?= $uo['order_id'] ?>">#<?= $uo['order_id'] ?> - <?= htmlspecialchars($uo['retailer_name']) ?></option>
                                             <?php endwhile; ?>
                                         </select>
-                                        <button type="submit" name="assign_order" style="background:#C34200; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Assign</button>
+                                        <button type="submit" name="assign_order" style="background:#C34200; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; padding: 10px; width: 100%;">Assign Order</button>
                                     </form>
                                 <?php endif; ?>
 
@@ -250,7 +255,7 @@
                                     <form method="POST" style="margin:0;">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="driver_id" value="<?= $driverId ?>">
-                                        <input type="hidden" name="new_status" value="available">
+                                        <input type="hidden" name="new_status" value="offline">  <!-- CHANGED HERE -->
                                         <button type="submit" name="toggle_status" class="btn-activate">Activate</button>
                                     </form>
                                 <?php else: ?>

@@ -4,6 +4,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/api.dart';
 import '../services/ble_service.dart';
+import 'package:geolocator/geolocator.dart';
 import '../services/foreground_service.dart';
 import '../services/retry_queue.dart';
 import '../theme/app_theme.dart';
@@ -146,6 +147,7 @@ class _SlideToActionButtonState extends State<SlideToActionButton> {
 class _DeliveriesScreenState extends State<DeliveriesScreen> {
   List<dynamic> deliveries = [];
   int? currentDeliveryId;
+  Timer? _directGpsTimer;
 
   bool _isOnline = false;
   bool _isUpdatingStatus = false;
@@ -233,10 +235,26 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     loadDeliveries();
     initBle();
 
+
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted && !_isFetchingDeliveries) loadDeliveries();
       _gpsQueue.flush();
       _sensorQueue.flush();
+    });
+
+    _directGpsTimer?.cancel();
+    _directGpsTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      if (_gpsOrderId == null) return;
+
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        debugPrint('📡 DIRECT GPS: ${pos.latitude}, ${pos.longitude} for order $_gpsOrderId');
+        await ApiService.saveDriverLocation(_gpsOrderId!, pos.latitude, pos.longitude);
+      } catch (e) {
+        debugPrint('📡 DIRECT GPS error: $e');
+      }
     });
 
     _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
@@ -347,6 +365,7 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     }
 
     if (active == null) {
+      _directGpsTimer?.cancel();
       _stopGpsUpdates();
       return;
     }
@@ -354,6 +373,10 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     final orderId = _parseInt(active['order_id']);
     if (orderId != null) {
       _startGpsUpdates(orderId);
+
+      if (_directGpsTimer == null || !_directGpsTimer!.isActive) {
+        debugPrint('📡 Starting background GPS timer for order $orderId');
+      }
     }
   }
 
@@ -530,9 +553,16 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
         return null;
       }
 
+      // Find active order FIRST
+      final active = findActive(activeData);
+
+      if (active != null) {
+        _gpsOrderId = _parseInt(active['order_id']);
+        debugPrint('📍 GPS Order ID set to: $_gpsOrderId');
+      }
+
       if (_previousDeliveries.isEmpty) {
         _previousDeliveries = List.from(activeData);
-        final active = findActive(activeData);
         setState(() {
           deliveries = activeData;
           currentDeliveryId = active != null ? _parseInt(active['delivery_id']) : null;
@@ -553,7 +583,6 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
       }
 
       _previousDeliveries = List.from(activeData);
-      final active = findActive(activeData);
       setState(() {
         deliveries = activeData;
         currentDeliveryId = active != null ? _parseInt(active['delivery_id']) : null;
@@ -597,19 +626,37 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     if (!mounted) return;
 
     if (result['success'] == true) {
-      if (orderId != null) {
-        if (status == 'picked_up' || status == 'in_transit') {
+      if (status == 'picked_up' || status == 'in_transit') {
+        if (orderId != null) {
           _startGpsUpdates(orderId);
-        } else if (status == 'delivered' || status == 'rejected') {
-          _stopGpsUpdates();
-          ForegroundService.stop();
         }
+
+        _directGpsTimer?.cancel();
+        _directGpsTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+          try {
+            final pos = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high,
+            );
+            debugPrint('📡 DIRECT GPS: ${pos.latitude}, ${pos.longitude} for order $orderId');
+            if (orderId != null) {
+              await ApiService.saveDriverLocation(orderId, pos.latitude, pos.longitude);
+            }
+          } catch (e) {
+            debugPrint('📡 DIRECT GPS error: $e');
+          }
+        });
+
+      } else if (status == 'delivered' || status == 'rejected') {
+        _directGpsTimer?.cancel();
+        _stopGpsUpdates();
+        ForegroundService.stop();
       }
+
       messenger.showSnackBar(
         SnackBar(content: Text('Updated to ${_label(status)}')),
       );
       await loadDeliveries();
-    } else {
+    }else {
       messenger.showSnackBar(
         SnackBar(
           content: Text(result['message']?.toString() ?? 'Update failed'),

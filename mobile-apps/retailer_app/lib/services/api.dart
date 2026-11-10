@@ -217,11 +217,11 @@ class ApiService {
   // ---------- CANCEL ORDER ----------
   static Future<Map<String, dynamic>> cancelOrder(int orderId) async {
     try {
-      final res = await http.put(
-        Uri.parse('$API/orders/$orderId/cancel'),
+      final res = await http.post(
+        Uri.parse('$API/cancel_order.php'),
         headers: _authHeaders(json: true),
+        body: jsonEncode({'order_id': orderId}),
       ).timeout(_timeout);
-
       return jsonDecode(res.body);
     } catch (e) {
       return {'success': false, 'message': 'Error: $e'};

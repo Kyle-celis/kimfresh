@@ -241,19 +241,13 @@ class ApiService {
   }
 
   // ---------- GPS: SAVE DRIVER LOCATION ----------
-  static Future<bool> saveDriverLocation(
-    int orderId,
-    double lat,
-    double lng,
-  ) async {
+  static Future<bool> saveDriverLocation(int orderId, double lat, double lng) async {
     try {
-      final res = await http
-          .post(
-            Uri.parse('$PHP_API/save_location.php'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'order_id': orderId, 'lat': lat, 'lng': lng}),
-          )
-          .timeout(_timeout);
+      final res = await http.post(
+        Uri.parse('$PHP_API/save_driver_location.php'), // <-- NEW URL
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'order_id': orderId, 'lat': lat, 'lng': lng}),
+      ).timeout(_timeout);
       if (res.statusCode < 200 || res.statusCode >= 300) return false;
       final decoded = _safeJson(res);
       return decoded['success'] == true;
@@ -369,7 +363,7 @@ class ApiService {
     try {
       final res = await http
           .get(
-            Uri.parse('$PHP_API/track.php?order_id=$orderId'),
+        Uri.parse('$PHP_API/track?order_id=$orderId'),
             headers: _authHeaders(),
           )
           .timeout(_timeout);

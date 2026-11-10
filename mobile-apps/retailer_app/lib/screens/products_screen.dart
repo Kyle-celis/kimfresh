@@ -48,8 +48,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
   String _query = '';
 
   String _storeWarning = '';
+  String _openTime = '';
+  String _closeTime = '';
   String _statusType = 'normal';
   bool _showBanner = false;
+  bool? _lastStoreOpenStatus;
+  bool _hasShownStartupPopup = false;
   Timer? _statusTimer;
   Timer? _bannerTimer;
 
@@ -59,7 +63,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     loadProducts();
     _checkStoreStatus();
 
-    _statusTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _statusTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       _checkStoreStatus();
     });
   }
@@ -92,12 +96,59 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Future<void> _checkStoreStatus() async {
-    final status = await ApiService.getStoreStatus();
+    final status = await ApiService.getStoreStatus(); // <-- Added missing line
     if (!mounted) return;
 
-    final newType = status['is_open'] == false ? 'closed' : (status['status_type'] ?? 'normal');
+    setState(() {
+      _openTime = status['open_time'] ?? '';
+      _closeTime = status['close_time'] ?? '';
+    });
+
+    // Bulletproof boolean check
+    final isOpen = status['is_open'] == true || status['is_open'] == 1 || status['is_open'] == 'true';
+    final newType = isOpen ? 'normal' : 'closed';
     final newMessage = status['message'] ?? '';
 
+    // 1. HANDLE THE STARTUP POP-UP (Only shows once per app session)
+    if (!_hasShownStartupPopup) {
+      _hasShownStartupPopup = true; // Mark as shown
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(
+                isOpen ? Icons.storefront_rounded : Icons.lock_outline_rounded,
+                color: isOpen ? _T.success : _T.error,
+                size: 28,
+              ),
+              const SizedBox(width: 10),
+              Text(isOpen ? 'Store is Open!' : 'Store is Closed'),
+            ],
+          ),
+          content: Text(
+            isOpen
+                ? 'Welcome back! The market is open. You can start adding items to your cart.'
+                : 'Welcome back! The market is currently closed. You cannot place orders right now.',
+            style: const TextStyle(fontSize: 14, height: 1.4),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isOpen ? _T.success : _T.error,
+              ),
+              child: const Text('Okay', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 2. Handle the Top Banner logic
     if (newMessage.isNotEmpty && newMessage != _storeWarning) {
       setState(() {
         _statusType = newType;
@@ -116,7 +167,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
       });
     }
   }
-
   Color get _bannerColor {
     if (_statusType == 'closed') return _T.error;
     if (_statusType == 'normal') return _T.success;
@@ -452,13 +502,38 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Widget _searchBar() {
     return Padding(
       padding: const EdgeInsets.all(_T.sMd),
-      child: TextField(
-        onChanged: (v) => setState(() => _query = v),
-        decoration: InputDecoration(
-          hintText: 'Search products',
-          prefixIcon: const Icon(Icons.search_rounded, size: 20),
-          fillColor: _T.surface,
-        ),
+      child: Column(
+        children: [
+          TextField(
+            onChanged: (v) => setState(() => _query = v),
+            decoration: InputDecoration(
+              hintText: 'Search products',
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+              fillColor: _T.surface,
+            ),
+          ),
+          if (_openTime.isNotEmpty && _closeTime.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.schedule_rounded, size: 16, color: _T.muted),
+                  const SizedBox(width: 6),
+                  Text(
+                    _statusType == 'closed' && _storeWarning.contains('Manual')
+                        ? 'Manually closed by admin'
+                        : 'Open: $_openTime - $_closeTime',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: _T.muted,
+                        fontWeight: FontWeight.w600
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -520,36 +595,62 @@ class _ProductCard extends StatelessWidget {
 
 
 
-  // This is what we will add inside _ProductCard
   Widget _buildExpiryBadge() {
     final expiryStr = product['expiry_date'];
-    if (expiryStr == null) return const SizedBox.shrink();
+    final status = product['status']?.toString() ?? 'available';
+    final stock = this.stock;
 
-    final expiry = DateTime.tryParse(expiryStr.toString());
-    if (expiry == null) return const SizedBox.shrink();
+    // 1. Check if database says expired OR the date is in the past
+    bool isExpired = status == 'expired';
 
-    final daysLeft = expiry.difference(DateTime.now()).inDays;
+    if (!isExpired && expiryStr != null) {
+      final expiry = DateTime.tryParse(expiryStr.toString());
+      if (expiry != null && expiry.difference(DateTime.now()).inDays < 0) {
+        isExpired = true;
+      }
+    }
 
-    if (daysLeft < 0) {
+    if (isExpired) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(4)),
         child: const Text('EXPIRED', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
       );
-    } else if (daysLeft <= 3) {
+    }
+
+    // 2. Check for Low Stock
+    if (stock != null && stock <= 5) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
-        child: Text('Eat Soon! ($daysLeft days left)', style: TextStyle(color: Colors.orange.shade900, fontSize: 10, fontWeight: FontWeight.bold)),
-      );
-    } else {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)),
-        child: Text('Fresh Batch', style: TextStyle(color: Colors.green.shade800, fontSize: 10, fontWeight: FontWeight.bold)),
+        child: Text('Low Stock ($stock left)', style: TextStyle(color: Colors.orange.shade900, fontSize: 10, fontWeight: FontWeight.bold)),
       );
     }
+
+    // 3. Check for Eat Soon
+    if (expiryStr != null) {
+      final expiry = DateTime.tryParse(expiryStr.toString());
+      if (expiry != null) {
+        final daysLeft = expiry.difference(DateTime.now()).inDays;
+        if (daysLeft <= 3) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
+            child: Text('Eat Soon! ($daysLeft days left)', style: TextStyle(color: Colors.orange.shade900, fontSize: 10, fontWeight: FontWeight.bold)),
+          );
+        }
+      }
+    }
+
+    // 4. Default: Fresh Batch
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)),
+      child: Text('Fresh Batch', style: TextStyle(color: Colors.green.shade800, fontSize: 10, fontWeight: FontWeight.bold)),
+    );
   }
+
+
   @override
   Widget build(BuildContext context) {
     final id = int.tryParse(product['product_id'].toString()) ?? 0;
