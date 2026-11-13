@@ -103,7 +103,8 @@ Sensor: RS485 Temperature & Humidity Probe.
 
 Display: I2C LCD 16x2.
 
-Setup: Upload esp32/kimchi_monitor/kimchi_monitor.ino using the Arduino IDE. Ensure the NimBLE-Arduino library is installed.
+Setup: Upload esp32/kimchi_monitor/kimchi_monitor.ino using the Arduino IDE. 
+Ensure the NimBLE-Arduino library is installed.
 
 🔒 Security Highlights
 CSRF Protection: All forms include rotating CSRF tokens.
