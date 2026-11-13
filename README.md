@@ -84,7 +84,8 @@ MySQL / MariaDB
 
 XAMPP (Local development)
 
-Setup: Place php-web inside C:\xampp\htdocs\. Import database/kimfresh.sql. Run Apache and MySQL via XAMPP.
+Setup: Place php-web inside C:\xampp\htdocs\. Import database/kimfresh.sql. 
+Run Apache and MySQL via XAMPP.
 
 Mobile App (Flutter)
 Flutter 3.x
