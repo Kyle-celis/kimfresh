@@ -1,109 +1,115 @@
-![CI](https://github.com/Kyle-celis/kimfresh/actions/workflows/ci.yml/badge.svg)
+# 🥬 KimFresh: IoT-Driven Delivery Monitoring System
 
-# KimFresh: IoT-Based Kimchi Management System
+KimFresh is a complete end-to-end ecosystem designed for monitoring the temperature and humidity of perishable goods (Kimchi) during transit. It consists of a **Custom PHP MVC Backend**, a **Unified Flutter Mobile App (Driver & Retailer)**, and an **ESP32 IoT Sensor**.
 
-An integrated web and mobile-based system for managing kimchi distribution in Bacolod City.
+---
 
-## Components
+## 📊 Before vs. After (Project Evolution)
 
-| Component | Tech | Status |
-| :--- | :--- | :--- |
-| **Backend REST API** | **Core PHP (No Frameworks)** | ✅ |
-| **Admin Web App** | **Core PHP + MySQL** | ✅ |
-| **Retailer App** | Flutter + Dart | ✅ |
-| **Driver App** | Flutter + Dart | ✅ |
-| **IoT Sensor** | ESP32 + BLE | ✅ |
+### 🚨 BEFORE (Legacy State)
+- **Architecture:** Flat PHP with 40+ loose `.php` files in the web root. Spaghetti code.
+- **Security:** Zero CSRF protection. No central authentication guard. Brute-force attacks were unlimited.
+- **Database:** Blocking queries. If MySQL crashed, the site hung for 120 seconds.
+- **Mobile Apps:** Two separate apps with mismatched themes, hardcoded IP addresses, and a broken BLE implementation.
+- **IoT/Inventory:** No concept of time or expiry. The ESP32 Bluetooth was not discoverable by Android.
+- **Maintenance:** 20+ redundant `.bak` files cluttered the repository.
 
-## Screenshots
+### ✅ AFTER (Current Refactored State)
+- **Architecture:** Strict, hand-written MVC framework. The `public/` folder is the only web-accessible directory.
+- **Security:** 
+  - CSRF tokens on all POST forms.
+  - Centralized route protection (Auth Guard).
+  - Brute-force Rate Limiting (5 attempts / 15 mins).
+  - Fail-Fast DB (3s timeout with clean 503 error).
+- **Mobile App (Unified):** 
+  - Single Flutter app with a beautiful **Role Selection Screen** (Driver or Retailer).
+  - Unified design system (`AppTheme`) featuring the Rust Orange brand color.
+  - Smart routing: Location/Bluetooth gates for Drivers, lightweight UI for Retailers.
+- **IoT & Expiry Features:** 
+  - Shelf-life tracking and auto-expire logic.
+  - Store locks prevent admin edits while the store is open.
+  - Live BLE Sensor: ESP32 broadcasts via NimBLE. The app scans, parses `T:30.7C H:72.3%`, and logs to the DB via an offline retry queue.
+- **Maintenance:** Clean separation of concerns. All `.bak` files purged.
 
-### Admin Orders Dashboard with IoT Data
-The admin dashboard shows temperature and humidity for each delivery. Rows turn red when temperature exceeds the threshold.
+---
 
-## Features
+## 📱 Unified Mobile App Architecture
 
-### Admin Web (Core PHP)
-*   **No Frameworks:** Built using native PHP `mysqli` and a custom MVC architecture.
-*   **Product Management:** Add, edit, hide, and restore products with stock validation.
-*   **Order Management:** View, approve, reject, and bulk approve orders.
-*   **Driver Management:** Add drivers, assign orders, and handle OTP account approvals.
-*   **IoT Monitoring:** Live temperature and humidity tracking per delivery.
-*   **Alert Detection:** Automated red-row highlighting for out-of-range readings.
-*   **Store Settings:** Smart scheduling with force open/close manual overrides.
-*   **Superadmin System:** Manage admin accounts and view detailed activity logs.
-*   **PDF Exports:** Generate real FPDF reports for Orders, Products, and Drivers.
+We successfully merged the previously separate `driver_app` and `retailer_app` into a single **`kimfresh_app`**.
 
-### Retailer App (Flutter)
-*   **Strict Signup:** Split First/Last name and strict Philippine 11-digit phone validation.
-*   **Secure Authentication:** JWT Authentication with 2FA OTP (One-Time Password) verification via Gmail SMTP.
-*   **Account Verification:** 5-minute expiring OTP sent during registration to verify email addresses.
-*   **Smart Ordering:** Browse products with real-time stock validation.
-*   **GPS Capture:** Automatic location tagging when placing orders for accurate delivery routing.
-*   **Order Tracking:** Dynamic timeline and status updates.
-*   **Live Delivery Map:** Draggable bottom sheet with ETA, distance, driver details, and OpenStreetMap integration.
-*   **Digital Receipts:** View detailed order history and receipts.
+### Key Mobile Features:
+1. **Role Selection Landing Page:** Users choose "I am a Driver" or "I am a Retailer" upon opening the app.
+2. **Shared Design System:** Both screens share colors, button styles, and card layouts.
+3. **Dynamic Auth Routing:** 
+   - Drivers are forced through `LocationGate` and `BluetoothGate` before seeing their delivery list.
+   - Retailers bypass those gates and go straight to the shopping cart.
+4. **Unified Signup:** Retailer Signup matches the premium look of Driver Signup, with OTP verification.
+5. **IoT Sensor Integration:** Drivers scan for the ESP32 (`Kimchi_Monitor`), view live temp/humidity, and see alerts if the Kimchi gets too warm.
 
-### Driver App (Flutter)
-*   **Strict Signup:** Auto-formatting LTO license plate validation (e.g., N01-23-456789).
-*   **Admin Gated:** Account remains locked until the Admin manually approves it via the web dashboard.
-*   **OTP Verification:** Secure login using OTP verification for account approvals.
-*   **Delivery Management:** View assigned deliveries and update status (Assigned → Picked Up → In Transit → Delivered).
-*   **Live Navigation Map:** Route display to the retailer's GPS location.
-*   **Background GPS Tracking:** Pings `save_location.php` every 10 seconds while in transit.
-*   **IoT Integration:** Connect to the ESP32 via BLE to read real-time temperature and humidity.
-*   **Offline Logging:** View and sync stored offline sensor readings.
+---
 
-### IoT Device (ESP32)
-*   DHT22 temperature/humidity sensor.
-*   BLE communication with the Driver App.
-*   Offline data logging via LittleFS.
-*   Command-based stored data retrieval.
-*   LED status indicator.
-*   Alert detection (temperature > 10°C).
-
-## System Architecture
+## 📁 The Project Tree
 
 ```text
-ESP32 → BLE → Driver App → REST API (Core PHP) → MySQL → Admin Dashboard
-Retailer App → REST API (Core PHP) → Admin Dashboard
-Retailer App ⇄ PHP GPS Endpoints ⇄ Driver App (Live Map Tracking)
+kimfresh/
+├── database/                 # SQL dumps (kimfresh.sql)
+├── esp32/                    
+│   └── kimchi_monitor/       # Arduino C++ code (NimBLE, Modbus RS485)
+├── mobile-apps/              
+│   └── kimfresh_app/         # Unified Flutter App (Driver + Retailer)
+│       ├── lib/
+│       │   ├── screens/      # UI (Role Selection, Deliveries, Products, etc.)
+│       │   ├── services/     # API, BLE, Location, Foreground Services
+│       │   └── theme/        # Unified AppTheme
+│       └── android/          # Android Manifest & Permissions
+├── php-web/                  # Custom PHP MVC Backend
+│   ├── app/                  # Controllers, Models, Views, Helpers
+│   ├── config/               # Database connection (Fail-fast logic)
+│   ├── core/                 # Hand-written Micro-Framework (Base Controller, CSRF)
+│   ├── public/               # The ONLY web-accessible folder
+│   │   ├── api/              # Live API endpoints for mobile apps
+│   │   ├── css/              # Stylesheets
+│   │   └── index.php         # Front Controller / Router Entry Point
+│   ├── lib/                  # Third-party (FPDF)
+│   └── storage/              # Logs
+└── README.md
 
 
 
-New Workflows
-Account Creation: Retailer/Driver signs up → OTP generated → Email sent → Account verified → Auto-login (Retailer) / Admin Approval (Driver).
+💻 Tech Stack & Setup
+Web / Backend
+PHP 8.x (Custom MVC)
 
-Order Flow: Retailer places order (GPS saved) → Admin approves → Driver auto-assigned → Driver picks up → Retailer watches truck move on the map → Delivered.
+MySQL / MariaDB
 
-Data Gating: GPS locations are hidden from the driver until the admin approves the order.
+XAMPP (Local development)
 
-Setup
-Backend (Local Development)
-bash
-# Navigate to the web folder
-cd php-web
+Setup: Place php-web inside C:\xampp\htdocs\. Import database/kimfresh.sql. Run Apache and MySQL via XAMPP.
 
-# Start the PHP built-in server
-php -S 0.0.0.0:8000
-Database Import
-bash
-# Create a local database and import the master schema
-mysql -u root -p -e "CREATE DATABASE kimfresh;"
-mysql -u root -p kimfresh < database/kimfresh_master.sql
-Environment Setup
-Create a .env file in the php-web directory:
+Mobile App (Flutter)
+Flutter 3.x
 
-env
-DB_HOST="localhost"
-DB_NAME="kimfresh"
-DB_USER="root"
-DB_PASS="your_local_password"
-Production (Hostinger VPS)
-Web Server: Nginx with reverse proxy.
+Dependencies: flutter_blue_plus, geolocator, flutter_foreground_task, permission_handler
 
-PHP: PHP 8.3 FPM.
+Setup: Update the IP address in lib/services/api.dart to match your PC's local IPv4 address.
 
-Database: MySQL 8.0.
+dart
+const String API = 'http://192.168.0.xxx/php-web/public/api';
+const String PHP_API = 'http://192.168.0.xxx/php-web/public';
+IoT / Hardware
+ESP32 (NimBLE, Modbus RTU RS485)
 
-SSL: Let's Encrypt (Certbot).
+Sensor: RS485 Temperature & Humidity Probe.
 
-Deployment: Automated via GitHub Actions (Pull & Reset).
+Display: I2C LCD 16x2.
+
+Setup: Upload esp32/kimchi_monitor/kimchi_monitor.ino using the Arduino IDE. Ensure the NimBLE-Arduino library is installed.
+
+🔒 Security Highlights
+CSRF Protection: All forms include rotating CSRF tokens.
+
+Rate Limiting: Login attempts are tracked to prevent brute-force attacks.
+
+Role Gating: A central Auth Guard ensures only logged-in users can access dashboards.
+
+Secure BLE: Server-side validation blocks expired items and closed-store orders before they reach the database.
