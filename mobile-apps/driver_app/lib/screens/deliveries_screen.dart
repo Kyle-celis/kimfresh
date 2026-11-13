@@ -460,31 +460,51 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
                       stream: ble.scanForDevices(),
                       builder: (context, snapshot) {
                         if (!snapshot.hasData) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(child: Text('Starting scan...'));
                         }
+
                         final results = snapshot.data!;
+
+                        // 🔍 DEBUG: Print how many devices the phone sees
+                        if (results.isNotEmpty) {
+                          debugPrint("📡 PHONE SEES ${results.length} DEVICES");
+                          for (var r in results) {
+                            debugPrint("   -> Name: '${r.advertisementData.advName}' | MAC: ${r.device.remoteId}");
+                          }
+                        }
+
                         if (results.isEmpty) {
                           return const Center(child: Text('Scanning for nearby devices...'));
                         }
+
                         return ListView.builder(
                           itemCount: results.length,
                           itemBuilder: (context, i) {
                             final device = results[i].device;
-                            final name = results[i].advertisementData.advName;
-                            if (name.isEmpty) return const SizedBox.shrink();
+                            // 🔥 FIX: Fallback to MAC address if name is empty
+                            final rawName = results[i].advertisementData.advName;
+                            final displayName = rawName.isNotEmpty ? rawName : 'Unknown Device (${device.remoteId})';
+
                             return ListTile(
                               leading: const Icon(Icons.bluetooth, color: AppColors.burgundy),
-                              title: Text(name),
+                              title: Text(displayName), // Show the fallback name
                               subtitle: Text(device.remoteId.toString()),
                               onTap: () async {
+                                // 1. Stop the scan immediately
                                 ble.stopScan();
+
+                                // 2. Close the modal
                                 Navigator.pop(context);
-                                // Use the screen messenger after the modal is dismissed.
+
+                                // 3. Wait for the modal to fully close (500ms)
+                                await Future.delayed(const Duration(milliseconds: 500));
+
                                 final messenger = ScaffoldMessenger.of(this.context);
                                 messenger.showSnackBar(
-                                  SnackBar(content: Text('Connecting to $name...')),
+                                  SnackBar(content: Text('Connecting to $displayName...')),
                                 );
 
+                                // 4. NOW connect
                                 final success = await ble.connectToDevice(device);
                                 if (!mounted) return;
 
@@ -1008,21 +1028,61 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
             ],
           ),
           const SizedBox(height: 14),
+
           if (!isConnected)
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.bluetooth_searching, size: 18),
-                label: const Text('Connect ESP32 Sensor'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.burgundy,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.bluetooth_searching, size: 18),
+                    label: const Text('Scan for ESP32 Sensor'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.burgundy,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: _showBluetoothScanner,
+                  ),
                 ),
-                onPressed: _showBluetoothScanner,
-              ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.link, size: 18),
+                    label: const Text('Connect to Saved Sensor'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.burgundy,
+                      side: const BorderSide(color: AppColors.burgundy),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('Connecting to saved sensor...')),
+                      );
+
+                      final success = await ble.connectToSavedDevice();
+                      if (!mounted) return;
+
+                      if (success) {
+                        setState(() => bleStatus = 'Connected');
+                      } else {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('Failed to connect. Make sure ESP32 is on and nearby.'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
+
           if (isConnected) ...[
             Row(
               children: [
@@ -1074,9 +1134,9 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
               ),
             ),
           ],
-        ],
-      ),
-    );
+        ], // Closes the main Column's children list
+      ), // Closes the main Column
+    ); // Closes the Container
   }
 
   Widget _statBlock({

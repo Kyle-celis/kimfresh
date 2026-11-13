@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-const String API = 'http://10.0.2.2/php-web/public/api';
-const String PHP_API = 'http://10.0.2.2/php-web/public';
+const String API = 'http://192.168.0.117/php-web/public/api';
+const String PHP_API = 'http://192.168.0.117/php-web/public';
 
 class ApiService {
   static const Duration _timeout = Duration(seconds: 15);
