@@ -1,8 +1,11 @@
-<?php
-// public/index.php — strict MVC, no framework
+﻿<?php
+// public/index.php â€” strict MVC, no framework
 
 ini_set('display_errors', 1);
-header('Content-Type: text/html; charset=utf-8');
+// Skip HTML header if this is a file download (PDF or CSV)
+if (!isset($_GET['export_pdf']) && !isset($_GET['export_csv']) && strpos($_SERVER['REQUEST_URI'] ?? '', 'export-csv') === false) {
+    header('Content-Type: text/html; charset=utf-8');
+}
 error_reporting(E_ALL);
 session_start();
 
@@ -20,12 +23,11 @@ if (strpos($uri, $base) === 0) {
 $uri = '/' . trim($uri, '/');
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Route format: [Controller, method, meta]
-//   meta['auth'] = false         → public route (no login required)
-//   meta['auth'] = true          → login required (DEFAULT if meta missing)
-//   meta['role'] = 'superadmin'  → requires $_SESSION['is_superadmin'] == 1
 $routes = [
     'GET'  => [
+        '/welcome'                => ['WelcomeController', 'index',         ['auth' => false]],
+        '/download'               => ['WelcomeController', 'download',      ['auth' => false]],
+
         '/'                       => ['DashboardController', 'index'],
         '/dashboard'              => ['DashboardController', 'index'],
         '/login'                  => ['AuthController', 'showLogin',         ['auth' => false]],
@@ -37,6 +39,7 @@ $routes = [
         '/analytics'              => ['AnalyticsController', 'index'],
         '/settings'               => ['SettingsController', 'index'],
         '/logs'                   => ['LogsController', 'index'],
+        '/track'                  => ['TrackingController', 'index', ['auth' => false]],
         '/products/export-csv'    => ['CsvController', 'exportProducts'],
         '/superadmin'             => ['SuperAdminController', 'index',       ['auth' => true, 'role' => 'superadmin']],
         '/notifications'          => ['NotificationController', 'index'],
@@ -55,11 +58,11 @@ $routes = [
 
 if (!isset($routes[$method][$uri])) {
     http_response_code(404);
-    echo "<h1>404 — no route for {$method} {$uri}</h1>";
+    echo "<h1>404 â€” no route for {$method} {$uri}</h1>";
     echo "<p>Available routes:</p><ul>";
     foreach ($routes as $m => $list) {
         foreach ($list as $path => $handler) {
-            echo "<li><code>{$m} {$path}</code> → {$handler[0]}::{$handler[1]}()</li>";
+            echo "<li><code>{$m} {$path}</code> â†’ {$handler[0]}::{$handler[1]}()</li>";
         }
     }
     echo "</ul>";
@@ -72,14 +75,14 @@ $meta = $routes[$method][$uri][2] ?? [];
 // ---- AUTH GUARD (Patch 2) ----
 $needsAuth = $meta['auth'] ?? true;
 if ($needsAuth && !isset($_SESSION['admin_id'])) {
-    header('Location: /php-web/public/login');
+    header('Location: /php-web/public/welcome');
     exit;
 }
 
 $needsRole = $meta['role'] ?? null;
 if ($needsRole === 'superadmin' && empty($_SESSION['is_superadmin'])) {
     http_response_code(403);
-    die('403 — Superadmin access required.');
+    die('403 â€” Superadmin access required.');
 }
 // ---- END AUTH GUARD ----
 
@@ -105,3 +108,4 @@ if (!method_exists($controller, $action)) {
 }
 
 $controller->$action();
+

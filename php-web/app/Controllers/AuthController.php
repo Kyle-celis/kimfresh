@@ -22,55 +22,88 @@ class AuthController extends Controller
         $loginError = $_SESSION['login_error'] ?? '';
         unset($_SESSION['login_error']);
 
-        $this->view('auth/login', ['loginError' => $loginError]);
+        // Capture the role from the URL (defaults to 'admin')
+        $role = $_GET['role'] ?? 'admin';
+
+        // Pass both to the view
+        $this->view('auth/login', [
+            'loginError' => $loginError,
+            'role'       => $role
+        ]);
     }
 
     public function login()
     {
         require_once __DIR__ . '/../Models/Admin.php';
+        require_once __DIR__ . '/../../core/Csrf.php';
 
-        $email = trim($_POST['email'] ?? '');
+        $email         = trim($_POST['email'] ?? '');
+        $password      = $_POST['password'] ?? '';
+        $requestedRole = $_POST['role'] ?? 'admin';
 
-        // PATCH-5: rate limit check BEFORE password verification
+        // Helper to preserve the role in the URL on redirects
+        $loginUrl = '/php-web/public/login' . ($requestedRole === 'superadmin' ? '?role=superadmin' : '');
+
+        // 1. CSRF Check (Crucial for security)
+        if (!Csrf::verify($_POST['_csrf'] ?? '')) {
+            $_SESSION['login_error'] = "CSRF token missing or invalid. Go back, refresh the page, and try again.";
+            $this->redirect($loginUrl);
+        }
+
+        // 2. Rate limit check BEFORE password verification
         if ($email !== '') {
             $blocked = $this->rateLimitBlockRemaining($email);
             if ($blocked > 0) {
                 $minutes = (int)ceil($blocked / 60);
-                http_response_code(429);
-                $this->view('auth/login', ['loginError' => "Too many failed attempts. Try again in {$minutes} minute(s)."]);
-                return;
+                $_SESSION['login_error'] = "Too many failed attempts. Try again in {$minutes} minute(s).";
+                $this->redirect($loginUrl);
             }
         }
-        require_once __DIR__ . '/../../core/Csrf.php';
+
         $model = new Admin($this->conn);
 
-        $email    = trim($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
-
+        // 3. Basic Validation
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $password === '') {
             $_SESSION['login_error'] = "Please enter a valid email and password.";
-            $this->redirect('/php-web/public/login');
+            $this->redirect($loginUrl);
         }
 
         $row = $model->findByEmail($email);
 
+        // 4. Find User
         if (!$row) {
             $this->recordLoginAttempt($email, false);
-            $_SESSION['login_error'] = "Email not found.";
-            $this->redirect('/php-web/public/login');
+            $_SESSION['login_error'] = "Invalid email or password."; // <--- CHANGED
+            $this->redirect($loginUrl);
         }
+        
+        // 5. Check Status (Deactivated accounts)
         if ($row['status'] !== 'active') {
             $this->recordLoginAttempt($email, false);
-            $_SESSION['login_error'] = "This account is deactivated. Contact a superadmin.";
-            $this->redirect('/php-web/public/login');
-        }
-        if (!password_verify($password, $row['password_hash'])) {
-            $this->recordLoginAttempt($email, false);
-            $_SESSION['login_error'] = "Invalid password.";
-            $this->redirect('/php-web/public/login');
+            $_SESSION['login_error'] = "Invalid email or password."; // <--- CHANGED (or keep the deactivation message if you prefer to warn them)
+            $this->redirect($loginUrl);
         }
 
-        $this->recordLoginAttempt($email, true); // PATCH-5: clears prior failures
+        // 6. Check Password
+        if (!password_verify($password, $row['password_hash'])) {
+            $this->recordLoginAttempt($email, false);
+            $_SESSION['login_error'] = "Invalid email or password."; // <--- CHANGED
+            $this->redirect($loginUrl);
+        }
+
+        // 7. Strict Role Enforcement
+        if ($requestedRole === 'superadmin' && $row['is_superadmin'] != 1) {
+            $_SESSION['login_error'] = "Invalid email or password."; 
+            $this->redirect($loginUrl);
+        }
+
+        if ($requestedRole === 'admin' && $row['is_superadmin'] == 1) {
+            $_SESSION['login_error'] = "Invalid email or password."; 
+            $this->redirect($loginUrl); 
+        }
+
+        // 8. Success! (Clears prior failures)
+        $this->recordLoginAttempt($email, true); 
         session_regenerate_id(true);
         Csrf::rotate();
 
@@ -85,6 +118,7 @@ class AuthController extends Controller
             ? '/php-web/public/superadmin'
             : '/php-web/public/dashboard');
     }
+
     // ============================================================
     // PATCH-5: Login rate limiting
     // ============================================================

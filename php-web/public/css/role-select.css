@@ -1,0 +1,236 @@
+﻿/* ============================================
+   KimFresh — Role Selection + Download Pages
+   Matches theme.css / login.css visual language
+   ============================================ */
+
+* { box-sizing: border-box; }
+
+body.role-page {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Nunito Sans", Arial, sans-serif;
+    color: #252733;
+    background: #F5F6FA;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.role-card,
+.download-card {
+    width: 100%;
+    max-width: 470px;
+    padding: clamp(28px, 4vw, 42px);
+    background: #fff;
+    border: 1px solid #eaebf0;
+    border-radius: 24px;
+    box-shadow: 0 24px 70px rgba(195, 66, 0, .13);
+    text-align: center;
+    animation: roleFadeIn .3s ease;
+}
+
+@keyframes roleFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.role-logo {
+    display: block;
+    height: 60px;
+    width: auto;
+    margin: 0 auto 22px;
+    object-fit: contain;
+}
+
+.role-card h1,
+.download-card h1 {
+    margin: 0;
+    font-size: clamp(24px, 2.5vw, 30px);
+    font-weight: 800;
+    letter-spacing: -.035em;
+    color: #252733;
+}
+
+.role-card .subtitle,
+.download-card .subtitle {
+    margin: 10px 0 28px;
+    font-size: 14px;
+    line-height: 1.65;
+    color: #737887;
+}
+
+.role-btn {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    text-align: left;
+    text-decoration: none;
+    color: #252733;
+    background: #fff;
+    border: 1px solid #dfe1e9;
+    border-radius: 14px;
+    transition: border-color .2s, box-shadow .2s, transform .2s, background .2s;
+}
+
+.role-btn:hover {
+    border-color: #C34200;
+    background: #fdf0e6;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px rgba(195, 66, 0, .13);
+}
+
+.role-btn:active { transform: translateY(0); }
+
+.role-btn .icon {
+    font-size: 26px;
+    line-height: 1;
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: #fdf0e6;
+    color: #C34200;
+}
+
+.role-btn .label {
+    display: block;
+    font-size: 15px;
+    font-weight: 800;
+    color: #252733;
+}
+
+.role-btn .desc {
+    display: block;
+    margin-top: 3px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #737887;
+}
+
+.role-footer {
+    margin-top: 26px;
+    padding-top: 20px;
+    border-top: 1px solid #ececf2;
+    font-size: 12px;
+    color: #a0a3af;
+}
+
+.download-card .back-link {
+    display: inline-block;
+    margin-top: 18px;
+    font-size: 13px;
+    font-weight: 800;
+    color: #C34200;
+    text-decoration: none;
+}
+
+.download-card .back-link:hover {
+    color: #9a3400;
+    text-decoration: underline;
+}
+
+#qrcode {
+    display: flex;
+    justify-content: center;
+    width: fit-content;
+    margin: 0 auto 22px;
+    padding: 16px;
+    background: #fff;
+    border: 1px solid #dfe1e9;
+    border-radius: 16px;
+    box-shadow: 0 8px 22px rgba(35, 25, 40, .06);
+}
+
+#qrcode img,
+#qrcode canvas { display: block; max-width: 100%; }
+
+.scan-hint {
+    margin: 0 0 22px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #737887;
+    line-height: 1.5;
+}
+
+.download-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 50px;
+    padding: 12px 18px;
+    color: #fff;
+    background: #C34200;
+    border: 1px solid #C34200;
+    border-radius: 11px;
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: 0 7px 16px rgba(195, 66, 0, .15);
+    transition: background .2s, transform .2s, box-shadow .2s;
+}
+
+.download-btn:hover {
+    background: #9a3400;
+    box-shadow: 0 10px 22px rgba(195, 66, 0, .22);
+    transform: translateY(-1px);
+}
+
+.download-btn:active { transform: translateY(0); }
+
+.ios-notice {
+    margin: 6px 0 22px;
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #C34200;
+    background: #fdf0e6;
+    border: 1px solid #f9d4b8;
+    border-radius: 10px;
+}
+
+.ios-notice strong { color: #9a3400; }
+
+.install-hint {
+    margin: 4px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #a0a3af;
+    text-align: left;
+}
+
+.mobile-only { display: none; }
+
+@media (max-width: 640px) {
+    body.role-page {
+        padding: 16px;
+        align-items: flex-start;
+        padding-top: 32px;
+    }
+    .role-card,
+    .download-card {
+        padding: 26px 22px;
+        border-radius: 20px;
+    }
+    .role-logo { height: 52px; }
+    .role-btn { padding: 14px 16px; gap: 12px; }
+    .role-btn .icon { width: 42px; height: 42px; font-size: 22px; }
+    .desktop-only { display: none; }
+    .mobile-only { display: block; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+    }
+}

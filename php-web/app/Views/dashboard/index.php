@@ -385,8 +385,6 @@
         });
     </script>
 
-
-
 <!-- SCROLL MEMORY -->
 <script>
     if (sessionStorage.getItem('scrollPos')) { 

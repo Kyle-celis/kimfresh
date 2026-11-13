@@ -2,7 +2,6 @@
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config/db.php';
 
-// Accept only POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     echo json_encode(['success' => false, 'message' => 'POST required']);
@@ -22,6 +21,7 @@ $deliveryId  = isset($body['delivery_id'])  ? (int)$body['delivery_id'] : 0;
 $temperature = isset($body['temperature'])  ? (float)$body['temperature'] : null;
 $humidity    = isset($body['humidity'])     ? (float)$body['humidity'] : null;
 $isAlert     = !empty($body['is_alert']) ? 1 : 0;
+$dedupKey    = isset($body['dedup_key'])    ? $body['dedup_key'] : null;
 
 if ($deliveryId <= 0 || $temperature === null || $humidity === null) {
     http_response_code(400);
@@ -29,7 +29,6 @@ if ($deliveryId <= 0 || $temperature === null || $humidity === null) {
     exit;
 }
 
-// Verify delivery exists (prevents junk rows)
 $check = $conn->prepare("SELECT delivery_id FROM delivery WHERE delivery_id = ? LIMIT 1");
 $check->bind_param('i', $deliveryId);
 $check->execute();
@@ -42,16 +41,15 @@ if ($check->num_rows === 0) {
 }
 $check->close();
 
-// Insert
 $stmt = $conn->prepare(
-    "INSERT INTO sensor_data (delivery_id, temperature, humidity, is_alert, reading_timestamp)
-     VALUES (?, ?, ?, ?, NOW())"
+    "INSERT INTO sensor_data (delivery_id, temperature, humidity, is_alert, reading_timestamp, client_dedup_key)
+     VALUES (?, ?, ?, ?, NOW(), ?)"
 );
-$stmt->bind_param('iddi', $deliveryId, $temperature, $humidity, $isAlert);
+$stmt->bind_param('iddis', $deliveryId, $temperature, $humidity, $isAlert, $dedupKey);
 
 if (!$stmt->execute()) {
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'DB insert failed']);
+    echo json_encode(['success' => false, 'message' => 'DB insert failed: ' . $stmt->error]);
     $stmt->close();
     exit;
 }
