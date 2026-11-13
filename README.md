@@ -113,4 +113,5 @@ Rate Limiting: Login attempts are tracked to prevent brute-force attacks.
 
 Role Gating: A central Auth Guard ensures only logged-in users can access dashboards.
 
-Secure BLE: Server-side validation blocks expired items and closed-store orders before they reach the database.
+Secure BLE: Server-side validation blocks expired items and closed-store orders before they 
+reach the database.
