@@ -244,6 +244,23 @@
                 row.style.display = 'none';
             }
         }
+            
+        // Close all when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (menu && !menu.contains(event.target)) {
+                const prof = document.getElementById('profileDropdown');
+                if (prof) prof.classList.remove('show');
+            }
+            const c = document.getElementById('notifContainer');
+            if (c && !c.contains(event.target)) {
+                const d = document.getElementById('notifDropdown');
+                if (d) d.classList.remove('show');
+            }
+            if (!event.target.closest('.menu-wrap')) {
+                document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            }
+        });
     </script>
 <!-- SCROLL MEMORY -->
 <script>
@@ -267,7 +284,24 @@
             sessionStorage.setItem('scrollPos', window.scrollY);
         }
     });
-</script>
+        
+        // Close all when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (menu && !menu.contains(event.target)) {
+                const prof = document.getElementById('profileDropdown');
+                if (prof) prof.classList.remove('show');
+            }
+            const c = document.getElementById('notifContainer');
+            if (c && !c.contains(event.target)) {
+                const d = document.getElementById('notifDropdown');
+                if (d) d.classList.remove('show');
+            }
+            if (!event.target.closest('.menu-wrap')) {
+                document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            }
+        });
+    </script>
 </body>
 </html>
 

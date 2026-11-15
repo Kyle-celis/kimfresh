@@ -1,5 +1,5 @@
 <?php
-// app/Controllers/ProductController.php Ã¢â‚¬â€ strict MVC Controller
+// app/Controllers/ProductController.php ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â strict MVC Controller
 class ProductController extends Controller
 {
     private $productModel;
@@ -41,6 +41,7 @@ class ProductController extends Controller
         $total_products     = $stats['total'];
         $low_stock          = $stats['low_stock'];
         $available_products = $stats['available'];
+        $out_of_stock        = $stats['out_of_stock'];
 
         // --- Sorting & pagination ---
         $sort = $_GET['sort'] ?? 'id_asc';
@@ -66,6 +67,7 @@ class ProductController extends Controller
             'total_products'    => $total_products,
             'low_stock'         => $low_stock,
             'available_products'=> $available_products,
+            'out_of_stock'      => $out_of_stock,
             'products'          => $products,
             'sort'              => $sort,
             'page'              => $page,

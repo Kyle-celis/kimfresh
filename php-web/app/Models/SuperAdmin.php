@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Models/SuperAdmin.php — strict MVC Model
 class SuperAdmin extends Model
 {

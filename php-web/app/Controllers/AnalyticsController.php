@@ -1,5 +1,5 @@
 <?php
-// app/Controllers/AnalyticsController.php — strict MVC Controller
+// app/Controllers/AnalyticsController.php Ã¢â‚¬â€ strict MVC Controller
 class AnalyticsController extends Controller
 {
     public function index()
@@ -17,9 +17,65 @@ class AnalyticsController extends Controller
             'top_products'   => $top_products,
             'top_drivers'    => $top_drivers,
             'total_orders'   => $stats['total_orders'],
-            'delivered'      => $stats['delivered'],
+            'delivered_orders' => $stats['delivered'],
             'rejected'       => $stats['rejected'],
             'total_earnings' => $stats['total_earnings'],
         ]);
     }
+    public function exportPdf()
+{
+    if (ob_get_length()) ob_end_clean();
+    ob_start();
+
+    require_once __DIR__ . '/../../lib/fpdf/fpdf.php';
+    require_once __DIR__ . '/../helpers/KimFreshPdf.php';
+
+    $pdf = new KimFreshPdf();
+    $pdf->title = 'KimFresh Analytics Report';
+    $pdf->AddPage();
+    
+    // Fetch real data using getStats()
+    require_once __DIR__ . '/../Models/Analytics.php';
+    $analyticsModel = new Analytics($this->conn);
+    $stats = $analyticsModel->getStats();
+
+    $pdf->SetFont('Arial', 'B', 12);
+    $pdf->Cell(0, 10, 'Analytics Overview', 0, 1, 'C');
+    $pdf->SetFont('Arial', '', 10);
+    $pdf->Cell(0, 10, 'Total Orders: ' . $stats['total_orders'], 0, 1);
+    $pdf->Cell(0, 10, 'Delivered Orders: ' . $stats['delivered'], 0, 1);
+    $pdf->Cell(0, 10, 'Estimated Earnings: PHP ' . number_format($stats['total_earnings'], 2), 0, 1);
+
+    $pdfData = $pdf->Output('S', 'KimFresh_Analytics.pdf');
+    ob_end_clean();
+
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="KimFresh_Analytics.pdf"'); 
+    header('Content-Length: ' . strlen($pdfData));
+    echo $pdfData;
+    exit;
 }
+
+    public function exportCsv()
+{
+    require_once __DIR__ . '/../Models/Analytics.php';
+    $analyticsModel = new Analytics($this->conn);
+    $stats = $analyticsModel->getStats();
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="KimFresh_Analytics.csv"');
+    
+    $output = fopen('php://output', 'w');
+    fputcsv($output, ['Metric', 'Value']);
+    fputcsv($output, ['Total Orders', $stats['total_orders']]);
+    fputcsv($output, ['Delivered Orders', $stats['delivered']]);
+    fputcsv($output, ['Estimated Earnings', number_format($stats['total_earnings'], 2)]);
+    
+    fclose($output);
+    exit;
+}
+
+    
+}
+
+

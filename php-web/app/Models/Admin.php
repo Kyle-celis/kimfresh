@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Models/Admin.php — strict MVC Model
 class Admin extends Model
 {

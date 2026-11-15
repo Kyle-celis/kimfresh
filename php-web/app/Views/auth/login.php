@@ -1,115 +1,216 @@
-﻿<?php
-// app/Views/auth/login.php
-$base = '/php-web/public';
-
-$isSuper = (isset($role) && $role === 'superadmin');
-$panelTitle = $isSuper ? 'Super Admin Login' : 'Admin Login';
-$panelDesc = $isSuper ? 'Enter your credentials to access the super admin dashboard.' : 'Enter your credentials to access the admin dashboard.';
-?>
+<?php /* Login view - vars from AuthController::showLogin() */ ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><?= $panelTitle ?> — KimFresh</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap">
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Nunito Sans", Arial, sans-serif; }
-    body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #C34200; padding: 20px; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KimFresh - Admin Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/php-web/public/css/theme.css">
     
-    .split-container {
-      display: flex; width: 100%; max-width: 1000px; min-height: 600px; background: #fff;
-      border-radius: 20px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,0.25);
-    }
-    
-    /* Left Panel */
-    .left-panel {
-      flex: 1; background: #C34200; padding: 60px 48px; position: relative; display: flex; flex-direction: column;
-      color: #fff; background-image: radial-gradient(circle at 10% 90%, rgba(255,255,255,0.1) 0%, transparent 40%);
-      justify-content: center;
-    }
-    .left-panel .logo { max-width: 220px; height: auto; margin-bottom: 40px; object-fit: contain; }
-    
-    .left-panel h1 { font-size: 34px; font-weight: 800; line-height: 1.2; margin-bottom: 20px; }
-    .left-panel p { font-size: 16px; line-height: 1.6; color: rgba(255,255,255,0.9); max-width: 90%; }
+    <style>
+        :root {
+            --primary: #C34200;
+            --primary-dark: #9a3400;
+            --bg-orange: #C34200;
+            --text-dark: #111;
+            --text-gray: #666;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Nunito Sans', sans-serif;
+            background-color: #C34200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
 
-    /* Right Panel */
-    .right-panel { flex: 1; padding: 60px 50px; display: flex; flex-direction: column; justify-content: center; }
-    .right-panel h2 { font-size: 26px; font-weight: 800; color: #C34200; margin-bottom: 8px; }
-    .right-panel .subtitle { font-size: 14px; color: #737887; margin-bottom: 30px; line-height: 1.5; }
-    
-    /* Form Elements */
-    .form-group { margin-bottom: 20px; }
-    .form-group label { display: block; font-size: 13px; font-weight: 800; color: #343643; margin-bottom: 8px; }
-    .form-control {
-      width: 100%; padding: 14px 16px; border: 1px solid #dfe1e9; border-radius: 10px;
-      font-size: 14px; outline: none; transition: border-color 0.2s;
-    }
-    .form-control:focus { border-color: #C34200; box-shadow: 0 0 0 4px rgba(195,66,0,0.08); }
-    
-    .btn-login {
-      width: 100%; padding: 16px; background: #C34200; color: #fff; border: none; border-radius: 10px;
-      font-size: 16px; font-weight: 800; cursor: pointer; transition: background 0.2s; margin-top: 10px;
-    }
-    .btn-login:hover { background: #9a3400; }
-    
-    .back-link { text-align: center; display: block; margin-top: 24px; font-size: 13px; color: #737887; text-decoration: none; font-weight: 700; }
-    .back-link:hover { color: #C34200; }
+        .login-container {
+            display: flex;
+            width: 1000px;
+            max-width: 95%;
+            background: #fff;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+            min-height: 600px;
+        }
 
-    /* Error Box */
-    .alert-box { margin-bottom: 20px; padding: 12px 14px; color: #C34200; background: #fdf0e6; border: 1px solid #f9d4b8; border-radius: 10px; font-size: 13px; line-height: 1.5; font-weight: 700; }
-    .alert-box:empty { display: none; }
+        /* Left Side (Branding) */
+        .login-left {
+            width: 45%;
+            background: linear-gradient(165deg, #d94a00 0%, #cf561a 55%, #c96a3a 100%);
+            padding: 60px 50px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            color: #fff;
+        }
+        .login-left img {
+            width: 150px;
+            margin-bottom: 40px;
+        }
+        .login-left h1 {
+            font-size: 36px;
+            font-weight: 800;
+            line-height: 1.2;
+            margin: 0 0 20px;
+        }
+        .login-left p {
+            font-size: 16px;
+            opacity: 0.9;
+            line-height: 1.5;
+            margin: 0;
+        }
 
-    @media (max-width: 800px) {
-      .split-container { flex-direction: column; max-width: 500px; }
-      .left-panel { padding: 40px 32px; }
-      .left-panel h1 { font-size: 28px; }
-      .right-panel { padding: 40px 32px; }
-    }
-  </style>
+        /* Right Side (Form) */
+        .login-right {
+            width: 55%;
+            padding: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .login-right h2 {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--primary);
+            margin: 0 0 10px;
+        }
+        .login-right p.subtitle {
+            color: var(--text-gray);
+            margin: 0 0 30px;
+            font-size: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #333;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 15px;
+            font-family: inherit;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+        .btn-login:hover {
+            background: var(--primary-dark);
+        }
+
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 24px;
+            color: var(--text-gray);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .back-link:hover {
+            color: var(--primary);
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border: 1px solid #f87171;
+        }
+
+        @media (max-width: 768px) {
+            .login-container {
+                flex-direction: column;
+            }
+            .login-left, .login-right {
+                width: 100%;
+                padding: 40px 30px;
+            }
+        }
+    </style>
+<style>
+    body { background-color: #C34200 !important; background-image: none !important; }
+    .login-left { background-color: #C34200 !important; background-image: none !important; }
+</style>
+</head>
 </head>
 <body>
 
-  <div class="split-container">
-    <!-- Left Side -->
-    <div class="left-panel">
-      <img src="<?= $base ?>/logo.png" alt="KimFresh" class="logo">
-      <h1>Control everything from one dashboard</h1>
-      <p>Monitor users, manage product and monitor real-time delivery fulfillment</p>
-    </div>
-
-    <!-- Right Side -->
-    <div class="right-panel">
-      <h2><?= $panelTitle ?></h2>
-      <p class="subtitle"><?= $panelDesc ?></p>
-
-      <!-- Error Message Display -->
-      <?php if (!empty($loginError)): ?>
-        <div class="alert-box"><?= htmlspecialchars($loginError) ?></div>
-      <?php endif; ?>
-
-      <form action="<?= $base ?>/login" method="POST">
-        <?= csrf_field() ?>
-        
-        <input type="hidden" name="role" value="<?= htmlspecialchars($role) ?>">
-        
-        <div class="form-group">
-          <label>Email Address</label>
-          <input type="email" name="email" class="form-control" placeholder="admin@kimfresh.com" required>
-        </div>
-        
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+    <div class="login-container">
+        <!-- Left Side: Branding -->
+        <div class="login-left" style="background: #C34200 !important; background-image: none !important;">
+            <img src="/php-web/public/logo.png" alt="KimFresh">
+            <h1>Control everything from one dashboard</h1>
+            <p>Monitor users, manage products, and monitor real-time delivery fulfillment.</p>
         </div>
 
-        <button type="submit" class="btn-login">Sign In</button>
-      </form>
+        <!-- Right Side: Login Form -->
+        <div class="login-right">
+            <h2>Admin Login</h2>
+            <p class="subtitle">Enter your credentials to access the admin dashboard.</p>
 
-      <a href="<?= $base ?>/welcome" class="back-link">← Back to role selection</a>
+            <?php if (isset($error) && $error): ?>
+                <div class="alert-error">
+                    <?= htmlspecialchars($error) ?>
+                </div>
+            <?php endif; ?>
+
+            <form method="POST" action="/php-web/public/login">
+                <?= csrf_field() ?>
+                
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" name="email" placeholder="admin@kimfresh.com" required autofocus>
+                </div>
+
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" placeholder="Enter your password" required>
+                </div>
+
+                <button type="submit" class="btn-login">Sign In</button>
+
+                <a href="/php-web/public/" class="back-link">&larr; Back to role selection</a>
+            </form>
+        </div>
     </div>
-  </div>
 
 </body>
 </html>
+
 

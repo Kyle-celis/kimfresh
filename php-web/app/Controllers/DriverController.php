@@ -1,5 +1,5 @@
 <?php
-// app/Controllers/DriverController.php — strict MVC Controller
+// app/Controllers/DriverController.php â€” strict MVC Controller
 class DriverController extends Controller
 {
     private $model;
@@ -100,7 +100,7 @@ class DriverController extends Controller
         if (manualAssignDriver($this->conn, $order_id, $driver_id)) {
             logActivity($this->conn, $_SESSION['admin_id'], "Manually assigned Order #$order_id to Driver #$driver_id");
         } else {
-            logActivity($this->conn, $_SESSION['admin_id'], "Manual assign FAILED for Order #$order_id → Driver #$driver_id");
+            logActivity($this->conn, $_SESSION['admin_id'], "Manual assign FAILED for Order #$order_id â†’ Driver #$driver_id");
         }
         $this->redirect('/php-web/public/drivers');
     }
@@ -140,5 +140,51 @@ class DriverController extends Controller
         }
         $pdf->Output('D', 'KimFresh_Drivers.pdf');
         exit();
+    }
+    public function exportPdf()
+    {
+        if (ob_get_length()) ob_end_clean();
+        ob_start();
+        require_once __DIR__ . '/../../lib/fpdf/fpdf.php';
+        require_once __DIR__ . '/../helpers/KimFreshPdf.php';
+        $pdf = new KimFreshPdf();
+        $pdf->title = 'KimFresh Drivers Report';
+        $pdf->AddPage();
+        $pdf->SetFont('Arial', 'B', 10);
+        $pdf->SetFillColor(195, 66, 0); $pdf->SetTextColor(255, 255, 255);
+        $pdf->Cell(60, 8, 'Driver Name', 1, 0, 'C', true);
+        $pdf->Cell(50, 8, 'License', 1, 0, 'C', true);
+        $pdf->Cell(50, 8, 'Status', 1, 1, 'C', true);
+        $pdf->SetFont('Arial', '', 9); $pdf->SetTextColor(0, 0, 0);
+        
+        require_once __DIR__ . '/../Models/Driver.php';
+        $model = new Driver($this->conn);
+        $drivers = $model->getAllForExport();
+        while ($row = $drivers->fetch_assoc()) {
+            $pdf->Cell(60, 8, substr(htmlspecialchars($row['name']), 0, 25), 1, 0, 'L');
+            $pdf->Cell(50, 8, htmlspecialchars($row['license_number']), 1, 0, 'C');
+            $pdf->Cell(50, 8, strtoupper($row['status']), 1, 1, 'C');
+        }
+        $pdfData = $pdf->Output('S', 'KimFresh_Drivers.pdf');
+        ob_end_clean();
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="KimFresh_Drivers.pdf"');
+        echo $pdfData; exit;
+    }
+
+    public function exportCsv()
+    {
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="KimFresh_Drivers.csv"');
+        $output = fopen('php://output', 'w');
+        fputcsv($output, ['Driver Name', 'License', 'Status']);
+        
+        require_once __DIR__ . '/../Models/Driver.php';
+        $model = new Driver($this->conn);
+        $drivers = $model->getAllForExport();
+        while ($row = $drivers->fetch_assoc()) {
+            fputcsv($output, [$row['name'], $row['license_number'], $row['status']]);
+        }
+        fclose($output); exit;
     }
 }

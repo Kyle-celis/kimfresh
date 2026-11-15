@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Controllers/WelcomeController.php
 // Renders the public welcome (role selection) and download pages.
 // Both routes are marked 'auth' => false in the router.

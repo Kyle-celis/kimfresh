@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Views/welcome/index.php
 $base = '/php-web/public';
 ?>
@@ -7,7 +7,7 @@ $base = '/php-web/public';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Select Account Type — KimFresh</title>
+  <title>KimFresh - Select Account Type</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Nunito Sans", Arial, sans-serif; }
@@ -107,10 +107,7 @@ $base = '/php-web/public';
       </form>
 
       <!-- Mobile App Link -->
-      <div class="app-download-link">
-        Are you a Driver or Customer? <br>
-        <a href="<?= $base ?>/download">📱 Download the Mobile App</a>
-      </div>
+      
 
       <div class="footer-text">
         &copy; <?= date('Y') ?> KimFresh. All rights reserved.
@@ -124,6 +121,23 @@ $base = '/php-web/public';
       selectedLabel.classList.add('selected');
       selectedLabel.querySelector('input[type="radio"]').checked = true;
     }
-  </script>
+          
+        // Close all when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (menu && !menu.contains(event.target)) {
+                const prof = document.getElementById('profileDropdown');
+                if (prof) prof.classList.remove('show');
+            }
+            const c = document.getElementById('notifContainer');
+            if (c && !c.contains(event.target)) {
+                const d = document.getElementById('notifDropdown');
+                if (d) d.classList.remove('show');
+            }
+            if (!event.target.closest('.menu-wrap')) {
+                document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            }
+        });
+    </script>
 </body>
 </html>

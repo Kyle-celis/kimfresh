@@ -10,7 +10,7 @@ unset($qs['page']);
 $qsBase = http_build_query($qs);
 $qsSuffix = $qsBase !== '' ? '&' . $qsBase : '';
 
-// Window: current ±2, clamped
+// Window: current Â±2, clamped
 $start = max(1, $page - 2);
 $end   = min($total_pages, $page + 2);
 ?>
@@ -23,7 +23,7 @@ $end   = min($total_pages, $page + 2);
 
     <?php if ($start > 1): ?>
         <a href="?page=1<?= htmlspecialchars($qsSuffix) ?>">1</a>
-        <?php if ($start > 2): ?><span class="disabled">…</span><?php endif; ?>
+        <?php if ($start > 2): ?><span class="disabled">â€¦</span><?php endif; ?>
     <?php endif; ?>
 
     <?php for ($i = $start; $i <= $end; $i++): ?>
@@ -35,7 +35,7 @@ $end   = min($total_pages, $page + 2);
     <?php endfor; ?>
 
     <?php if ($end < $total_pages): ?>
-        <?php if ($end < $total_pages - 1): ?><span class="disabled">…</span><?php endif; ?>
+        <?php if ($end < $total_pages - 1): ?><span class="disabled">â€¦</span><?php endif; ?>
         <a href="?page=<?= $total_pages ?><?= htmlspecialchars($qsSuffix) ?>"><?= $total_pages ?></a>
     <?php endif; ?>
 

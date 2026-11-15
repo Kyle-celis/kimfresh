@@ -45,17 +45,10 @@
            ========================================= */
         .notification-container { position: relative; margin-right: 15px; }
         
-        .notification-bell {
-            position: relative; display: flex; align-items: center; justify-content: center;
-            width: 44px; height: 44px; border-radius: 50%; background: transparent; cursor: pointer; transition: background 0.2s;
-        }
+        .notification-bell { position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%; background: var(--primary); cursor: pointer; }
         .notification-bell:hover { background: #f0f0f0; }
         
-        .notif-badge {
-            position: absolute; top: 2px; right: 2px; background: #dc2626; color: white;
-            font-size: 11px; font-weight: 800; width: 20px; height: 20px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
+        .notif-badge { position: absolute; top: -6px; right: -8px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; min-width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
         .notif-dropdown {
             position: absolute; top: 55px; right: 0; width: 320px;
@@ -95,7 +88,21 @@
         .notif-time { color: #888; font-size: 11px; font-weight: 600; }
         
         .notif-empty { padding: 20px; text-align: center; color: #888; font-size: 13px; }
+    
+        /* ---------- Sidebar typography (same on all pages) ---------- */
+        .sidebar, .sidebar * { font-family: 'Nunito Sans', sans-serif !important; }
+        .sidebar .sidebar-brand .logo { width: 120px !important; max-width: 100% !important; height: auto !important; }
+        .sidebar .sidebar-brand p { font-size: 13px !important; font-weight: 600 !important; color: #fff !important; opacity: .95 !important; }
+        .sidebar .menu a { font-size: 17px !important; font-weight: 800 !important; }
+    
+        /* ---------- Sidebar brand (same as Drivers) ---------- */
+        .sidebar .sidebar-brand { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-align: center !important; padding: 28px 16px 22px !important; margin: 0 !important; border-bottom: 1px solid rgba(255,255,255,.18) !important; }
+        .sidebar .sidebar-brand .logo { display: block !important; margin: 0 auto !important; }
+        .sidebar .sidebar-brand p { margin: 12px 0 0 !important; text-align: center !important; }
     </style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/php-web/public/css/app-shell.css?v=1">
 </head>
 <body>
     <div class="dashboard-layout">
@@ -105,38 +112,42 @@
                 <p>Administration</p>
             </div>
             <nav class="menu">
-                <a href="/php-web/public/dashboard">Dashboard</a>
-                <a href="/php-web/public/orders">Orders</a>
-                <a href="/php-web/public/products">Products</a>
-                <a href="/php-web/public/drivers">Drivers</a>
-                <a href="/php-web/public/analytics">Analytics</a>
-                <?php if (!empty($_SESSION['is_superadmin'])): ?>
-                    <a href="/php-web/public/superadmin">Manage Admins</a>
-                <?php endif; ?>
+                <a href="/php-web/public/dashboard">
+                    <svg viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v4H3V5a1 1 0 0 1 1-1zm-1 7h8v9H4a1 1 0 0 1-1-1v-8zm10 0h8v8a1 1 0 0 1-1 1h-7v-9z"/></svg>
+                    Dashboard
+                </a>
+                <a href="/php-web/public/products">
+                    <svg viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm2 5v2h8V7H8zm0 4v2h8v-2H8zm0 4v2h5v-2H8z"/></svg>
+                    Products
+                </a>
+                <a href="/php-web/public/orders">
+                    <svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5zm-8.5 8.2L2 11l10 5 10-5-1.5-.8L12 14 3.5 10.2zm0 4L2 15l10 5 10-5-1.5-.8L12 18l-8.5-3.8z"/></svg>
+                    Orders
+                </a>
+                <a href="/php-web/public/drivers">
+                    <svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v1h1a2 2 0 0 1 2 2v3a7 7 0 0 1-14 0V9a2 2 0 0 1 2-2h1V6a4 4 0 0 1 4-4zM5 20h14v2H5v-2z"/></svg>
+                    Drivers
+                </a>
+                
+                <!-- ADDED ANALYTICS LINK -->
+                <a href="/php-web/public/analytics">
+                    <svg viewBox="0 0 24 24"><path d="M3 3v18h18V3H3zm16 16H5V5h14v14zM7 16h2V9H7v7zm4 0h2V7h-2v9zm4 0h2v-4h-2v4z"/></svg>
+                    Analytics
+                </a>
             </nav>
         </aside>
 
         <div class="main-area">
             <header class="top-header">
                 
-                <!-- NOTIFICATION BELL & DROPDOWN -->
                 <div class="notification-container" id="notifContainer">
                     <div class="notification-bell" onclick="toggleNotifications(event)">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                        </svg>
+                        <svg viewBox="0 0 24 24" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                         <span id="notif-badge" class="notif-badge" style="display: none;">0</span>
                     </div>
-                    
                     <div class="notif-dropdown" id="notifDropdown">
-                        <div class="notif-header">
-                            <h3>Notifications</h3>
-                            <a href="orders.php?status=pending" class="notif-mark-read">View All</a>
-                        </div>
-                        <div class="notif-list" id="notifList">
-                            <div class="notif-empty">No new orders</div>
-                        </div>
+                        <div class="notif-header"><h3>Notifications</h3><a href="/php-web/public/orders" class="notif-mark-read">View All</a></div>
+                        <div class="notif-list" id="notifList"><div class="notif-empty">No new orders</div></div>
                     </div>
                 </div>
 
@@ -144,9 +155,10 @@
                     <button type="button" class="profile-trigger" onclick="toggleProfileMenu(event)">
                         <div class="avatar">A</div>
                         <div class="user-info" style="text-align: left;">
-                            <p class="user-name" style="margin: 0;"><?php echo htmlspecialchars($_SESSION['admin_name']); ?></p>
-                            <p class="user-role" style="margin: 0;">Administrator</p>
+                            <p class="user-name" style="margin: 0;"><?= htmlspecialchars($_SESSION['admin_name'] ?? 'Admin') ?></p>
+                            <p class="user-role" style="margin: 0;">Admin</p>
                         </div>
+                        <span class="profile-chevron"><svg width="8" height="8" viewBox="0 0 12 8"><path d="M1 1l5 5 5-5" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round"/></svg></span>
                     </button>
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
@@ -213,7 +225,11 @@
         // PROFILE MENU
         function toggleProfileMenu(event) {
             event.stopPropagation();
-            document.getElementById('profileDropdown').classList.toggle('show');
+            const notif = document.getElementById('notifDropdown');
+            if (notif) notif.classList.remove('show');
+            document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            const prof = document.getElementById('profileDropdown');
+            if (prof) prof.classList.toggle('show');
         }
         document.addEventListener('click', function(event) {
             const menu = document.getElementById('profileMenu');
@@ -223,7 +239,7 @@
         });
 
     let lastNotifCount = 0;
-// 🔥 NEW: Built-in browser beep synthesizer
+// ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥ NEW: Built-in browser beep synthesizer
 function playBeep() {
     try {
         let context = new (window.AudioContext || window.webkitAudioContext)();
@@ -239,11 +255,13 @@ function playBeep() {
 }
 
     function toggleNotifications(event) {
-        event.stopPropagation();
-        const dropdown = document.getElementById('notifDropdown');
-        // Just toggle the open/close state
-        dropdown.classList.toggle('show');
-    }
+            event.stopPropagation();
+            const prof = document.getElementById('profileDropdown');
+            if (prof) prof.classList.remove('show');
+            document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            const notif = document.getElementById('notifDropdown');
+            if (notif) notif.classList.toggle('show');
+        }
 
     // Close dropdown when clicking outside
     document.addEventListener('click', function(event) {
@@ -279,7 +297,7 @@ function playBeep() {
                         badge.textContent = unreadCount;
                         
                     if (unreadCount > lastNotifCount) {
-                        playBeep(); // 👈 Call our new beep function
+                        playBeep(); // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¹Ã…â€œÃƒÆ’Ã¢â‚¬Â¹ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â  Call our new beep function
                     }
                     } else {
                         badge.style.display = 'none';
@@ -302,7 +320,7 @@ function playBeep() {
                                     <div class="notif-icon">#${item.order_id}</div>
                                     <div class="notif-content">
                                         <p><strong>${item.retailer_name}</strong> placed a new order.</p>
-                                        <span class="notif-time">${timeAgo} &middot; ₱${Number(item.total_amount).toFixed(2)}</span>
+                                        <span class="notif-time">${timeAgo} &middot; ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±${Number(item.total_amount).toFixed(2)}</span>
                                     </div>
                                 </a>
                             `;
@@ -325,7 +343,7 @@ function playBeep() {
             .catch(err => console.error('Error fetching notifications:', err));
     }
 
-    // 🔥 NEW FUNCTION: Marks only the clicked item as read
+    // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥ NEW FUNCTION: Marks only the clicked item as read
     function markAsRead(itemId) {
         let readIds = JSON.parse(localStorage.getItem('readNotifIds') || '[]');
         if (!readIds.includes(itemId)) {
@@ -337,7 +355,24 @@ function playBeep() {
 
     checkNotifications();
     setInterval(checkNotifications, 15000);
-</script>
+        
+        // Close all when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (menu && !menu.contains(event.target)) {
+                const prof = document.getElementById('profileDropdown');
+                if (prof) prof.classList.remove('show');
+            }
+            const c = document.getElementById('notifContainer');
+            if (c && !c.contains(event.target)) {
+                const d = document.getElementById('notifDropdown');
+                if (d) d.classList.remove('show');
+            }
+            if (!event.target.closest('.menu-wrap')) {
+                document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            }
+        });
+    </script>
 
     <!-- KimFresh mobile burger menu script -->
     <script>
@@ -388,6 +423,23 @@ function playBeep() {
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
         window.matchMedia('(min-width: 769px)').addEventListener('change', function (e) { if (e.matches) setOpen(false); });
     })();
+            
+        // Close all when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (menu && !menu.contains(event.target)) {
+                const prof = document.getElementById('profileDropdown');
+                if (prof) prof.classList.remove('show');
+            }
+            const c = document.getElementById('notifContainer');
+            if (c && !c.contains(event.target)) {
+                const d = document.getElementById('notifDropdown');
+                if (d) d.classList.remove('show');
+            }
+            if (!event.target.closest('.menu-wrap')) {
+                document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            }
+        });
     </script>
 <!-- SCROLL MEMORY -->
 <script>
@@ -411,6 +463,23 @@ function playBeep() {
             sessionStorage.setItem('scrollPos', window.scrollY);
         }
     });
-</script>
+        
+        // Close all when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (menu && !menu.contains(event.target)) {
+                const prof = document.getElementById('profileDropdown');
+                if (prof) prof.classList.remove('show');
+            }
+            const c = document.getElementById('notifContainer');
+            if (c && !c.contains(event.target)) {
+                const d = document.getElementById('notifDropdown');
+                if (d) d.classList.remove('show');
+            }
+            if (!event.target.closest('.menu-wrap')) {
+                document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            }
+        });
+    </script>
 </body>
 </html>

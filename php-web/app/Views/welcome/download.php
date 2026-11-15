@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Views/welcome/download.php — Android-only download gate
 $base = '/php-web/public';
 

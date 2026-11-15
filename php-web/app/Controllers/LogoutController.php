@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Controllers/LogoutController.php — strict MVC Controller
 class LogoutController extends Controller
 {

@@ -1,0 +1,51 @@
+/* KimFresh app shell: shared sidebar + topbar + layout */
+:root { --primary: #D44A00; --primary-dark: #B83F00; --primary-soft: #fdf0e6; }
+body { margin: 0 !important; padding: 0 !important; background: #f4f6fa; font-family: 'Nunito Sans', sans-serif; }
+
+/* ---------- Sidebar ---------- */
+.sidebar, .sidebar * { font-family: 'Nunito Sans', sans-serif !important; }
+.sidebar { background: linear-gradient(165deg, #d94a00 0%, #cf561a 55%, #c96a3a 100%) !important; padding-right: 0 !important; }
+.sidebar .sidebar-brand { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-align: center !important; padding: 28px 16px 22px !important; margin: 0 !important; border-bottom: 1px solid rgba(255,255,255,.18) !important; }
+.sidebar .sidebar-brand .logo { display: block !important; margin: 0 auto !important; width: 120px !important; max-width: 100% !important; height: auto !important; }
+.sidebar .sidebar-brand p { margin: 12px 0 0 !important; text-align: center !important; font-size: 13px !important; font-weight: 600 !important; color: #fff !important; opacity: .95 !important; }
+.sidebar .menu { display: flex; flex-direction: column; gap: 4px; padding: 0 !important; margin-top: 40px; }
+.sidebar .menu a { display: flex; align-items: center; gap: 14px; margin: 0 0 0 12px; padding: 15px 22px; color: #fff; font-size: 17px !important; font-weight: 800 !important; text-decoration: none; border-radius: 999px 0 0 999px; background: transparent; transition: background .15s; }
+.sidebar .menu a svg { width: 18px; height: 18px; flex-shrink: 0; fill: currentColor; }
+.sidebar .menu a:hover { background: rgba(255,255,255,.14); }
+.sidebar .menu a.active { background: #f4f5f9; color: #d9480f; box-shadow: none; }
+
+/* ---------- Layout ---------- */
+.main-area { margin-left: 270px !important; width: calc(100% - 270px) !important; display: flex; flex-direction: column; min-height: 100vh; }
+.main-content { padding: 24px 40px 40px !important; flex-grow: 1 !important; }
+.overview-label { margin: 0 0 2px !important; color: var(--primary) !important; font-weight: 800 !important; font-size: 18px !important; }
+.main-content h1 { margin: 0 0 18px; font-size: 32px; font-weight: 800; color: #111; }
+
+/* ---------- Topbar ---------- */
+.top-header { width: 100% !important; background: #fff !important; padding: 18px 40px !important; border-bottom: none !important; border-radius: 0 !important; margin: 0 !important; box-shadow: none !important; display: flex !important; justify-content: flex-end !important; align-items: center !important; gap: 22px; box-sizing: border-box !important; position: sticky; top: 0; z-index: 999; }
+.top-header .profile-menu { order: 1; position: relative; }
+.top-header .notification-container { order: 2; position: relative; margin-right: 0 !important; }
+
+.profile-trigger { display: flex; align-items: center; gap: 12px; background: transparent; border: none; cursor: pointer; padding: 4px 8px !important; border-radius: 10px; transition: .2s; }
+.profile-trigger:hover { background: #fdf0e6; }
+.profile-trigger .avatar { width: 34px !important; height: 34px !important; border-radius: 50%; background: #F2B58F !important; color: var(--primary) !important; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; }
+.profile-trigger .user-name { font-size: 12px !important; font-weight: 700 !important; color: #222 !important; margin: 0 !important; }
+.profile-trigger .user-role { font-size: 10px !important; color: #666 !important; margin: 0 !important; }
+.profile-chevron { width: 16px; height: 16px; border-radius: 50%; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; margin-left: 10px; }
+.profile-dropdown { position: absolute; top: 100%; right: 0; background: #fff; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.1); width: 200px; padding: 8px; display: none; z-index: 100; border: 1px solid #eee; }
+.profile-dropdown.show { display: block; }
+.dropdown-account { padding: 12px; border-bottom: 1px solid #eee; margin-bottom: 8px; }
+.dropdown-account strong { display: block; font-size: 14px; color: #333; }
+.dropdown-account span { font-size: 12px; color: #777; }
+.dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-decoration: none; color: #333; font-size: 13px; font-weight: 600; border-radius: 8px; transition: .2s; }
+.dropdown-item:hover { background: #fdf0e6; color: var(--primary); }
+
+.notification-bell { position: relative; display: flex !important; align-items: center; justify-content: center; width: 28px !important; height: 28px !important; border-radius: 50%; background: var(--primary) !important; cursor: pointer; }
+.notification-bell:hover { background: var(--primary-dark) !important; }
+.notification-bell svg { width: 16px !important; height: 16px !important; fill: #fff !important; stroke: #fff !important; }
+.notification-bell svg path { fill: #fff !important; stroke: #fff !important; }
+.notif-badge { position: absolute; top: -4px !important; right: -6px !important; background: #fff !important; color: #333 !important; font-size: 7px !important; font-weight: 800; min-width: 12px !important; height: 12px !important; width: auto !important; border: none !important; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.notif-dropdown { position: absolute; top: 45px !important; right: 0; width: 320px; background: #fff; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.15); border: 1px solid #eee; display: none; z-index: 1000; color: #333; overflow: hidden; }
+.notif-dropdown.show { display: block; }
+
+@media (max-width: 900px) { .main-area { margin-left: 0 !important; width: 100% !important; } .sidebar { position: static; } }
+@media print { .sidebar, .top-header { display: none !important; } .main-area { margin-left: 0 !important; width: 100% !important; } .main-content { padding: 0 !important; } }

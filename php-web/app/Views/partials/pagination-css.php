@@ -3,7 +3,7 @@
 // Usage: require inside <head> or before </body>
 ?>
 <style>
-/* PAGINATION — shared partial */
+/* PAGINATION â€” shared partial */
 .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 24px; flex-wrap: wrap; }
 .pagination a, .pagination span {
     display: inline-flex; align-items: center; justify-content: center;

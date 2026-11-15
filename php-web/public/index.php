@@ -1,5 +1,5 @@
-﻿<?php
-// public/index.php â€” strict MVC, no framework
+<?php
+// public/index.php ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â strict MVC, no framework
 
 ini_set('display_errors', 1);
 // Skip HTML header if this is a file download (PDF or CSV)
@@ -32,14 +32,20 @@ $routes = [
         '/dashboard'              => ['DashboardController', 'index'],
         '/login'                  => ['AuthController', 'showLogin',         ['auth' => false]],
         '/logout'                 => ['LogoutController', 'index'],
-        '/orders'                 => ['OrderController', 'index'],
+        '/orders'                 => ['OrderController', 'index'],        '/orders/view/export_pdf' => ['ViewOrderController', 'exportPdf'],
+        '/orders/view/export_csv' => ['ViewOrderController', 'exportCsv'],
         '/orders/view'            => ['ViewOrderController', 'show'],
         '/products'               => ['ProductController', 'index'],
         '/drivers'                => ['DriverController', 'index'],
         '/analytics'              => ['AnalyticsController', 'index'],
         '/settings'               => ['SettingsController', 'index'],
         '/logs'                   => ['LogsController', 'index'],
-        '/track'                  => ['TrackingController', 'index', ['auth' => false]],
+        '/track'                  => ['TrackingController', 'index', ['auth' => false]],        '/analytics/export_pdf'   => ['AnalyticsController', 'exportPdf'],
+        '/analytics/export_csv'   => ['AnalyticsController', 'exportCsv'],
+        '/orders/export_pdf'      => ['OrderController', 'exportPdf'],
+        '/orders/export_csv'      => ['OrderController', 'exportCsv'],
+        '/drivers/export_pdf'     => ['DriverController', 'exportPdf'],
+        '/drivers/export_csv'     => ['DriverController', 'exportCsv'],
         '/products/export-csv'    => ['CsvController', 'exportProducts'],
         '/superadmin'             => ['SuperAdminController', 'index',       ['auth' => true, 'role' => 'superadmin']],
         '/notifications'          => ['NotificationController', 'index'],
@@ -48,7 +54,8 @@ $routes = [
         '/superadmin'             => ['SuperAdminController', 'index',       ['auth' => true, 'role' => 'superadmin']],
         '/login'                  => ['AuthController', 'login',             ['auth' => false]],
         '/products'               => ['ProductController', 'index'],
-        '/drivers'                => ['DriverController', 'index'],
+        '/drivers'                => ['DriverController', 'index'],        '/orders/view/export_pdf' => ['ViewOrderController', 'exportPdf'],
+        '/orders/view/export_csv' => ['ViewOrderController', 'exportCsv'],
         '/orders/view'            => ['ViewOrderController', 'show'],
         '/orders'                 => ['OrderController', 'index'],
         '/settings'               => ['SettingsController', 'index'],
@@ -58,11 +65,11 @@ $routes = [
 
 if (!isset($routes[$method][$uri])) {
     http_response_code(404);
-    echo "<h1>404 â€” no route for {$method} {$uri}</h1>";
+    echo "<h1>404 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no route for {$method} {$uri}</h1>";
     echo "<p>Available routes:</p><ul>";
     foreach ($routes as $m => $list) {
         foreach ($list as $path => $handler) {
-            echo "<li><code>{$m} {$path}</code> â†’ {$handler[0]}::{$handler[1]}()</li>";
+            echo "<li><code>{$m} {$path}</code> ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ {$handler[0]}::{$handler[1]}()</li>";
         }
     }
     echo "</ul>";
@@ -82,7 +89,7 @@ if ($needsAuth && !isset($_SESSION['admin_id'])) {
 $needsRole = $meta['role'] ?? null;
 if ($needsRole === 'superadmin' && empty($_SESSION['is_superadmin'])) {
     http_response_code(403);
-    die('403 â€” Superadmin access required.');
+    die('403 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Superadmin access required.');
 }
 // ---- END AUTH GUARD ----
 
@@ -108,4 +115,8 @@ if (!method_exists($controller, $action)) {
 }
 
 $controller->$action();
+
+
+
+
 

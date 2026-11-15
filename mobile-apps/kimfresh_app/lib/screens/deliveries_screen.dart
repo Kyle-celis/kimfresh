@@ -199,6 +199,7 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
   bool _isFetchingDeliveries = false;
 
   int? _gpsOrderId;
+  int? _justDeliveredOrderId;
   int? _updatingDeliveryId;
   final Map<int, String> _optimisticStatus = {};
 
@@ -556,7 +557,12 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
       final added = newIds.difference(oldIds);
 
       if (removed.isNotEmpty) {
-        _showBanner('Order #${removed.first} was reassigned or delivered', AppColors.warning);
+        if (_justDeliveredOrderId != null && removed.contains(_justDeliveredOrderId.toString())) {
+          _showBanner('Order #$_justDeliveredOrderId delivered successfully!', AppColors.success);
+          _justDeliveredOrderId = null; // Reset it
+        } else {
+          _showBanner('Order #${removed.first} was reassigned', AppColors.warning);
+        }
       } else if (added.isNotEmpty) {
         _showBanner('New order #${added.first} assigned', AppColors.success);
       }
@@ -626,6 +632,10 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
         _directGpsTimer?.cancel();
         _stopGpsUpdates();
         ForegroundService.stop();
+
+        if (status == 'delivered' && orderId != null) {
+          _justDeliveredOrderId = orderId; // Remember this so the banner doesn't say "reassigned"
+        }
       }
 
       messenger.showSnackBar(

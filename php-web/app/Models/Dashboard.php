@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Models/Dashboard.php — strict MVC Model
 class Dashboard extends Model
 {

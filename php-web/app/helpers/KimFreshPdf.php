@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/helpers/KimFreshPdf.php — FPDF subclass for "Products" inventory export
 // Extends lib/fpdf/fpdf.php
 

@@ -18,6 +18,19 @@
         .stat-card p { margin: 0; color: #666; font-size: 13px; font-weight: 700; }
         .stat-card h2 { margin: 5px 0 0; font-size: 28px; color: #333; }
 
+                /* ---------- Sidebar (matches Figma) ---------- */
+        .sidebar { background: linear-gradient(165deg, #d94a00 0%, #cf561a 55%, #c96a3a 100%) !important; padding-right: 0 !important; }
+        .sidebar .sidebar-brand p { font-size: 13px; font-weight: 600; color: #fff; opacity: .95; }
+        .sidebar .menu { display: flex; flex-direction: column; gap: 4px; padding: 0 !important; margin-top: 40px; }
+        .sidebar .menu a { display: flex; align-items: center; gap: 14px; margin: 0 0 0 12px; padding: 15px 22px; color: #fff; font-size: 17px; font-weight: 800; text-decoration: none; border-radius: 999px 0 0 999px; background: transparent; transition: background .15s; }
+        .sidebar .menu a svg { width: 18px; height: 18px; flex-shrink: 0; fill: currentColor; }
+        .sidebar .menu a:hover { background: rgba(255,255,255,.14); }
+        .sidebar .menu a.active { background: #f4f5f9; color: #d9480f; box-shadow: none; }
+        /* ---------- Sidebar brand (same as Drivers) ---------- */
+        .sidebar .sidebar-brand { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-align: center !important; padding: 28px 16px 22px !important; margin: 0 !important; border-bottom: 1px solid rgba(255,255,255,.18) !important; }
+        .sidebar .sidebar-brand .logo { display: block !important; margin: 0 auto !important; }
+        .sidebar .sidebar-brand p { margin: 12px 0 0 !important; text-align: center !important; }
+
         .table-section { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 24px; }
         .table-section h3 { margin-top: 0; color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }
         table { width: 100%; border-collapse: collapse; }
@@ -27,7 +40,7 @@
         .profile-menu { position: relative; }
         .profile-trigger { display: flex; align-items: center; gap: 10px; background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 10px; transition: 0.2s; }
         .profile-trigger:hover { background: var(--primary-soft); }
-        .profile-dropdown { position: absolute; top: 100%; right: 0; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 200px; padding: 8px; display: none; z-index: 100; border: 1px solid #eee; }
+        .profile-dropdown { position: absolute; top: 100%; right: 0; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 200px; padding: 8px; display: none; z-index: 999; border: 1px solid #eee; }
         .profile-dropdown.show { display: block; }
         .dropdown-account { padding: 12px; border-bottom: 1px solid #eee; margin-bottom: 8px; }
         .dropdown-account strong { display: block; font-size: 14px; color: #333; }
@@ -40,17 +53,10 @@
            ========================================= */
         .notification-container { position: relative; margin-right: 15px; }
         
-        .notification-bell {
-            position: relative; display: flex; align-items: center; justify-content: center;
-            width: 44px; height: 44px; border-radius: 50%; background: transparent; cursor: pointer; transition: background 0.2s;
-        }
+        .notification-bell { position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%; background: var(--primary); cursor: pointer; }
         .notification-bell:hover { background: #f0f0f0; }
         
-        .notif-badge {
-            position: absolute; top: 2px; right: 2px; background: #dc2626; color: white;
-            font-size: 11px; font-weight: 800; width: 20px; height: 20px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
+        .notif-badge { position: absolute; top: -6px; right: -8px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; min-width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
         .notif-dropdown {
             position: absolute; top: 55px; right: 0; width: 320px;
@@ -90,7 +96,28 @@
         .notif-time { color: #888; font-size: 11px; font-weight: 600; }
         
         .notif-empty { padding: 20px; text-align: center; color: #888; font-size: 13px; }
-    </style>
+    
+        /* ---------- Sidebar typography (same on all pages) ---------- */
+        .sidebar, .sidebar * { font-family: 'Nunito Sans', sans-serif !important; }
+        .sidebar .sidebar-brand .logo { width: 120px !important; max-width: 100% !important; height: auto !important; }
+        .sidebar .sidebar-brand p { font-size: 13px !important; font-weight: 600 !important; color: #fff !important; opacity: .95 !important; }
+        .sidebar .menu a { font-size: 17px !important; font-weight: 800 !important; }
+    .pop.show { display: block !important; }
+.menu-wrap { position: relative; display: inline-block; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/php-web/public/css/app-shell.css?v=1">
+        <style>
+        .menu-wrap { position: relative; display: inline-block; }
+        .pill-btn.solid { height: 42px; padding: 0 16px; font-size: 18px; font-weight: 900; letter-spacing: 1px; min-width: 42px; justify-content: center; background: #C34200; color: #fff; border: 1px solid #C34200; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; }
+        .pop { position: absolute; top: 46px; right: 0; min-width: 190px; background: #fff; border: 1px solid #eee; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); padding: 8px; display: none; z-index: 999; }
+        .pop.show { display: block; }
+        .pop a { display: block; width: 100%; text-align: left; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #333; text-decoration: none; border-radius: 8px; }
+        .pop a:hover { background: #fdf0e6; color: #C34200; }
+        .pop.show { display: block !important; }
+.menu-wrap { position: relative; display: inline-block; }
+</style>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -100,38 +127,42 @@
                 <p>Administration</p>
             </div>
             <nav class="menu">
-                <a href="/php-web/public/dashboard">Dashboard</a>
-                <a href="/php-web/public/orders">Orders</a>
-                <a href="/php-web/public/products">Products</a>
-                <a href="/php-web/public/drivers">Drivers</a>
-                <a href="/php-web/public/analytics" class="active">Analytics</a>
-                <?php if (!empty($_SESSION['is_superadmin'])): ?>
-                    <a href="/php-web/public/superadmin">Manage Admins</a>
-                <?php endif; ?>
+                <a href="/php-web/public/dashboard">
+                    <svg viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v4H3V5a1 1 0 0 1 1-1zm-1 7h8v9H4a1 1 0 0 1-1-1v-8zm10 0h8v8a1 1 0 0 1-1 1h-7v-9z"/></svg>
+                    Dashboard
+                </a>
+                <a href="/php-web/public/products">
+                    <svg viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm2 5v2h8V7H8zm0 4v2h8v-2H8zm0 4v2h5v-2H8z"/></svg>
+                    Products
+                </a>
+                <a href="/php-web/public/orders" >
+                    <svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5zm-8.5 8.2L2 11l10 5 10-5-1.5-.8L12 14 3.5 10.2zm0 4L2 15l10 5 10-5-1.5-.8L12 18l-8.5-3.8z"/></svg>
+                    Orders
+                </a>
+                <a href="/php-web/public/drivers">
+                    <svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v1h1a2 2 0 0 1 2 2v3a7 7 0 0 1-14 0V9a2 2 0 0 1 2-2h1V6a4 4 0 0 1 4-4zM5 20h14v2H5v-2z"/></svg>
+                    Drivers
+                </a>
+                
+                <!-- ADDED ANALYTICS LINK -->
+                <a href="/php-web/public/analytics" class="active">
+                    <svg viewBox="0 0 24 24"><path d="M3 3v18h18V3H3zm16 16H5V5h14v14zM7 16h2V9H7v7zm4 0h2V7h-2v9zm4 0h2v-4h-2v4z"/></svg>
+                    Analytics
+                </a>
             </nav>
         </aside>
 
         <div class="main-area">
             <header class="top-header">
                 
-                <!-- NOTIFICATION BELL & DROPDOWN -->
                 <div class="notification-container" id="notifContainer">
                     <div class="notification-bell" onclick="toggleNotifications(event)">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                        </svg>
+                        <svg viewBox="0 0 24 24" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                         <span id="notif-badge" class="notif-badge" style="display: none;">0</span>
                     </div>
-                    
                     <div class="notif-dropdown" id="notifDropdown">
-                        <div class="notif-header">
-                            <h3>Notifications</h3>
-                            <a href="orders.php?status=pending" class="notif-mark-read">View All</a>
-                        </div>
-                        <div class="notif-list" id="notifList">
-                            <div class="notif-empty">No new orders</div>
-                        </div>
+                        <div class="notif-header"><h3>Notifications</h3><a href="/php-web/public/orders" class="notif-mark-read">View All</a></div>
+                        <div class="notif-list" id="notifList"><div class="notif-empty">No new orders</div></div>
                     </div>
                 </div>
 
@@ -139,9 +170,10 @@
                     <button type="button" class="profile-trigger" onclick="toggleProfileMenu(event)">
                         <div class="avatar">A</div>
                         <div class="user-info" style="text-align: left;">
-                            <p class="user-name" style="margin: 0;"><?php echo htmlspecialchars($_SESSION['admin_name']); ?></p>
-                            <p class="user-role" style="margin: 0;">Administrator</p>
+                            <p class="user-name" style="margin: 0;"><?= htmlspecialchars($_SESSION['admin_name'] ?? 'Admin') ?></p>
+                            <p class="user-role" style="margin: 0;">Admin</p>
                         </div>
+                        <span class="profile-chevron"><svg width="8" height="8" viewBox="0 0 12 8"><path d="M1 1l5 5 5-5" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round"/></svg></span>
                     </button>
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-account">
@@ -156,93 +188,94 @@
             </header>
 
             <main class="main-content">
-                <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
-                    <div>
-                        <p class="overview-label">Reports</p>
-                        <h1 style="margin:0;">Analytics & Insights</h1>
-                        <p class="page-sub" style="margin-top:5px;">Analyze business performance and driver efficiency.</p>
-                    </div>
-                </div>
+    <!-- Page Header with Kebab Menu -->
+    <div class="page-head" style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 12px; flex-wrap: wrap;">
+        <div>
+            <p class="overview-label" style="margin:0 0 2px; color:#C34200; font-weight:800; font-size:18px;">Reports</p>
+            <h1 style="margin:0;">Analytics</h1>
+            <p style="margin-top:5px;">Analyze business performance and driver efficiency.</p>
+        </div>
+        <div class="menu-wrap">
+            <button type="button" class="pill-btn solid" onclick="togglePop(event, 'exportPopAnalytics')" style="position: relative; z-index: 999; padding: 0 16px; font-size: 18px; font-weight: 900; letter-spacing: 1px; min-width: 42px; justify-content: center; background: #C34200; color: #fff; border-radius: 999px; border: none; height: 48px; cursor: pointer;" title="Options">&#8942;</button>
+            <div class="pop" id="exportPopAnalytics" style="position: absolute; top: 52px; right: 0; min-width: 190px; background: #fff; border: 1px solid #eee; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); padding: 8px; display: none; z-index: 999;">
+                <a href="/php-web/public/analytics/export_pdf" style="display: block; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #333; text-decoration: none; border-radius: 8px;">Export PDF</a>
+                <a href="/php-web/public/analytics/export_csv" style="display: block; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #333; text-decoration: none; border-radius: 8px;">Export CSV</a>
+            </div>
+        </div>
+    </div>
 
-                <!-- STATS GRID -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <p>Total Orders (All Time)</p>
-                        <h2><?php echo $total_orders; ?></h2>
-                    </div>
-                    <div class="stat-card green">
-                        <p>Delivered Orders</p>
-                        <h2><?php echo $delivered; ?></h2>
-                    </div>
-                    <!-- 🔥 REPLACED SUCCESS RATE WITH ESTIMATED EARNINGS -->
-                    <div class="stat-card blue">
-                        <p>Estimated Earnings</p>
-                        <h2>₱<?php echo number_format($total_earnings, 2); ?></h2>
-                    </div>
-                </div>
+    <!-- Stats Row -->
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 24px;">
+        <div class="stat-card" style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid #C34200;">
+            <p style="margin: 0; color: #666; font-size: 13px; font-weight: 700;">Total Orders (All Time)</p>
+            <h2 style="margin: 5px 0 0; font-size: 28px; color: #333;"><?= $total_orders ?? 0 ?></h2>
+        </div>
+        <div class="stat-card" style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid #15803d;">
+            <p style="margin: 0; color: #666; font-size: 13px; font-weight: 700;">Delivered Orders</p>
+            <h2 style="margin: 5px 0 0; font-size: 28px; color: #333;"><?= $completed_orders ?? $delivered_orders ?? $total_delivered ?? 0 ?></h2>
+        </div>
+        <div class="stat-card" style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid #1d4ed8;">
+            <p style="margin: 0; color: #666; font-size: 13px; font-weight: 700;">Estimated Earnings</p>
+            <h2 style="margin: 5px 0 0; font-size: 28px; color: #333;">&#8369;<?= number_format($total_earnings ?? $total_revenue ?? $revenue ?? 0, 2) ?></h2>
+        </div>
+    </div>
 
-                <!-- TOP PRODUCTS TABLE -->
-                <section class="table-section">
-                    <h3>Top 5 Best-Selling Products</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Product Name</th>
-                                <th>Total Sold</th>
-                                <th>Total Revenue</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php 
-                            $rank = 1;
-                            if ($top_products->num_rows > 0) {
-                                while($row = $top_products->fetch_assoc()) {
-                                    echo "<tr>";
-                                    echo "<td><strong>#" . $rank++ . "</strong></td>";
-                                    echo "<td>" . htmlspecialchars($row['name']) . "</td>";
-                                    echo "<td>" . $row['total_sold'] . " units</td>";
-                                    echo "<td>₱" . number_format((float)($row['total_revenue'] ?? 0), 2) . "</td>";
-                                    echo "</tr>";
-                                }
-                            } else {
-                                echo "<tr><td colspan='4' style='text-align:center;'>No delivered orders yet.</td></tr>";
-                            }
-                            ?>
-                        </tbody>
-                    </table>
-                </section>
+    <!-- Top Selling Products -->
+    <div class="table-section" style="background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 24px;">
+        <h3 style="margin-top: 0; font-size: 18px; color: #333;">Top 5 Best-Selling Products</h3>
+        <div class="table-responsive" style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f1f2f6; text-align: left;">
+                        <th style="padding: 12px; font-size: 12px; color: #666;">Rank</th>
+                        <th style="padding: 12px; font-size: 12px; color: #666;">Product Name</th>
+                        <th style="padding: 12px; font-size: 12px; color: #666;">Total Sold</th>
+                        <th style="padding: 12px; font-size: 12px; color: #666;">Total Revenue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (isset($top_products) && $top_products->num_rows > 0): $rank = 1; while($row = $top_products->fetch_assoc()): ?>
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 12px; font-size: 13px; font-weight: bold;">#<?= $rank++ ?></td>
+                            <td style="padding: 12px; font-size: 13px;"><?= htmlspecialchars($row['name']) ?></td>
+                            <td style="padding: 12px; font-size: 13px;"><?= (int)$row['total_sold'] ?> units</td>
+                            <td style="padding: 12px; font-size: 13px;">&#8369;<?= number_format($row['total_sales'] ?? $row['total_amount'] ?? $row['revenue'] ?? 0, 2) ?></td>
+                        </tr>
+                    <?php endwhile; else: ?>
+                        <tr><td colspan="4" style="padding: 20px; text-align: center; color: #777;">No products sold yet.</td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-                <!-- DRIVER LEADERBOARD -->
-                <section class="table-section">
-                    <h3>Driver Leaderboard</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Driver Name</th>
-                                <th>Completed Deliveries</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php 
-                            $rank = 1;
-                            if ($top_drivers->num_rows > 0) {
-                                while($row = $top_drivers->fetch_assoc()) {
-                                    echo "<tr>";
-                                    echo "<td><strong>#" . $rank++ . "</strong></td>";
-                                    echo "<td>" . htmlspecialchars($row['name']) . "</td>";
-                                    echo "<td>" . $row['total_deliveries'] . " deliveries</td>";
-                                    echo "</tr>";
-                                }
-                            } else {
-                                echo "<tr><td colspan='3' style='text-align:center;'>No drivers have completed deliveries yet.</td></tr>";
-                            }
-                            ?>
-                        </tbody>
-                    </table>
-                </section>
-            </main>
+    <!-- Driver Leaderboard -->
+    <div class="table-section" style="background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <h3 style="margin-top: 0; font-size: 18px; color: #333;">Driver Leaderboard</h3>
+        <div class="table-responsive" style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f1f2f6; text-align: left;">
+                        <th style="padding: 12px; font-size: 12px; color: #666;">Rank</th>
+                        <th style="padding: 12px; font-size: 12px; color: #666;">Driver Name</th>
+                        <th style="padding: 12px; font-size: 12px; color: #666;">Completed Deliveries</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (isset($driver_leaderboard) && $driver_leaderboard->num_rows > 0): $rank = 1; while($row = $driver_leaderboard->fetch_assoc()): ?>
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 12px; font-size: 13px; font-weight: bold;">#<?= $rank++ ?></td>
+                            <td style="padding: 12px; font-size: 13px;"><?= htmlspecialchars($row['name']) ?></td>
+                            <td style="padding: 12px; font-size: 13px;"><?= (int)($row['total_deliveries'] ?? $row['deliveries'] ?? $row['completed_orders'] ?? 0) ?> deliveries</td>
+                        </tr>
+                    <?php endwhile; else: ?>
+                        <tr><td colspan="3" style="padding: 20px; text-align: center; color: #777;">No completed deliveries yet.</td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
         </div>
     </div>
 
@@ -250,7 +283,11 @@
         // PROFILE MENU
         function toggleProfileMenu(event) {
             event.stopPropagation();
-            document.getElementById('profileDropdown').classList.toggle('show');
+            const notif = document.getElementById('notifDropdown');
+            if (notif) notif.classList.remove('show');
+            document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            const prof = document.getElementById('profileDropdown');
+            if (prof) prof.classList.toggle('show');
         }
         document.addEventListener('click', function(event) {
             const menu = document.getElementById('profileMenu');
@@ -298,8 +335,11 @@
 
         function toggleNotifications(event) {
             event.stopPropagation();
-            const dropdown = document.getElementById('notifDropdown');
-            dropdown.classList.toggle('show');
+            const prof = document.getElementById('profileDropdown');
+            if (prof) prof.classList.remove('show');
+            document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            const notif = document.getElementById('notifDropdown');
+            if (notif) notif.classList.toggle('show');
         }
 
         document.addEventListener('click', function(event) {
@@ -355,7 +395,7 @@
                                         <div class="notif-icon">#${item.order_id}</div>
                                         <div class="notif-content">
                                             <p><strong>${item.retailer_name}</strong> placed a new order.</p>
-                                            <span class="notif-time">${timeAgo} &middot; ₱${Number(item.total_amount).toFixed(2)}</span>
+                                            <span class="notif-time">${timeAgo} &middot; ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±${Number(item.total_amount).toFixed(2)}</span>
                                         </div>
                                     </a>
                                 `;
@@ -388,6 +428,23 @@
 
         checkNotifications();
         setInterval(checkNotifications, 15000);
+            
+        // Close all when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (menu && !menu.contains(event.target)) {
+                const prof = document.getElementById('profileDropdown');
+                if (prof) prof.classList.remove('show');
+            }
+            const c = document.getElementById('notifContainer');
+            if (c && !c.contains(event.target)) {
+                const d = document.getElementById('notifDropdown');
+                if (d) d.classList.remove('show');
+            }
+            if (!event.target.closest('.menu-wrap')) {
+                document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            }
+        });
     </script>
 <!-- SCROLL MEMORY -->
 <script>
@@ -411,7 +468,24 @@
             sessionStorage.setItem('scrollPos', window.scrollY);
         }
     });
-</script>
+        
+        // Close all when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (menu && !menu.contains(event.target)) {
+                const prof = document.getElementById('profileDropdown');
+                if (prof) prof.classList.remove('show');
+            }
+            const c = document.getElementById('notifContainer');
+            if (c && !c.contains(event.target)) {
+                const d = document.getElementById('notifDropdown');
+                if (d) d.classList.remove('show');
+            }
+            if (!event.target.closest('.menu-wrap')) {
+                document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            }
+        });
+    </script>
 <!-- NOTIFICATIONS SCRIPT -->
 <script>
     let lastNotifCount = 0;
@@ -427,9 +501,13 @@
         } catch (e) {}
     }
     function toggleNotifications(event) {
-        event.stopPropagation();
-        document.getElementById('notifDropdown').classList.toggle('show');
-    }
+            event.stopPropagation();
+            const prof = document.getElementById('profileDropdown');
+            if (prof) prof.classList.remove('show');
+            document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            const notif = document.getElementById('notifDropdown');
+            if (notif) notif.classList.toggle('show');
+        }
     document.addEventListener('click', function(event) {
         const container = document.getElementById('notifContainer');
         const dropdown = document.getElementById('notifDropdown');
@@ -484,6 +562,67 @@
     }
     checkNotifications();
     setInterval(checkNotifications, 15000);
+        
+        // Close all when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('profileMenu');
+            if (menu && !menu.contains(event.target)) {
+                const prof = document.getElementById('profileDropdown');
+                if (prof) prof.classList.remove('show');
+            }
+            const c = document.getElementById('notifContainer');
+            if (c && !c.contains(event.target)) {
+                const d = document.getElementById('notifDropdown');
+                if (d) d.classList.remove('show');
+            }
+            if (!event.target.closest('.menu-wrap')) {
+                document.querySelectorAll('.pop').forEach(p => p.classList.remove('show'));
+            }
+        });
+    </script>
+
+
+<script>
+    function togglePop(event, id) {
+        event.stopPropagation();
+        var pop = document.getElementById(id);
+        if (!pop) return;
+        
+        // Hide all other popups
+        var allPops = document.querySelectorAll('.pop');
+        for (var i = 0; i < allPops.length; i++) {
+            allPops[i].style.display = 'none';
+            allPops[i].classList.remove('show');
+        }
+
+        // Toggle the clicked one
+        if (pop.style.display === 'block') {
+            pop.style.display = 'none';
+            pop.classList.remove('show');
+        } else {
+            pop.style.display = 'block';
+            pop.classList.add('show');
+        }
+    }
+
+    // Close popup if clicking outside
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.menu-wrap')) {
+            var allPops = document.querySelectorAll('.pop');
+            for (var i = 0; i < allPops.length; i++) {
+                allPops[i].style.display = 'none';
+                allPops[i].classList.remove('show');
+            }
+        }
+    });
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+

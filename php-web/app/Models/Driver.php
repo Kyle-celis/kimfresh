@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Models/Driver.php — strict MVC Model
 class Driver extends Model
 {

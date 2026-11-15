@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // app/Models/Store.php — strict MVC Model
 class Store extends Model
 {

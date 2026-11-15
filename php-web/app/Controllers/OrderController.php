@@ -1,5 +1,5 @@
 <?php
-// app/Controllers/OrderController.php — strict MVC Controller
+// app/Controllers/OrderController.php â€” strict MVC Controller
 class OrderController extends Controller
 {
     private $model;
@@ -155,5 +155,53 @@ class OrderController extends Controller
 
         $pdf->Output('D', 'KimFresh_Orders.pdf');
         exit();
+    }
+    public function exportPdf()
+    {
+        if (ob_get_length()) ob_end_clean();
+        ob_start();
+        require_once __DIR__ . '/../../lib/fpdf/fpdf.php';
+        require_once __DIR__ . '/../helpers/KimFreshPdf.php';
+        $pdf = new KimFreshPdf();
+        $pdf->title = 'KimFresh Orders Report';
+        $pdf->AddPage();
+        $pdf->SetFont('Arial', 'B', 10);
+        $pdf->SetFillColor(195, 66, 0); $pdf->SetTextColor(255, 255, 255);
+        $pdf->Cell(30, 8, 'Order ID', 1, 0, 'C', true);
+        $pdf->Cell(70, 8, 'Retailer', 1, 0, 'C', true);
+        $pdf->Cell(40, 8, 'Total', 1, 0, 'C', true);
+        $pdf->Cell(40, 8, 'Status', 1, 1, 'C', true);
+        $pdf->SetFont('Arial', '', 9); $pdf->SetTextColor(0, 0, 0);
+        
+        require_once __DIR__ . '/../Models/Order.php';
+        $model = new Order($this->conn);
+        $orders = $model->getAllForExport();
+        while ($row = $orders->fetch_assoc()) {
+            $pdf->Cell(30, 8, $row['order_id'], 1, 0, 'C');
+            $pdf->Cell(70, 8, substr(htmlspecialchars($row['retailer_name']), 0, 30), 1, 0, 'L');
+            $pdf->Cell(40, 8, 'PHP ' . number_format($row['total_amount'], 2), 1, 0, 'R');
+            $pdf->Cell(40, 8, strtoupper($row['order_status']), 1, 1, 'C');
+        }
+        $pdfData = $pdf->Output('S', 'KimFresh_Orders.pdf');
+        ob_end_clean();
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="KimFresh_Orders.pdf"');
+        echo $pdfData; exit;
+    }
+
+    public function exportCsv()
+    {
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="KimFresh_Orders.csv"');
+        $output = fopen('php://output', 'w');
+        fputcsv($output, ['Order ID', 'Retailer', 'Total', 'Status']);
+        
+        require_once __DIR__ . '/../Models/Order.php';
+        $model = new Order($this->conn);
+        $orders = $model->getAllForExport();
+        while ($row = $orders->fetch_assoc()) {
+            fputcsv($output, [$row['order_id'], $row['retailer_name'], $row['total_amount'], $row['order_status']]);
+        }
+        fclose($output); exit;
     }
 }

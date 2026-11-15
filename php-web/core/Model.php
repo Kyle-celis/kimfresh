@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // core/Model.php — strict, framework-free
 
 abstract class Model

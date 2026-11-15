@@ -1,5 +1,5 @@
 <?php
-// app/Models/Analytics.php — strict MVC Model
+// app/Models/Analytics.php Ã¢â‚¬â€ strict MVC Model
 class Analytics extends Model
 {
     public function getTopProducts($limit = 5)
