@@ -7,13 +7,13 @@ import 'login_screen.dart';
 class ProfileScreen extends StatefulWidget {
   final int driverId;
   final String driverName;
-  final String role; // <-- Make sure this is here
+  final String role;
 
   const ProfileScreen({
     super.key,
     required this.driverId,
     required this.driverName,
-    required this.role, // <-- And this
+    required this.role,
   });
 
   @override
@@ -52,13 +52,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
 
     setState(() {
-      // Safely handle if PHP wraps the data
       profile = data.containsKey('data') ? data['data'] : data;
-
       loading = false;
       nameController.text = profile?['name'] ?? '';
       phoneController.text = profile?['phone'] ?? '';
-      // Handle both 'license_number' and 'license' keys just in case
       licenseController.text = profile?['license_number'] ?? profile?['license'] ?? '';
     });
   }
@@ -100,7 +97,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => LoginScreen(role: widget.role)), // <-- CHANGED THIS
+      MaterialPageRoute(builder: (_) => LoginScreen(role: widget.role)),
           (route) => false,
     );
   }
@@ -109,7 +106,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => Dialog(
-        backgroundColor: Colors.white, // <-- Correctly placed inside Dialog
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
@@ -209,24 +206,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: AppColors.canvas,
       appBar: AppBar(
-        title: Text(editing ? 'Edit profile' : 'Profile'),
+        backgroundColor: Colors.white, // Changed to white
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: AppColors.textPrimary), // Back arrow color
+        title: Text(
+          editing ? 'Edit profile' : 'Profile',
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         actions: [
           if (!editing && !loading)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: TextButton.icon(
                 onPressed: _startEditing,
-                icon: const Icon(Icons.edit_outlined,
-                    color: Colors.white, size: 16),
+                icon: const Icon(Icons.edit_outlined, color: AppColors.burgundy, size: 16),
                 label: const Text(
                   'Edit',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.burgundy, // Changed text to burgundy for contrast on white
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 style: TextButton.styleFrom(
-                  backgroundColor: AppColors.burgundy, // Solid background so white pops
+                  backgroundColor: Colors.transparent, // Removed solid background
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -261,8 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   'KimFresh Driver · v1.0',
                   style: TextStyle(
                     fontSize: 11,
-                    color:
-                    AppColors.textSecondary.withOpacity(0.55),
+                    color: AppColors.textSecondary.withOpacity(0.55),
                     letterSpacing: 0.3,
                   ),
                 ),
@@ -273,14 +278,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── HEADER ───────────────────────────────────────────────────
   Widget _buildHeader() {
     final name = profile?['name'] ?? widget.driverName;
     final initials = _initialsFor(name);
 
     return Column(
       children: [
-        // Avatar with soft ring
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
@@ -340,7 +343,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── READ-ONLY INFO CARD ──────────────────────────────────────
   Widget _buildInfoCard() {
     return Container(
       decoration: BoxDecoration(
@@ -448,10 +450,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     switch (value) {
       case 'active':
       case 'approved':
-      case 'available': // <-- Add this
+      case 'available':
         color = AppColors.success;
         break;
-      case 'offline': // <-- Add this
+      case 'offline':
         color = AppColors.textSecondary;
         break;
       case 'pending':
@@ -494,7 +496,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── EDIT FORM ────────────────────────────────────────────────
   Widget _buildEditForm() {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
@@ -522,7 +523,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             controller: nameController,
             maxLength: 100,
             textCapitalization: TextCapitalization.words,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.black), // Changed for visibility
             decoration: const InputDecoration(
               counterText: '',
               prefixIcon: Icon(Icons.person_outline_rounded,
@@ -536,7 +537,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             controller: phoneController,
             maxLength: 20,
             keyboardType: TextInputType.phone,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.black), // Changed for visibility
             decoration: const InputDecoration(
               counterText: '',
               prefixIcon: Icon(Icons.phone_outlined,
@@ -550,7 +551,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             controller: licenseController,
             maxLength: 50,
             textCapitalization: TextCapitalization.characters,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.black), // Changed for visibility
             decoration: const InputDecoration(
               counterText: '',
               prefixIcon: Icon(Icons.badge_outlined,
@@ -647,7 +648,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── MESSAGE BANNER ───────────────────────────────────────────
   Widget _buildMessageBanner() {
     final color =
     _messageIsSuccess ? AppColors.success : AppColors.danger;
@@ -681,7 +681,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── LOGOUT BUTTON ────────────────────────────────────────────
   Widget _buildLogoutButton() {
     return SizedBox(
       width: double.infinity,

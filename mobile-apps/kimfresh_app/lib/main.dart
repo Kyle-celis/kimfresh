@@ -19,7 +19,7 @@ class KimFreshApp extends StatelessWidget {
     return MaterialApp(
       title: 'KimFresh',
       theme: AppTheme.build(),
-      home: RoleSelectionScreen(), // REMOVED const here
+      home: RoleSelectionScreen(),
       debugShowCheckedModeBanner: false,
     );
   }

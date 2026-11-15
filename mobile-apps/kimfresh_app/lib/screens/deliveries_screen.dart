@@ -65,7 +65,6 @@ class _SlideToActionButtonState extends State<SlideToActionButton> {
           ),
           child: Stack(
             children: [
-              // The Text Label
               Center(
                 child: AnimatedOpacity(
                   opacity: _dragValue > 0.1 ? 0.0 : 1.0,
@@ -88,8 +87,6 @@ class _SlideToActionButtonState extends State<SlideToActionButton> {
                   ),
                 ),
               ),
-
-              // The Draggable Thumb
               Positioned(
                 left: _padding + (_dragValue * dragWidth),
                 top: _padding,
@@ -102,15 +99,12 @@ class _SlideToActionButtonState extends State<SlideToActionButton> {
                   },
                   onHorizontalDragEnd: (details) {
                     if (_dragValue > 0.85) {
-                      // Success! Trigger the action
                       _dragValue = 1.0;
                       widget.onConfirmed();
-                      // Reset after a tiny delay
                       Future.delayed(const Duration(milliseconds: 300), () {
                         if (mounted) setState(() => _dragValue = 0.0);
                       });
                     } else {
-                      // Snap back if they didn't slide far enough
                       setState(() => _dragValue = 0.0);
                     }
                   },
@@ -151,7 +145,6 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
 
   bool _isOnline = false;
   bool _isUpdatingStatus = false;
-
 
   Future<void> _toggleOnlineStatus() async {
     if (_isUpdatingStatus) return;
@@ -205,14 +198,10 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
   DateTime _lastFgUpdate = DateTime(0);
   bool _isFetchingDeliveries = false;
 
-  // ── GPS State ──
   int? _gpsOrderId;
-
-  // ── Status-update state (fix #1) ──
   int? _updatingDeliveryId;
   final Map<int, String> _optimisticStatus = {};
 
-  // ── Retry queues (fix #2) ──
   late final RetryQueue _gpsQueue;
   late final RetryQueue _sensorQueue;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
@@ -225,16 +214,13 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
   }
 
   Future<void> _initializeApp() async {
-    // 1. Force the driver offline on app startup to sync the database with the UI
     await ApiService.updateDriverStatus(widget.driverId, 'offline');
 
-    // 2. Then initialize the rest of the services
     ForegroundService.init();
     _initQueues();
     _requestPermissions();
     loadDeliveries();
     initBle();
-
 
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted && !_isFetchingDeliveries) loadDeliveries();
@@ -328,9 +314,6 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     super.dispose();
   }
 
-  // ─────────────────────────────────────────────────────────
-  // GPS LOCATION TRACKING (delegated to foreground service)
-  // ─────────────────────────────────────────────────────────
   void _startGpsUpdates(int orderId) {
     if (_gpsOrderId == orderId) return;
     _gpsOrderId = orderId;
@@ -347,9 +330,6 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     }
     _gpsOrderId = null;
     ForegroundService.setActiveOrder(0);
-    // NOTE: do NOT call ForegroundService.stop() here — updateStatus()
-    // and _rejectOrder() call it only after a successful delivery/rejection,
-    // so the service doesn't die mid-transit if the UI rebuilds.
   }
 
   void _syncGpsWithDeliveries(List<dynamic> activeData) {
@@ -380,9 +360,6 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     }
   }
 
-  // ─────────────────────────────────────────────────────────
-  // BLE
-  // ─────────────────────────────────────────────────────────
   void initBle() {
     try {
       _bleSub = ble.readingStream.listen((data) {
@@ -430,9 +407,6 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     }
   }
 
-  // ─────────────────────────────────────────────────────────
-  // BLUETOOTH SCANNER MODAL
-  // ─────────────────────────────────────────────────────────
   void _showBluetoothScanner() {
     showModalBottomSheet(
       context: context,
@@ -465,7 +439,6 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
 
                         final results = snapshot.data!;
 
-                        // 🔍 DEBUG: Print how many devices the phone sees
                         if (results.isNotEmpty) {
                           debugPrint("📡 PHONE SEES ${results.length} DEVICES");
                           for (var r in results) {
@@ -481,33 +454,23 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
                           itemCount: results.length,
                           itemBuilder: (context, i) {
                             final device = results[i].device;
-                            // 🔥 FIX: Fallback to MAC address if name is empty
                             final rawName = results[i].advertisementData.advName;
                             final displayName = rawName.isNotEmpty ? rawName : 'Unknown Device (${device.remoteId})';
 
                             return ListTile(
                               leading: const Icon(Icons.bluetooth, color: AppColors.burgundy),
-                              title: Text(displayName), // Show the fallback name
+                              title: Text(displayName),
                               subtitle: Text(device.remoteId.toString()),
                               onTap: () async {
-                                // 1. Stop the scan immediately
                                 ble.stopScan();
-
-                                // 2. Close the modal
                                 Navigator.pop(context);
-
-                                // 3. Wait for the modal to fully close (500ms)
                                 await Future.delayed(const Duration(milliseconds: 500));
-
                                 final messenger = ScaffoldMessenger.of(this.context);
                                 messenger.showSnackBar(
                                   SnackBar(content: Text('Connecting to $displayName...')),
                                 );
-
-                                // 4. NOW connect
                                 final success = await ble.connectToDevice(device);
                                 if (!mounted) return;
-
                                 if (success) {
                                   setState(() => bleStatus = 'Connected');
                                 } else {
@@ -543,9 +506,6 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
 
   int _parseIntOrZero(dynamic val) => _parseInt(val) ?? 0;
 
-  // ─────────────────────────────────────────────────────────
-  // LOAD DELIVERIES
-  // ─────────────────────────────────────────────────────────
   Future<void> loadDeliveries() async {
     if (_isFetchingDeliveries) return;
     setState(() => _isFetchingDeliveries = true);
@@ -573,7 +533,6 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
         return null;
       }
 
-      // Find active order FIRST
       final active = findActive(activeData);
 
       if (active != null) {
@@ -626,9 +585,6 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     });
   }
 
-  // ─────────────────────────────────────────────────────────
-  // UPDATE STATUS (optimistic + in-flight guard)
-  // ─────────────────────────────────────────────────────────
   Future<void> updateStatus(dynamic rawDeliveryId, String status, {int? orderId}) async {
     final deliveryId = _parseIntOrZero(rawDeliveryId);
     if (deliveryId == 0) return;
@@ -676,7 +632,7 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
         SnackBar(content: Text('Updated to ${_label(status)}')),
       );
       await loadDeliveries();
-    }else {
+    } else {
       messenger.showSnackBar(
         SnackBar(
           content: Text(result['message']?.toString() ?? 'Update failed'),
@@ -776,14 +732,24 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     return (card['delivery_status'] ?? 'assigned').toString();
   }
 
-  // ─────────────────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.canvas,
       appBar: AppBar(
+        titleSpacing: 16,
+        centerTitle: false,
+        backgroundColor: AppColors.canvas,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Deliveries', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.textPrimary)),
+            Text(widget.driverName, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+          ],
+        ),
         actions: [
           if (_isFetchingDeliveries)
             const Padding(
@@ -793,42 +759,11 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
                   width: 18, height: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.brand),
                   ),
                 ),
               ),
             ),
-          IconButton(
-            icon: const Icon(Icons.local_shipping_outlined),
-            tooltip: 'Delivery History',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => DeliveryHistoryScreen(driverId: widget.driverId)),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.sensors_rounded),
-            tooltip: 'Sensor history',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => SensorHistoryScreen(driverId: widget.driverId)),
-            ),
-          ),
-IconButton(
-  icon: const Icon(Icons.person_outline_rounded),
-  tooltip: 'Profile',
-  onPressed: () => Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ProfileScreen(
-        driverId: widget.driverId,
-        driverName: widget.driverName,
-        role: 'driver', // <-- ADD THIS
-      ),
-    ),
-  ),
-),
-          const SizedBox(width: 4),
         ],
       ),
       body: RefreshIndicator(
@@ -836,6 +771,7 @@ IconButton(
         onRefresh: loadDeliveries,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 100),
           child: Column(
             children: [
               if (_bannerMessage.isNotEmpty)
@@ -889,8 +825,6 @@ IconButton(
                   ),
                 ),
 
-              // ── ONLINE / OFFLINE TOGGLE ──
-              // ── ONLINE / OFFLINE TOGGLE ──
               Container(
                 margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 padding: const EdgeInsets.all(16),
@@ -951,7 +885,6 @@ IconButton(
                     ),
                     const SizedBox(height: 16),
 
-                    // The Slide Button
                     if (_isUpdatingStatus)
                       const Center(child: CircularProgressIndicator())
                     else
@@ -964,14 +897,13 @@ IconButton(
                 ),
               ),
 
-              _buildMonitorCard(),
               deliveries.isEmpty
                   ? Container(
                 constraints: BoxConstraints(minHeight: MediaQuery.of(context).size.height * 0.5),
                 child: _buildEmpty(),
               )
                   : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: deliveries.length,
@@ -981,212 +913,80 @@ IconButton(
           ),
         ),
       ),
-    );
-  }
 
-  Widget _buildMonitorCard() {
-    final alert = tempAlert;
-    final isConnected = bleStatus == 'Connected';
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: alert ? AppColors.danger.withOpacity(0.06) : AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: alert ? AppColors.danger.withOpacity(0.4) : AppColors.border,
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 24, offset: const Offset(0, 8)),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildDockIcon(
+                  icon: Icons.local_shipping_outlined,
+                  label: 'History',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => DeliveryHistoryScreen(driverId: widget.driverId)),
+                  ),
+                ),
+                _buildDockIcon(
+                  icon: Icons.sensors_rounded,
+                  label: 'Sensors',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => SensorHistoryScreen(driverId: widget.driverId)),
+                  ),
+                ),
+                _buildDockIcon(
+                  icon: Icons.person_outline_rounded,
+                  label: 'Profile',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProfileScreen(
+                        driverId: widget.driverId,
+                        driverName: widget.driverName,
+                        role: 'driver',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.sensors_rounded, size: 18, color: AppColors.burgundy),
-              const SizedBox(width: 8),
-              const Text(
-                'IoT Monitor',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary),
-              ),
-              const Spacer(),
-              _statusPill(bleStatus, alert),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          if (!isConnected)
-            Column(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.bluetooth_searching, size: 18),
-                    label: const Text('Scan for ESP32 Sensor'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.burgundy,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: _showBluetoothScanner,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.link, size: 18),
-                    label: const Text('Connect to Saved Sensor'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.burgundy,
-                      side: const BorderSide(color: AppColors.burgundy),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('Connecting to saved sensor...')),
-                      );
-
-                      final success = await ble.connectToSavedDevice();
-                      if (!mounted) return;
-
-                      if (success) {
-                        setState(() => bleStatus = 'Connected');
-                      } else {
-                        messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('Failed to connect. Make sure ESP32 is on and nearby.'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-
-          if (isConnected) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _statBlock(
-                    label: 'Temperature',
-                    value: currentTemp?.toStringAsFixed(1) ?? '--',
-                    unit: '°C',
-                    alert: alert,
-                  ),
-                ),
-                Container(width: 1, height: 44, color: AppColors.border),
-                Expanded(
-                  child: _statBlock(
-                    label: 'Humidity',
-                    value: currentHum?.toStringAsFixed(1) ?? '--',
-                    unit: '%',
-                    alert: alert,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextButton.icon(
-              icon: const Icon(Icons.bluetooth_disabled, color: Colors.red, size: 16),
-              label: const Text('Disconnect Sensor', style: TextStyle(color: Colors.red)),
-              onPressed: () async {
-                await ble.disconnect();
-                if (!mounted) return;
-                setState(() => bleStatus = 'Not connected');
-              },
-            ),
-          ],
-          if (alert) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(8)),
-              child: const Row(
-                children: [
-                  Icon(Icons.warning_rounded, color: Colors.white, size: 16),
-                  SizedBox(width: 6),
-                  Text(
-                    'Temperature out of range',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ], // Closes the main Column's children list
-      ), // Closes the main Column
-    ); // Closes the Container
-  }
-
-  Widget _statBlock({
-    required String label,
-    required String value,
-    required String unit,
-    required bool alert,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, letterSpacing: 0.4),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: alert ? AppColors.danger : AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(unit, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _statusPill(String status, bool alert) {
-    final connected = status.toLowerCase().contains('connected');
-    final color = alert ? AppColors.danger : connected ? AppColors.success : AppColors.textSecondary;
-    final label = alert ? 'ALERT' : connected ? 'LIVE' : 'OFFLINE';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
-              color: color,
+  Widget _buildDockIcon({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 80,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: const Color(0xFFB0B3B8), size: 24),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(color: Color(0xFFB0B3B8), fontSize: 11, fontWeight: FontWeight.w500),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
