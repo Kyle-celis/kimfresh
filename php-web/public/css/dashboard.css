@@ -266,6 +266,7 @@ body {
     .pipe-step { clip-path: none !important; border-radius: 8px !important; }
     .cards-section { grid-template-columns: 1fr; }
 }
+
 /* --- Delivery Monitoring (paginated) --- */
 .delivery-panel .panel-head { align-items: flex-start; }
 .delivery-panel .panel-link { color: var(--primary); font-weight: 700; font-size: 11px; }
@@ -292,107 +293,109 @@ body {
 .mini-pagination button:disabled { opacity: 0.5; cursor: default; }
 
 
+/* ===== NEW RECENT ORDERS STYLE ===== */
+.orders-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    border-top: 8px solid #D44A00; /* Added matching top border */
+    box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+}
 
-    /* ===== NEW RECENT ORDERS STYLE ===== */
-    .orders-card {
-        background: #fff;
-        border-radius: 16px;
-        padding: 24px;
-        border-left: 8px solid #D44A00;
-        border-right: 8px solid #D44A00;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.05);
-    }
-    .orders-title {
-        margin: 0 0 20px;
-        font-size: 20px;
-        font-weight: 800;
-        color: #111;
-    }
-    .orders-title small {
-        font-size: 14px;
-        font-weight: 600;
-        color: #888;
-        margin-left: 8px;
-    }
+.orders-title {
+    margin: 0 0 20px;
+    font-size: 20px;
+    font-weight: 800;
+    color: #111; /* Changed to dark gray so it is visible on white */
+}
 
-    .new-orders-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-    }
-    .new-orders-table thead th {
-        background: #D44A00 !important;
-        color: #fff !important;
-        text-align: left;
-        padding: 12px 16px;
-        font-weight: 700;
-        font-size: 12px;
-    }
-    .new-orders-table thead th:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
-    .new-orders-table thead th:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
-    
-    .new-orders-table thead th a { color: #fff !important; text-decoration: none; }
-    .new-orders-table thead th a:hover { text-decoration: underline; }
+.orders-title small {
+    font-size: 14px;
+    font-weight: 600;
+    color: #888;
+    margin-left: 8px;
+}
 
-    .new-orders-table tbody td {
-        padding: 14px 16px;
-        border-bottom: 1px solid #f0f0f0;
-        color: #555;
-        font-weight: 500;
-    }
-    
-    .new-orders-table tbody tr:last-child td { border-bottom: none; }
-    
-    .order-id { color: #888 !important; font-weight: 600 !important; }
-    .order-name { color: #333 !important; font-weight: 600 !important; }
-    .order-total { color: #333 !important; font-weight: 600 !important; }
+.new-orders-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
 
-    /* New Status Pills */
-    .new-pill {
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 10px;
-        font-weight: 800;
-        text-transform: capitalize;
-        letter-spacing: 0.5px;
-        display: inline-block;
-    }
-    .new-pill.delivered { background: #0c9b87; color: #fff; } /* Teal */
-    .new-pill.pending { background: #f59e0b; color: #fff; } /* Orange */
-    .new-pill.cancelled, .new-pill.rejected { background: #ef4444; color: #fff; } /* Red */
-    .new-pill.approved, .new-pill.in_transit { background: #3b82f6; color: #fff; } /* Blue */
+.new-orders-table thead th {
+    background: #D44A00 !important;
+    color: #fff !important;
+    text-align: left;
+    padding: 12px 16px;
+    font-weight: 700;
+    font-size: 12px;
+}
 
-    /* New Pagination */
-    .new-pagination {
-        display: flex;
-        justify-content: center;
-        gap: 6px;
-        margin-top: 24px;
-    }
-    .page-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 32px;
-        height: 28px;
-        padding: 0 10px;
-        border-radius: 6px;
-        border: 1px solid #D44A00;
-        background: #fff;
-        color: #D44A00;
-        font-size: 11px;
-        font-weight: 700;
-        text-decoration: none;
-        transition: all 0.2s;
-    }
-    .page-btn:hover { background: #fdf0e6; }
-    .page-btn.active {
-        background: #D44A00;
-        color: #fff;
-    }
-    .page-btn.disabled {
-        opacity: 0.4;
-        pointer-events: none;
-        border-color: #ccc;
-        color: #ccc;
-    }  
+.new-orders-table thead th:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+.new-orders-table thead th:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+
+.new-orders-table thead th a { color: #fff !important; text-decoration: none; }
+.new-orders-table thead th a:hover { text-decoration: underline; }
+
+.new-orders-table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    color: #555;
+    font-weight: 500;
+}
+
+.new-orders-table tbody tr:last-child td { border-bottom: none; }
+
+.order-id { color: #888 !important; font-weight: 600 !important; }
+.order-name { color: #333 !important; font-weight: 600 !important; }
+.order-total { color: #333 !important; font-weight: 600 !important; }
+
+/* New Status Pills */
+.new-pill {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: capitalize;
+    letter-spacing: 0.5px;
+    display: inline-block;
+}
+.new-pill.delivered { background: #0c9b87; color: #fff; } /* Teal */
+.new-pill.pending { background: #f59e0b; color: #fff; } /* Orange */
+.new-pill.cancelled, .new-pill.rejected { background: #ef4444; color: #fff; } /* Red */
+.new-pill.approved, .new-pill.in_transit { background: #3b82f6; color: #fff; } /* Blue */
+
+/* New Pagination */
+.new-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 24px;
+}
+.page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #D44A00;
+    background: #fff;
+    color: #D44A00;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+.page-btn:hover { background: #fdf0e6; }
+.page-btn.active {
+    background: #D44A00;
+    color: #fff;
+}
+.page-btn.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    border-color: #ccc;
+    color: #ccc;
+}

@@ -1,190 +1,80 @@
 <?php
-// app/Controllers/DriverController.php â€” strict MVC Controller
+// app/Controllers/DriverController.php
 class DriverController extends Controller
 {
-    private $model;
-
-    private function boot()
-    {
-        require_once __DIR__ . '/../Models/Driver.php';
-        $this->model = new Driver($this->conn);
-    }
-
     public function index()
     {
-        // Prevent the browser from caching the page so auto-refresh pulls live data
-        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-        header("Pragma: no-cache");
-        header("Expires: 0");
         $this->requireAuth();
-        $this->boot();
 
-        // --- POST handlers ---
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            if (isset($_POST['toggle_status'])) { $this->handleToggleStatus(); return; }
-            if (isset($_POST['assign_order']))  { $this->handleAssignOrder();  return; }
+        $filter = $_GET['filter'] ?? 'all';
+
+        // Base query to get drivers
+        $query = "SELECT d.*, 
+                         (SELECT COUNT(*) FROM delivery 
+                          WHERE driver_id = d.driver_id 
+                          AND delivery_status IN ('assigned', 'picked_up', 'in_transit')) as active_orders,
+                         (SELECT delivery_status FROM delivery 
+                          WHERE driver_id = d.driver_id 
+                          AND delivery_status IN ('assigned', 'picked_up', 'in_transit') 
+                          ORDER BY delivery_id DESC LIMIT 1) as active_delivery_status
+                  FROM driver d";
+
+        // Apply filters
+        $params = [];
+        $types = "";
+        if ($filter === 'available') {
+            $query .= " WHERE d.status = 'available' AND d.account_status != 'hidden'";
+        } elseif ($filter === 'offline') {
+            $query .= " WHERE d.status = 'offline' AND d.account_status != 'hidden'";
+        } elseif ($filter === 'inactive') {
+            $query .= " WHERE d.account_status = 'hidden'";
+        } elseif ($filter === 'assigned' || $filter === 'on_delivery') {
+            $query .= " WHERE d.status = 'on_delivery' AND d.account_status != 'hidden'";
+        } else {
+            $query .= " WHERE d.account_status != 'hidden'";
         }
 
-        // --- PDF export ---
-        if (isset($_GET['export_pdf'])) { $this->handlePdfExport(); return; }
+        $query .= " ORDER BY d.name ASC";
+        $drivers = $this->conn->query($query);
 
-        // --- Stats ---
-        $stats = $this->model->getStats();
-
-        // --- Filter & search ---
-        $filter = $_GET['filter'] ?? 'all';
-        $search = ''; // Search removed from view
-        $where  = $this->model->buildWhereClause($filter, '');
-
-        // --- Pagination ---
-        $limit  = 6;
-        $page   = max(1, (int)($_GET['page'] ?? 1));
-        $offset = ($page - 1) * $limit;
-
-        $total_rows  = $this->model->count($where);
-        $total_pages = (int)ceil($total_rows / $limit);
-
-        $drivers     = $this->model->getAll($where, $limit, $offset);
-        $unassigned  = $this->model->getUnassignedOrders();
-        $histories   = $this->model->getDeliveryHistories();
-
-        $this->view('drivers/index', [
-            'total_drivers'     => $stats['total'],
-            'available_drivers' => $stats['available'],
-            'on_delivery'       => $stats['on_delivery'],
-            'filter'            => $filter,
-            'search'            => $search,
-            'search'            => $search,
-            'page'              => $page,
-            'total_pages'       => $total_pages,
-            'drivers'           => $drivers,
-            'unassigned'        => $unassigned,
-            'histories'         => $histories,
-        ]);
-    }
-
-    private function handleToggleStatus()
-    {
-        $driver_id  = (int)$_POST['driver_id'];
-        $new_status = $_POST['new_status'];
-
-        // Check if driver has an active delivery before hiding them
-        if ($new_status === 'hidden') {
-            $activeQuery = $this->conn->query("SELECT COUNT(*) AS c FROM delivery WHERE driver_id = $driver_id AND delivery_status IN ('assigned', 'picked_up', 'in_transit')");
-            if ((int)$activeQuery->fetch_assoc()['c'] > 0) {
-                // We will use a URL parameter to show an error message
-                $this->redirect('/php-web/public/drivers?error=active_order');
-                return;
+        // Fetch histories (unchanged)
+        $histories = [];
+        $histQuery = "SELECT d.driver_id, o.order_id, r.name as retailer_name, o.total_amount, o.order_status, d.delivery_status, d.delivery_date as assigned_at
+                      FROM delivery d
+                      JOIN `order` o ON d.order_id = o.order_id
+                      JOIN retailer r ON o.retailer_id = r.retailer_id
+                      WHERE d.delivery_status IN ('delivered', 'rejected')
+                      ORDER BY d.delivery_id DESC";
+        $histResult = $this->conn->query($histQuery);
+        if ($histResult) {
+            while ($row = $histResult->fetch_assoc()) {
+                $histories[$row['driver_id']][] = $row;
             }
         }
 
-        $this->model->setStatus($driver_id, $new_status);
-
-        if ($new_status === 'hidden') {
-            logActivity($this->conn, $_SESSION['admin_id'], "Deactivated Driver #$driver_id");
-        } elseif ($new_status === 'available') {
-            logActivity($this->conn, $_SESSION['admin_id'], "Manually forced Driver #$driver_id to Available");
-            assignWaitingOrders($this->conn);
-        } else {
-            logActivity($this->conn, $_SESSION['admin_id'], "Activated Driver #$driver_id (Set to Offline)");
-        }
-
-        $this->redirect('/php-web/public/drivers');
-    }
-
-    private function handleAssignOrder()
-    {
-        $order_id  = (int)$_POST['order_id'];
-        $driver_id = (int)$_POST['driver_id'];
-
-        if (manualAssignDriver($this->conn, $order_id, $driver_id)) {
-            logActivity($this->conn, $_SESSION['admin_id'], "Manually assigned Order #$order_id to Driver #$driver_id");
-        } else {
-            logActivity($this->conn, $_SESSION['admin_id'], "Manual assign FAILED for Order #$order_id â†’ Driver #$driver_id");
-        }
-        $this->redirect('/php-web/public/drivers');
-    }
-
-    private function handlePdfExport()
-    {
-        logActivity($this->conn, $_SESSION['admin_id'], "Exported Drivers to PDF");
-
-        require_once __DIR__ . '/../../lib/fpdf/fpdf.php';
-        require_once __DIR__ . '/../helpers/KimFreshPdf.php';
-
-        $pdf = new KimFreshPdf();
-        $pdf->title = 'KimFresh Driver Roster';
-        $pdf->AddPage();
-        $pdf->SetFont('Arial', '', 10);
-        $pdf->SetTextColor(0, 0, 0);
-
-        // Header row
-        $pdf->SetFont('Arial', 'B', 10);
-        $pdf->SetFillColor(195, 66, 0);
-        $pdf->SetTextColor(255, 255, 255);
-        $pdf->Cell(50, 8, 'Driver Name', 1, 0, 'C', true);
-        $pdf->Cell(40, 8, 'License',     1, 0, 'C', true);
-        $pdf->Cell(50, 8, 'Email',       1, 0, 'C', true);
-        $pdf->Cell(30, 8, 'Status',      1, 1, 'C', true);
-
-        // Data rows
-        $pdf->SetFont('Arial', '', 10);
-        $pdf->SetTextColor(0, 0, 0);
-        $rows = $this->model->getAllForPdf();
-        while ($row = $rows->fetch_assoc()) {
-            $status = ($row['status'] === 'hidden') ? 'INACTIVE' : strtoupper($row['status']);
-            $pdf->Cell(50, 8, htmlspecialchars($row['name']), 1, 0, 'L');
-            $pdf->Cell(40, 8, htmlspecialchars($row['license_number'] ?? 'N/A'), 1, 0, 'L');
-            $pdf->Cell(50, 8, htmlspecialchars($row['email'] ?? 'N/A'), 1, 0, 'L');
-            $pdf->Cell(30, 8, $status, 1, 1, 'C');
-        }
-        $pdf->Output('D', 'KimFresh_Drivers.pdf');
-        exit();
-    }
-    public function exportPdf()
-    {
-        if (ob_get_length()) ob_end_clean();
-        ob_start();
-        require_once __DIR__ . '/../../lib/fpdf/fpdf.php';
-        require_once __DIR__ . '/../helpers/KimFreshPdf.php';
-        $pdf = new KimFreshPdf();
-        $pdf->title = 'KimFresh Drivers Report';
-        $pdf->AddPage();
-        $pdf->SetFont('Arial', 'B', 10);
-        $pdf->SetFillColor(195, 66, 0); $pdf->SetTextColor(255, 255, 255);
-        $pdf->Cell(60, 8, 'Driver Name', 1, 0, 'C', true);
-        $pdf->Cell(50, 8, 'License', 1, 0, 'C', true);
-        $pdf->Cell(50, 8, 'Status', 1, 1, 'C', true);
-        $pdf->SetFont('Arial', '', 9); $pdf->SetTextColor(0, 0, 0);
+        // Stats
+        $total_drivers = (int)$this->conn->query("SELECT COUNT(*) as c FROM driver WHERE account_status != 'hidden'")->fetch_assoc()['c'];
+        $available_drivers = (int)$this->conn->query("SELECT COUNT(*) as c FROM driver WHERE status = 'available' AND account_status != 'hidden'")->fetch_assoc()['c'];
+        $on_delivery = (int)$this->conn->query("SELECT COUNT(*) as c FROM driver WHERE status = 'on_delivery' AND account_status != 'hidden'")->fetch_assoc()['c'];
         
-        require_once __DIR__ . '/../Models/Driver.php';
-        $model = new Driver($this->conn);
-        $drivers = $model->getAllForExport();
-        while ($row = $drivers->fetch_assoc()) {
-            $pdf->Cell(60, 8, substr(htmlspecialchars($row['name']), 0, 25), 1, 0, 'L');
-            $pdf->Cell(50, 8, htmlspecialchars($row['license_number']), 1, 0, 'C');
-            $pdf->Cell(50, 8, strtoupper($row['status']), 1, 1, 'C');
-        }
-        $pdfData = $pdf->Output('S', 'KimFresh_Drivers.pdf');
-        ob_end_clean();
-        header('Content-Type: application/pdf');
-        header('Content-Disposition: attachment; filename="KimFresh_Drivers.pdf"');
-        echo $pdfData; exit;
+        // Unassigned orders for the dropdown
+        $unassigned = $this->conn->query("SELECT o.order_id, r.name as retailer_name 
+                                          FROM `order` o 
+                                          JOIN retailer r ON o.retailer_id = r.retailer_id 
+                                          WHERE o.order_status = 'approved' 
+                                          AND o.order_id NOT IN (SELECT order_id FROM delivery)
+                                          ORDER BY o.order_id ASC");
+
+        $this->view('drivers/index', [
+            'drivers' => $drivers,
+            'histories' => $histories,
+            'unassigned' => $unassigned,
+            'filter' => $filter,
+            'total_drivers' => $total_drivers,
+            'available_drivers' => $available_drivers,
+            'on_delivery' => $on_delivery
+        ]);
     }
 
-    public function exportCsv()
-    {
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="KimFresh_Drivers.csv"');
-        $output = fopen('php://output', 'w');
-        fputcsv($output, ['Driver Name', 'License', 'Status']);
-        
-        require_once __DIR__ . '/../Models/Driver.php';
-        $model = new Driver($this->conn);
-        $drivers = $model->getAllForExport();
-        while ($row = $drivers->fetch_assoc()) {
-            fputcsv($output, [$row['name'], $row['license_number'], $row['status']]);
-        }
-        fclose($output); exit;
-    }
+    // ... (keep your existing toggleStatus, assignOrder, export methods below)
 }

@@ -18,7 +18,15 @@
         .stat-card p { margin: 0; color: #666; font-size: 13px; font-weight: 700; }
         .stat-card h2 { margin: 5px 0 0; font-size: 28px; color: #333; }
 
-                /* ---------- Sidebar (matches Figma) ---------- */
+        /* Filter Dropdown Style */
+        .filter-select {
+            appearance: none; -webkit-appearance: none; padding: 9px 38px 9px 18px; border-radius: 8px;
+            border: 1px solid var(--primary); font-weight: 800; font-size: 14px; color: var(--primary);
+            background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23C34200' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 14px center;
+            cursor: pointer; outline: none; font-family: inherit;
+        }
+
+        /* ---------- Sidebar (matches Figma) ---------- */
         .sidebar { background: linear-gradient(165deg, #d94a00 0%, #cf561a 55%, #c96a3a 100%) !important; padding-right: 0 !important; }
         .sidebar .sidebar-brand p { font-size: 13px; font-weight: 600; color: #fff; opacity: .95; }
         .sidebar .menu { display: flex; flex-direction: column; gap: 4px; padding: 0 !important; margin-top: 40px; }
@@ -188,18 +196,30 @@
             </header>
 
             <main class="main-content">
-    <!-- Page Header with Kebab Menu -->
+    <!-- Page Header with Filter and Kebab Menu -->
     <div class="page-head" style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 12px; flex-wrap: wrap;">
         <div>
             <p class="overview-label" style="margin:0 0 2px; color:#C34200; font-weight:800; font-size:18px;">Reports</p>
             <h1 style="margin:0;">Analytics</h1>
             <p style="margin-top:5px;">Analyze business performance and driver efficiency.</p>
         </div>
-        <div class="menu-wrap">
-            <button type="button" class="pill-btn solid" onclick="togglePop(event, 'exportPopAnalytics')" style="position: relative; z-index: 999; padding: 0 16px; font-size: 18px; font-weight: 900; letter-spacing: 1px; min-width: 42px; justify-content: center; background: #C34200; color: #fff; border-radius: 999px; border: none; height: 48px; cursor: pointer;" title="Options">&#8942;</button>
-            <div class="pop" id="exportPopAnalytics" style="position: absolute; top: 52px; right: 0; min-width: 190px; background: #fff; border: 1px solid #eee; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); padding: 8px; display: none; z-index: 999;">
-                <a href="/php-web/public/analytics/export_pdf" style="display: block; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #333; text-decoration: none; border-radius: 8px;">Export PDF</a>
-                <a href="/php-web/public/analytics/export_csv" style="display: block; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #333; text-decoration: none; border-radius: 8px;">Export CSV</a>
+        
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <!-- NEW FILTER DROPDOWN -->
+            <select class="filter-select" onchange="window.location.href='?filter=' + this.value;">
+                <option value="all"     <?= ($filter ?? 'all') === 'all'     ? 'selected' : '' ?>>All Time</option>
+                <option value="weekly"  <?= ($filter ?? 'all') === 'weekly'  ? 'selected' : '' ?>>This Week</option>
+                <option value="monthly" <?= ($filter ?? 'all') === 'monthly' ? 'selected' : '' ?>>This Month</option>
+                <option value="yearly"  <?= ($filter ?? 'all') === 'yearly'  ? 'selected' : '' ?>>This Year</option>
+            </select>
+
+            <div class="menu-wrap">
+                <button type="button" class="pill-btn solid" onclick="togglePop(event, 'exportPopAnalytics')" style="position: relative; z-index: 999; padding: 0 16px; font-size: 18px; font-weight: 900; letter-spacing: 1px; min-width: 42px; justify-content: center; background: #C34200; color: #fff; border-radius: 999px; border: none; height: 48px; cursor: pointer;" title="Options">&#8942;</button>
+                <div class="pop" id="exportPopAnalytics" style="position: absolute; top: 52px; right: 0; min-width: 190px; background: #fff; border: 1px solid #eee; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); padding: 8px; display: none; z-index: 999;">
+                    <!-- Add filter parameter to export links -->
+                    <a href="/php-web/public/analytics/export_pdf?filter=<?= $filter ?? 'all' ?>" style="display: block; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #333; text-decoration: none; border-radius: 8px;">Export PDF</a>
+                    <a href="/php-web/public/analytics/export_csv?filter=<?= $filter ?? 'all' ?>" style="display: block; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #333; text-decoration: none; border-radius: 8px;">Export CSV</a>
+                </div>
             </div>
         </div>
     </div>
@@ -207,16 +227,16 @@
     <!-- Stats Row -->
     <div class="stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 24px;">
         <div class="stat-card" style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid #C34200;">
-            <p style="margin: 0; color: #666; font-size: 13px; font-weight: 700;">Total Orders (All Time)</p>
+            <p style="margin: 0; color: #666; font-size: 13px; font-weight: 700;">Total Orders (<?= ucfirst($filter ?? 'all') ?>)</p>
             <h2 style="margin: 5px 0 0; font-size: 28px; color: #333;"><?= $total_orders ?? 0 ?></h2>
         </div>
         <div class="stat-card" style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid #15803d;">
             <p style="margin: 0; color: #666; font-size: 13px; font-weight: 700;">Delivered Orders</p>
-            <h2 style="margin: 5px 0 0; font-size: 28px; color: #333;"><?= $completed_orders ?? $delivered_orders ?? $total_delivered ?? 0 ?></h2>
+            <h2 style="margin: 5px 0 0; font-size: 28px; color: #333;"><?= $delivered_orders ?? 0 ?></h2>
         </div>
         <div class="stat-card" style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid #1d4ed8;">
             <p style="margin: 0; color: #666; font-size: 13px; font-weight: 700;">Estimated Earnings</p>
-            <h2 style="margin: 5px 0 0; font-size: 28px; color: #333;">&#8369;<?= number_format($total_earnings ?? $total_revenue ?? $revenue ?? 0, 2) ?></h2>
+            <h2 style="margin: 5px 0 0; font-size: 28px; color: #333;">₱<?= number_format($total_earnings ?? 0, 2) ?></h2>
         </div>
     </div>
 
@@ -239,10 +259,10 @@
                             <td style="padding: 12px; font-size: 13px; font-weight: bold;">#<?= $rank++ ?></td>
                             <td style="padding: 12px; font-size: 13px;"><?= htmlspecialchars($row['name']) ?></td>
                             <td style="padding: 12px; font-size: 13px;"><?= (int)$row['total_sold'] ?> units</td>
-                            <td style="padding: 12px; font-size: 13px;">&#8369;<?= number_format($row['total_sales'] ?? $row['total_amount'] ?? $row['revenue'] ?? 0, 2) ?></td>
+                            <td style="padding: 12px; font-size: 13px;">₱<?= number_format($row['total_revenue'] ?? 0, 2) ?></td>
                         </tr>
                     <?php endwhile; else: ?>
-                        <tr><td colspan="4" style="padding: 20px; text-align: center; color: #777;">No products sold yet.</td></tr>
+                        <tr><td colspan="4" style="padding: 20px; text-align: center; color: #777;">No products sold for this period.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -262,14 +282,14 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (isset($driver_leaderboard) && $driver_leaderboard->num_rows > 0): $rank = 1; while($row = $driver_leaderboard->fetch_assoc()): ?>
+                    <?php if (isset($top_drivers) && $top_drivers->num_rows > 0): $rank = 1; while($row = $top_drivers->fetch_assoc()): ?>
                         <tr style="border-bottom: 1px solid #eee;">
                             <td style="padding: 12px; font-size: 13px; font-weight: bold;">#<?= $rank++ ?></td>
                             <td style="padding: 12px; font-size: 13px;"><?= htmlspecialchars($row['name']) ?></td>
-                            <td style="padding: 12px; font-size: 13px;"><?= (int)($row['total_deliveries'] ?? $row['deliveries'] ?? $row['completed_orders'] ?? 0) ?> deliveries</td>
+                            <td style="padding: 12px; font-size: 13px;"><?= (int)$row['total_deliveries'] ?> deliveries</td>
                         </tr>
                     <?php endwhile; else: ?>
-                        <tr><td colspan="3" style="padding: 20px; text-align: center; color: #777;">No completed deliveries yet.</td></tr>
+                        <tr><td colspan="3" style="padding: 20px; text-align: center; color: #777;">No completed deliveries for this period.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -395,7 +415,7 @@
                                         <div class="notif-icon">#${item.order_id}</div>
                                         <div class="notif-content">
                                             <p><strong>${item.retailer_name}</strong> placed a new order.</p>
-                                            <span class="notif-time">${timeAgo} &middot; ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±${Number(item.total_amount).toFixed(2)}</span>
+                                            <span class="notif-time">${timeAgo} &middot; ₱${Number(item.total_amount).toFixed(2)}</span>
                                         </div>
                                     </a>
                                 `;
@@ -618,11 +638,3 @@
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-

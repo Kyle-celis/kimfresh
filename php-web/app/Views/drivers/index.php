@@ -303,8 +303,8 @@ document.addEventListener('click', function(event) {
 
                             if ($isInactive) {
                                 $statusClass = 'inactive'; $statusLabel = 'Inactive';
-                            } elseif ($row['status'] === 'offline') {              // <--- ADD THIS
-                                $statusClass = 'offline'; $statusLabel = 'Offline (On Break)';  // <--- ADD THIS
+                            } elseif ($row['status'] === 'offline') {
+                                $statusClass = 'offline'; $statusLabel = 'Offline (On Break)';
                             } elseif ($activeCount === 0) {
                                 $statusClass = 'available'; $statusLabel = 'Available';
                             } else {
@@ -354,7 +354,7 @@ document.addEventListener('click', function(event) {
                                     <form method="POST" style="margin:0;">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="driver_id" value="<?= $driverId ?>">
-                                        <input type="hidden" name="new_status" value="offline">  <!-- CHANGED HERE -->
+                                        <input type="hidden" name="new_status" value="offline">
                                         <button type="submit" name="toggle_status" class="btn-activate">Activate</button>
                                     </form>
                                 <?php else: ?>
@@ -378,7 +378,7 @@ document.addEventListener('click', function(event) {
                                             <td><span class="order-no">#<?= (int)$h['order_id'] ?></span></td>
                                             <td><?= htmlspecialchars($h['retailer_name'] ?? '-') ?></td>
                                             <td><?= (int)($h['total_items'] ?? 0) ?></td>
-                                            <td>&#8369;<?= number_format((float)$h['total_amount'], 2) ?></td>
+                                            <td>₱<?= number_format((float)$h['total_amount'], 2) ?></td>
                                             <td><span class="status-pill <?= strtolower($h['order_status']) ?>"><?= strtoupper($h['order_status']) ?></span></td>
                                             <td><?= strtoupper($h['delivery_status']) ?></td>
                                             <td><?= date('M d, Y', strtotime($h['assigned_at'] ?? $h['order_date'])) ?></td>
@@ -400,7 +400,7 @@ document.addEventListener('click', function(event) {
 
     <div class="modal-backdrop no-print" id="historyModal">
         <div class="modal modal-wide">
-            <h3 style="margin-top:0; color: #C34200;">Order History ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â <span id="historyDriverName">ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â</span></h3>
+            <h3 style="margin-top:0; color: #C34200;">Order History: <span id="historyDriverName"></span></h3>
             <div id="historyBody" style="max-height: 60vh; overflow: auto; margin-top: 14px;"></div>
             <div class="modal-actions">
                 <button type="button" class="cancel" onclick="document.getElementById('historyModal').classList.remove('open')">Close</button>
@@ -495,7 +495,7 @@ document.addEventListener('click', function(event) {
                         const t = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                         const id = i.type === 'order' ? 'order-' + i.order_id : 'log-' + i.log_id;
                         if (i.type === 'order') {
-                            list.innerHTML += `<a href="/php-web/public/orders/view?id=${i.order_id}" class="notif-item" onclick="markAsRead('${id}')"><div class="notif-icon">#${i.order_id}</div><div class="notif-content"><p><strong>${i.retailer_name}</strong> placed a new order.</p><span class="notif-time">${t} &middot; &#8369;${Number(i.total_amount).toFixed(2)}</span></div></a>`;
+                            list.innerHTML += `<a href="/php-web/public/orders/view?id=${i.order_id}" class="notif-item" onclick="markAsRead('${id}')"><div class="notif-icon">#${i.order_id}</div><div class="notif-content"><p><strong>${i.retailer_name}</strong> placed a new order.</p><span class="notif-time">${t} &middot; ₱${Number(i.total_amount).toFixed(2)}</span></div></a>`;
                         } else {
                             list.innerHTML += `<a href="/php-web/public/drivers" class="notif-item" onclick="markAsRead('${id}')"><div class="notif-icon" style="background:#15803d;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div class="notif-content"><p>${i.action}</p><span class="notif-time">${t}</span></div></a>`;
                         }
@@ -536,5 +536,3 @@ document.addEventListener('click', function(event) {
     </script>
 </body>
 </html>
-
-
