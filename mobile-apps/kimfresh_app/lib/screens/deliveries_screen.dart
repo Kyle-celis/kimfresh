@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/api.dart';
@@ -9,6 +11,8 @@ import '../services/foreground_service.dart';
 import '../services/retry_queue.dart';
 import '../theme/app_theme.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:image_picker/image_picker.dart';
 import 'sensor_history_screen.dart';
 import 'profile_screen.dart';
 import 'delivery_history_screen.dart';
@@ -146,48 +150,15 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
   bool _isOnline = false;
   bool _isUpdatingStatus = false;
 
-  Future<void> _toggleOnlineStatus() async {
-    if (_isUpdatingStatus) return;
+  final BleService ble = BleService.instance;
 
-    final goingOnline = !_isOnline;
-    final newStatus = goingOnline ? 'available' : 'offline';
-
-    setState(() => _isUpdatingStatus = true);
-
-    final res = await ApiService.updateDriverStatus(widget.driverId, newStatus);
-
-    if (!mounted) return;
-
-    if (res['success'] == true) {
-      setState(() {
-        _isOnline = goingOnline;
-        _isUpdatingStatus = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isOnline ? 'You are now ONLINE' : 'You are now OFFLINE'),
-          backgroundColor: _isOnline ? AppColors.success : AppColors.textSecondary,
-        ),
-      );
-
-      if (_isOnline) loadDeliveries();
-    } else {
-      setState(() => _isUpdatingStatus = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(res['message']?.toString() ?? 'Failed to update status'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
-    }
-  }
-
-  final BleService ble = BleService();
   String bleStatus = 'Not connected';
   double? currentTemp;
   double? currentHum;
   bool tempAlert = false;
+
+  String _lastAlertLevel = 'safe';
+  DateTime _lastBeepTime = DateTime(0);
 
   Timer? _refreshTimer;
   Timer? _bannerTimer;
@@ -238,7 +209,13 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
           desiredAccuracy: LocationAccuracy.high,
         );
         debugPrint('📡 DIRECT GPS: ${pos.latitude}, ${pos.longitude} for order $_gpsOrderId');
-        await ApiService.saveDriverLocation(_gpsOrderId!, pos.latitude, pos.longitude);
+
+        await ApiService.saveDriverLocation(
+            _gpsOrderId!,
+            widget.driverId,
+            pos.latitude,
+            pos.longitude
+        );
       } catch (e) {
         debugPrint('📡 DIRECT GPS error: $e');
       }
@@ -260,6 +237,7 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
       send: (item) async {
         return await ApiService.saveDriverLocation(
           item['order_id'] as int,
+          widget.driverId,
           (item['lat'] as num).toDouble(),
           (item['lng'] as num).toDouble(),
         );
@@ -311,7 +289,7 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
     _bleSub?.cancel();
     _gpsQueue.dispose();
     _sensorQueue.dispose();
-    ble.disconnect();
+
     super.dispose();
   }
 
@@ -375,11 +353,21 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
 
         if (data['type'] == 'live') {
           if (!mounted) return;
+
+          final alertLevel = data['alert_level'] ?? 'safe';
+
           setState(() {
             currentTemp = data['temperature'];
             currentHum = data['humidity'];
-            tempAlert = data['is_alert'] ?? false;
+            tempAlert = alertLevel != 'safe';
           });
+
+          if (alertLevel != 'safe' && alertLevel != _lastAlertLevel) {
+            _lastAlertLevel = alertLevel;
+            _playAlarm(alertLevel);
+          } else if (alertLevel == 'safe') {
+            _lastAlertLevel = 'safe';
+          }
 
           if (currentTemp != null && currentHum != null) {
             if (DateTime.now().difference(_lastFgUpdate) > const Duration(seconds: 5)) {
@@ -392,19 +380,49 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
             }
           }
 
-          if (currentDeliveryId != null && currentTemp != null && currentHum != null) {
-            _sensorQueue.enqueue({
-              'delivery_id': currentDeliveryId!,
-              'temperature': currentTemp!,
-              'humidity': currentHum!,
-              'is_alert': tempAlert,
-              'dedup_key': 'sensor:$currentDeliveryId:${DateTime.now().millisecondsSinceEpoch ~/ 5000}',
-            });
+          if (currentTemp != null && currentHum != null) {
+            final activeDeliveries = deliveries.where((d) {
+              if (d is! Map) return false;
+              final status = _effectiveStatus(Map<String, dynamic>.from(d));
+              return status == 'picked_up' || status == 'in_transit';
+            }).toList();
+
+            for (var delivery in activeDeliveries) {
+              final dId = _parseInt(delivery['delivery_id']);
+              if (dId != null) {
+                _sensorQueue.enqueue({
+                  'delivery_id': dId,
+                  'temperature': currentTemp!,
+                  'humidity': currentHum!,
+                  'is_alert': tempAlert,
+                  'dedup_key': 'sensor:$dId:${DateTime.now().millisecondsSinceEpoch ~/ 5000}',
+                });
+              }
+            }
           }
         }
       });
     } catch (e) {
       debugPrint('BLE Error: $e');
+    }
+  }
+
+  Future<void> _playAlarm(String level) async {
+    if (DateTime.now().difference(_lastBeepTime).inSeconds < 5) return;
+    _lastBeepTime = DateTime.now();
+
+    if (level == 'warning') {
+      for (int i = 0; i < 3; i++) {
+        FlutterRingtonePlayer().playAlarm(looping: false, volume: 1.0, asAlarm: true);
+        HapticFeedback.heavyImpact();
+        await Future.delayed(const Duration(milliseconds: 1000));
+      }
+    } else if (level == 'critical') {
+      for (int i = 0; i < 10; i++) {
+        FlutterRingtonePlayer().playAlarm(looping: false, volume: 1.0, asAlarm: true);
+        HapticFeedback.heavyImpact();
+        await Future.delayed(const Duration(milliseconds: 1000));
+      }
     }
   }
 
@@ -559,7 +577,7 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
       if (removed.isNotEmpty) {
         if (_justDeliveredOrderId != null && removed.contains(_justDeliveredOrderId.toString())) {
           _showBanner('Order #$_justDeliveredOrderId delivered successfully!', AppColors.success);
-          _justDeliveredOrderId = null; // Reset it
+          _justDeliveredOrderId = null;
         } else {
           _showBanner('Order #${removed.first} was reassigned', AppColors.warning);
         }
@@ -604,7 +622,8 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
       _optimisticStatus[deliveryId] = status;
     });
 
-    final result = await ApiService.updateDeliveryStatus(deliveryId, status);
+    final now = DateTime.now().toIso8601String();
+    final result = await ApiService.updateDeliveryStatus(deliveryId, status, timestamp: now);
     if (!mounted) return;
 
     if (result['success'] == true) {
@@ -615,14 +634,20 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
 
         _directGpsTimer?.cancel();
         _directGpsTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+          if (_gpsOrderId == null) return;
+
           try {
             final pos = await Geolocator.getCurrentPosition(
               desiredAccuracy: LocationAccuracy.high,
             );
-            debugPrint('📡 DIRECT GPS: ${pos.latitude}, ${pos.longitude} for order $orderId');
-            if (orderId != null) {
-              await ApiService.saveDriverLocation(orderId, pos.latitude, pos.longitude);
-            }
+            debugPrint('📡 DIRECT GPS: ${pos.latitude}, ${pos.longitude} for order $_gpsOrderId');
+
+            await ApiService.saveDriverLocation(
+                _gpsOrderId!,
+                widget.driverId,
+                pos.latitude,
+                pos.longitude
+            );
           } catch (e) {
             debugPrint('📡 DIRECT GPS error: $e');
           }
@@ -634,7 +659,7 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
         ForegroundService.stop();
 
         if (status == 'delivered' && orderId != null) {
-          _justDeliveredOrderId = orderId; // Remember this so the banner doesn't say "reassigned"
+          _justDeliveredOrderId = orderId;
         }
       }
 
@@ -657,6 +682,33 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
         _optimisticStatus.remove(deliveryId);
       });
     }
+  }
+
+  Future<void> _markDelivered(int deliveryId, int? orderId) async {
+    if (deliveryId == 0 || _updatingDeliveryId == deliveryId) return;
+
+    final uploaded = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ProofOfDeliverySheet(deliveryId: deliveryId),
+    );
+
+    if (uploaded != true || !mounted) return;
+
+    _directGpsTimer?.cancel();
+    _stopGpsUpdates();
+    ForegroundService.stop();
+
+    if (orderId != null) _justDeliveredOrderId = orderId;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Proof of delivery saved — order completed'),
+        backgroundColor: AppColors.success,
+      ),
+    );
+    await loadDeliveries();
   }
 
   Future<void> _rejectOrder(int deliveryId) async {
@@ -952,7 +1004,12 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
                   label: 'Sensors',
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => SensorHistoryScreen(driverId: widget.driverId)),
+                    MaterialPageRoute(
+                      builder: (_) => SensorHistoryScreen(
+                        driverId: widget.driverId,
+                        deliveryId: currentDeliveryId,
+                      ),
+                    ),
                   ),
                 ),
                 _buildDockIcon(
@@ -1207,11 +1264,17 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
                     child: ElevatedButton(
                       onPressed: isUpdating
                           ? null
-                          : () => updateStatus(
-                        deliveryId,
-                        nextStatus!,
-                        orderId: orderIdInt,
-                      ),
+                          : () {
+                        if (nextStatus == 'delivered') {
+                          _markDelivered(_parseIntOrZero(deliveryId), orderIdInt);
+                        } else {
+                          updateStatus(
+                            deliveryId,
+                            nextStatus!,
+                            orderId: orderIdInt,
+                          );
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: isUpdating
                             ? AppColors.textSecondary
@@ -1301,6 +1364,234 @@ class _DeliveriesScreenState extends State<DeliveriesScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _toggleOnlineStatus() async {
+    if (_isUpdatingStatus) return;
+
+    final goingOnline = !_isOnline;
+    final newStatus = goingOnline ? 'available' : 'offline';
+
+    setState(() => _isUpdatingStatus = true);
+
+    final res = await ApiService.updateDriverStatus(widget.driverId, newStatus);
+
+    if (!mounted) return;
+
+    if (res['success'] == true) {
+      setState(() {
+        _isOnline = goingOnline;
+        _isUpdatingStatus = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isOnline ? 'You are now ONLINE' : 'You are now OFFLINE'),
+          backgroundColor: _isOnline ? AppColors.success : AppColors.textSecondary,
+        ),
+      );
+
+      if (_isOnline) loadDeliveries();
+    } else {
+      setState(() => _isUpdatingStatus = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message']?.toString() ?? 'Failed to update status'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    }
+  }
+}
+
+/// Bottom sheet that forces the driver to attach a photo before the delivery
+/// can be marked as delivered.
+class ProofOfDeliverySheet extends StatefulWidget {
+  final int deliveryId;
+
+  const ProofOfDeliverySheet({super.key, required this.deliveryId});
+
+  @override
+  State<ProofOfDeliverySheet> createState() => _ProofOfDeliverySheetState();
+}
+
+class _ProofOfDeliverySheetState extends State<ProofOfDeliverySheet> {
+  final ImagePicker _picker = ImagePicker();
+  XFile? _photo;
+  bool _uploading = false;
+  String? _error;
+
+  Future<void> _pick(ImageSource source) async {
+    try {
+      final picked = await _picker.pickImage(
+        source: source,
+        imageQuality: 70,
+        maxWidth: 1600,
+      );
+      if (picked == null) return;
+      if (!mounted) return;
+      setState(() {
+        _photo = picked;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Could not open ${source == ImageSource.camera ? 'camera' : 'gallery'}: $e');
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_photo == null || _uploading) return;
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+
+    final res = await ApiService.uploadDeliveryProof(widget.deliveryId, _photo!.path);
+
+    if (!mounted) return;
+
+    if (res['success'] == true) {
+      Navigator.pop(context, true);
+      return;
+    }
+
+    setState(() {
+      _uploading = false;
+      _error = res['message']?.toString() ?? 'Upload failed. Please try again.';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = _photo != null;
+
+    return Container(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Proof of Delivery',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'A photo of the handover is required before this order can be completed.',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                height: 220,
+                decoration: BoxDecoration(
+                  color: AppColors.canvas,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: hasPhoto
+                    ? Image.file(File(_photo!.path), fit: BoxFit.cover)
+                    : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.add_a_photo_outlined, size: 44, color: AppColors.textSecondary),
+                    SizedBox(height: 10),
+                    Text(
+                      'No photo yet',
+                      style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _uploading ? null : () => _pick(ImageSource.camera),
+                      icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                      label: Text(hasPhoto ? 'Retake' : 'Take photo'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.burgundy,
+                        side: const BorderSide(color: AppColors.burgundy),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _uploading ? null : () => _pick(ImageSource.gallery),
+                      icon: const Icon(Icons.photo_library_outlined, size: 18),
+                      label: const Text('Gallery'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.border),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: const TextStyle(fontSize: 13, color: AppColors.danger)),
+              ],
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: (!hasPhoto || _uploading) ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.burgundy,
+                    disabledBackgroundColor: AppColors.border,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: _uploading
+                      ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                      : const Text(
+                    'Submit & complete delivery',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

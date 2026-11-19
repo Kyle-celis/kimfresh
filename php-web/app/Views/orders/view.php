@@ -217,6 +217,63 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- Proof of Delivery -->
+                <?php if (!empty($proof) && !empty($proof['proof_photo'])): ?>
+                <div style="background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 20px;">
+                    <h3 style="margin-top: 0; font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 8px; color: #333;">Proof of Delivery</h3>
+                    <p style="margin: 10px 0; font-size: 14px; color: #555;">
+                        Photo submitted by <strong><?= htmlspecialchars($proof['driver_name'] ?? 'Driver') ?></strong>
+                        <?php if (!empty($proof['proof_uploaded_at'])): ?>
+                            on <?= date('M d, Y h:i A', strtotime($proof['proof_uploaded_at'])) ?>
+                        <?php endif; ?>
+                    </p>
+                    <a href="<?= htmlspecialchars($proof['proof_photo']) ?>" target="_blank" rel="noopener">
+                        <img src="<?= htmlspecialchars($proof['proof_photo']) ?>"
+                             alt="Proof of delivery for Order #<?= (int)$order_id ?>"
+                             style="display: block; max-width: 100%; max-height: 480px; border-radius: 10px; border: 1px solid #eee; object-fit: contain;">
+                    </a>
+                    <p style="margin: 10px 0 0; font-size: 12px; color: #888;">Click the photo to open the full-size image.</p>
+                </div>
+                <?php endif; ?>
+
+                <!-- IoT Temperature Log -->
+                <?php if (!empty($sensor_data) && $sensor_data->num_rows > 0): ?>
+                <div style="background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 20px;">
+                    <h3 style="margin-top: 0; font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 8px; color: #333;">IoT Temperature Log</h3>
+                    <table class="info-table" style="margin-top: 15px;">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Temperature</th>
+                                <th>Humidity</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($reading = $sensor_data->fetch_assoc()): ?>
+                            <tr>
+                                <td>
+                                    <div style="font-weight: 600; color: #333;"><?= date('M d, Y', strtotime($reading['reading_timestamp'])) ?></div>
+                                    <div style="font-size: 13px; color: #777;"><?= date('h:i:s A', strtotime($reading['reading_timestamp'])) ?></div>
+                                </td>
+                                <td style="font-weight: bold; color: <?= $reading['is_alert'] ? '#dc2626' : '#15803d' ?>;">
+                                    <?= number_format((float)$reading['temperature'], 1) ?> °C
+                                </td>
+                                <td><?= number_format((float)$reading['humidity'], 1) ?> %</td>
+                                <td>
+                                    <?php if ($reading['is_alert']): ?>
+                                        <span style="color: #dc2626; background: #fee2e2; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">ALERT</span>
+                                    <?php else: ?>
+                                        <span style="color: #15803d; background: #dcfce7; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">Normal</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
             </main>
         </div>
     </div>

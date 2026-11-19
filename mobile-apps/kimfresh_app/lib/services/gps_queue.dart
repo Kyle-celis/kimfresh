@@ -8,7 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Persisted via shared_preferences so it survives isolate restarts and app kills.
 class GpsQueue {
   static const String _prefKey = 'fg_gps_queue';
-  static const String _endpoint = 'http://10.0.2.2/php-web/save_location.php';
+  static const String _endpoint =
+      'http://10.0.2.2/php-web/public/api/save_driver_location.php';
   static const int _maxAttempts = 10;
 
   final List<Map<String, dynamic>> _items = [];

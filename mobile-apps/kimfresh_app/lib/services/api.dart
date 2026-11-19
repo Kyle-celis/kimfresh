@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-const String API = 'http://10.0.2.2/php-web/public/api';
-const String PHP_API = 'http://10.0.2.2/php-web/public';
+const String API = 'http://192.168.100.14/php-web/public/api';
+const String PHP_API = 'http://192.168.100.14/php-web/public';
 
 class ApiService {
   static const Duration _timeout = Duration(seconds: 15);
@@ -154,16 +154,38 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> updateDeliveryStatus(int deliveryId, String status) async {
+  static Future<Map<String, dynamic>> updateDeliveryStatus(int deliveryId, String status, {String? timestamp}) async {
     try {
       final res = await http.put(
         Uri.parse('$API/update_delivery_status.php?delivery_id=$deliveryId'),
         headers: _authHeaders(json: true),
-        body: jsonEncode({'delivery_status': status}),
+        body: jsonEncode({
+          'delivery_status': status,
+          if (timestamp != null) 'timestamp': timestamp, // ✅ Sends the time
+        }),
       ).timeout(_timeout);
       return _safeJson(res);
     } catch (e) {
       return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> uploadDeliveryProof(int deliveryId, String photoPath) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$API/upload_delivery_proof.php'),
+      )
+        ..fields['delivery_id'] = deliveryId.toString()
+        ..files.add(await http.MultipartFile.fromPath('photo', photoPath));
+
+      if (_token != null) request.headers['Authorization'] = 'Bearer $_token';
+
+      final streamed = await request.send().timeout(const Duration(seconds: 60));
+      final res = await http.Response.fromStream(streamed);
+      return _safeJson(res);
+    } catch (e) {
+      return {'success': false, 'message': 'Upload failed: $e'};
     }
   }
 
@@ -180,17 +202,26 @@ class ApiService {
     }
   }
 
-  static Future<bool> saveDriverLocation(int orderId, double lat, double lng) async {
+  static Future<bool> saveDriverLocation(int orderId, int driverId, double lat, double lng) async {
     try {
       final res = await http.post(
-        Uri.parse('$PHP_API/save_driver_location.php'),
+        Uri.parse('$API/save_driver_location.php'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'order_id': orderId, 'lat': lat, 'lng': lng}),
+        body: jsonEncode({
+          'order_id': orderId,
+          'driver_id': driverId,
+          'lat': lat,
+          'lng': lng
+        }),
       ).timeout(_timeout);
-      if (res.statusCode < 200 || res.statusCode >= 300) return false;
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        debugPrint('❌ saveDriverLocation failed: ${res.statusCode} ${res.body}');
+        return false;
+      }
       final decoded = _safeJson(res);
       return decoded['success'] == true;
     } catch (e) {
+      debugPrint('❌ saveDriverLocation exception: $e');
       return false;
     }
   }

@@ -142,6 +142,21 @@ class Order extends Model
         return $stmt->get_result();
     }
 
+    public function getDeliveryProof($order_id)
+    {
+        $stmt = $this->conn->prepare("
+            SELECT d.proof_photo, d.proof_uploaded_at, d.delivery_status, dr.name AS driver_name
+            FROM delivery d
+            LEFT JOIN driver dr ON d.driver_id = dr.driver_id
+            WHERE d.order_id = ?
+            LIMIT 1
+        ");
+        $stmt->bind_param("i", $order_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        return ($row && !empty($row['proof_photo'])) ? $row : null;
+    }
+
     public function getDriverName($order_id)
     {
         $stmt = $this->conn->prepare("

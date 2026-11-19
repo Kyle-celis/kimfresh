@@ -285,7 +285,12 @@
                     <?php if (isset($top_drivers) && $top_drivers->num_rows > 0): $rank = 1; while($row = $top_drivers->fetch_assoc()): ?>
                         <tr style="border-bottom: 1px solid #eee;">
                             <td style="padding: 12px; font-size: 13px; font-weight: bold;">#<?= $rank++ ?></td>
-                            <td style="padding: 12px; font-size: 13px;"><?= htmlspecialchars($row['name']) ?></td>
+                            <td style="padding: 12px; font-size: 13px;">
+                                <!-- ✅ CLICKABLE LINK TO THE MAP -->
+                                <a href="/php-web/public/analytics/driver?driver_id=<?= $row['driver_id'] ?>" style="color: #C34200; font-weight: bold; text-decoration: none;">
+                                    <?= htmlspecialchars($row['name']) ?>
+                                </a>
+                            </td>
                             <td style="padding: 12px; font-size: 13px;"><?= (int)$row['total_deliveries'] ?> deliveries</td>
                         </tr>
                     <?php endwhile; else: ?>

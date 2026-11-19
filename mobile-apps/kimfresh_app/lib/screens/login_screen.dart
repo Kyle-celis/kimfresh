@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For HapticFeedback
+import 'package:flutter/services.dart';
 import '../services/api.dart';
 import '../theme/app_theme.dart';
 import 'role_selection_screen.dart';

@@ -47,6 +47,8 @@ CREATE TABLE `delivery` (
   `driver_id` int DEFAULT NULL,
   `delivery_date` datetime DEFAULT CURRENT_TIMESTAMP,
   `delivery_status` varchar(20) DEFAULT 'assigned',
+  `proof_photo` varchar(255) DEFAULT NULL,
+  `proof_uploaded_at` datetime DEFAULT NULL,
   PRIMARY KEY (`delivery_id`),
   KEY `order_id` (`order_id`),
   KEY `driver_id` (`driver_id`),

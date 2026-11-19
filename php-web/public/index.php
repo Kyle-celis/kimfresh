@@ -46,6 +46,8 @@ $routes = [
         '/orders/export_csv'      => ['OrderController', 'exportCsv'],
         '/drivers/export_pdf'     => ['DriverController', 'exportPdf'],
         '/drivers/export_csv'     => ['DriverController', 'exportCsv'],
+        '/analytics/view'         => ['AnalyticsController', 'viewDelivery'],
+        '/analytics/driver'       => ['AnalyticsController', 'viewDriver'], 
         '/products/export-csv'    => ['CsvController', 'exportProducts'],
         '/superadmin'             => ['SuperAdminController', 'index',       ['auth' => true, 'role' => 'superadmin']],
         '/notifications'          => ['NotificationController', 'index'],

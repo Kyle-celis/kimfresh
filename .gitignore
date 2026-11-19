@@ -70,3 +70,4 @@ desktop.ini
 .idea/
 *.sublime-project
 *.sublime-workspace
+php-web/public/uploads/ 

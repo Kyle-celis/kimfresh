@@ -1,15 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // For HapticFeedback
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart'; // ✅ For loud alarm
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../services/api.dart';
 import '../services/ble_service.dart';
 import '../theme/app_theme.dart';
 
 class SensorHistoryScreen extends StatefulWidget {
   final int driverId;
-  SensorHistoryScreen({required this.driverId});
+  final int? deliveryId;
+
+  SensorHistoryScreen({required this.driverId, this.deliveryId});
 
   @override
   _SensorHistoryScreenState createState() => _SensorHistoryScreenState();
@@ -19,13 +21,18 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
   List<dynamic> readings = [];
   bool loading = true;
   Timer? _timer;
+  DateTime _lastSaved = DateTime.now();
 
-  // --- IoT Monitor State ---
-  final BleService ble = BleService();
+  final BleService ble = BleService.instance;
+
   String bleStatus = 'Not connected';
   double? currentTemp;
   double? currentHum;
-  bool tempAlert = false;
+
+  String currentAlertLevel = 'safe'; // ✅ Tracks 'safe', 'warning', or 'critical'
+  String _lastAlertLevel = 'safe';
+  DateTime _lastBeepTime = DateTime(0);
+
   StreamSubscription? _bleSub;
 
   @override
@@ -55,9 +62,21 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
     });
   }
 
-  // --- BLE Logic from DeliveriesScreen ---
   void initBle() {
     try {
+      if (!ble.isConnected) {
+        setState(() => bleStatus = 'Connecting...');
+        ble.connectToSavedDevice().then((success) {
+          if (success && mounted) {
+            setState(() => bleStatus = 'Connected');
+          } else if (mounted) {
+            setState(() => bleStatus = 'Not connected');
+          }
+        });
+      } else {
+        setState(() => bleStatus = 'Connected');
+      }
+
       _bleSub = ble.readingStream.listen((data) {
         if (data['type'] == 'disconnected') {
           if (mounted) setState(() => bleStatus = 'Not connected');
@@ -70,15 +89,60 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
 
         if (data['type'] == 'live') {
           if (!mounted) return;
+
+          final alertLevel = data['alert_level'] ?? 'safe';
+
           setState(() {
             currentTemp = data['temperature'];
             currentHum = data['humidity'];
-            tempAlert = data['is_alert'] ?? false;
+            currentAlertLevel = alertLevel; // ✅ Save the level for UI colors
           });
+
+          // ✅ PLAY ALARM SOUND
+          if (alertLevel != 'safe' && alertLevel != _lastAlertLevel) {
+            _lastAlertLevel = alertLevel;
+            _playAlarm(alertLevel);
+          } else if (alertLevel == 'safe') {
+            _lastAlertLevel = 'safe';
+          }
+
+          // Save to DB
+          if (widget.deliveryId != null) {
+            final now = DateTime.now();
+            if (now.difference(_lastSaved).inSeconds >= 10) {
+              _lastSaved = now;
+              ApiService.saveSensorData(
+                  widget.deliveryId!,
+                  data['temperature'],
+                  data['humidity'],
+                  alertLevel != 'safe'
+              );
+            }
+          }
         }
       });
     } catch (e) {
       debugPrint('BLE Error: $e');
+    }
+  }
+
+  // ✅ BEEP ALARM FUNCTION using Ringtone Player
+  Future<void> _playAlarm(String level) async {
+    if (DateTime.now().difference(_lastBeepTime).inSeconds < 5) return;
+    _lastBeepTime = DateTime.now();
+
+    if (level == 'warning') {
+      for (int i = 0; i < 3; i++) {
+        FlutterRingtonePlayer().playAlarm(looping: false, volume: 1.0, asAlarm: true);
+        HapticFeedback.heavyImpact();
+        await Future.delayed(const Duration(milliseconds: 1000));
+      }
+    } else if (level == 'critical') {
+      for (int i = 0; i < 10; i++) {
+        FlutterRingtonePlayer().playAlarm(looping: false, volume: 1.0, asAlarm: true);
+        HapticFeedback.heavyImpact();
+        await Future.delayed(const Duration(milliseconds: 1000));
+      }
     }
   }
 
@@ -165,10 +229,7 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
 
   String formatTime(String? raw) {
     if (raw == null) return '-';
-    return raw
-        .replaceAll(' GMT', '')
-        .replaceAll(' UTC', '')
-        .trim();
+    return raw.replaceAll(' GMT', '').replaceAll(' UTC', '').trim();
   }
 
   @override
@@ -186,8 +247,8 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
           'Sensor History',
           style: TextStyle(
             color: AppColors.textPrimary,
-            fontWeight: FontWeight.w900, // Matched the weight of Deliveries screen
-            fontSize: 24, // Matched the size of Deliveries screen
+            fontWeight: FontWeight.w900,
+            fontSize: 24,
           ),
         ),
       ),
@@ -197,15 +258,13 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 24),
           children: [
-            // --- IOT MONITOR CARD ADDED HERE ---
             _buildMonitorCard(),
-
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
               child: Text(
                 'Log History',
                 style: TextStyle(
-                    fontSize: 18, // Matched section header
+                    fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary
                 ),
@@ -258,32 +317,50 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
   }
 
   Widget _buildMonitorCard() {
-    final alert = tempAlert;
+    final isWarning = currentAlertLevel == 'warning';   // ✅ 5 to 14.9
+    final isCritical = currentAlertLevel == 'critical'; // ✅ 15+
     final isConnected = bleStatus == 'Connected';
+
+    // Determine card color
+    Color cardColor = AppColors.surface;
+    Color borderColor = AppColors.border;
+    Color textColor = AppColors.textPrimary;
+
+    if (isCritical) {
+      cardColor = AppColors.danger.withOpacity(0.06);
+      borderColor = AppColors.danger.withOpacity(0.4);
+      textColor = AppColors.danger;
+    } else if (isWarning) {
+      cardColor = Colors.amber.withOpacity(0.08); // ✅ YELLOW BACKGROUND
+      borderColor = Colors.amber.withOpacity(0.5);
+      textColor = Colors.amber.shade800; // Dark yellow text for visibility
+    }
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: alert ? AppColors.danger.withOpacity(0.06) : AppColors.surface,
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: alert ? AppColors.danger.withOpacity(0.4) : AppColors.border,
-        ),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.sensors_rounded, size: 18, color: AppColors.burgundy),
+              Icon(
+                  Icons.sensors_rounded,
+                  size: 18,
+                  color: isCritical ? AppColors.danger : isWarning ? Colors.amber.shade800 : AppColors.burgundy
+              ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'IoT Monitor',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: textColor),
               ),
               const Spacer(),
-              _statusPill(bleStatus, alert),
+              _statusPill(bleStatus, currentAlertLevel),
             ],
           ),
           const SizedBox(height: 14),
@@ -350,16 +427,16 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
                     label: 'Temperature',
                     value: currentTemp?.toStringAsFixed(1) ?? '--',
                     unit: '°C',
-                    alert: alert,
+                    color: textColor, // ✅ Use dynamic color
                   ),
                 ),
-                Container(width: 1, height: 44, color: AppColors.border),
+                Container(width: 1, height: 44, color: borderColor),
                 Expanded(
                   child: _statBlock(
                     label: 'Humidity',
                     value: currentHum?.toStringAsFixed(1) ?? '--',
                     unit: '%',
-                    alert: alert,
+                    color: textColor, // ✅ Use dynamic color
                   ),
                 ),
               ],
@@ -375,19 +452,22 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
               },
             ),
           ],
-          if (alert) ...[
+          if (isCritical || isWarning) ...[
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(8)),
-              child: const Row(
+              decoration: BoxDecoration(
+                  color: isCritical ? AppColors.danger : Colors.amber.shade700, // ✅ Yellow vs Red
+                  borderRadius: BorderRadius.circular(8)
+              ),
+              child: Row(
                 children: [
-                  Icon(Icons.warning_rounded, color: Colors.white, size: 16),
-                  SizedBox(width: 6),
+                  const Icon(Icons.warning_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 6),
                   Text(
-                    'Temperature out of range',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                    isCritical ? 'CRITICAL: Temp above 15°C' : 'WARNING: Temp above 5°C',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
                   ),
                 ],
               ),
@@ -402,7 +482,7 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
     required String label,
     required String value,
     required String unit,
-    required bool alert,
+    required Color color, // ✅ Changed from bool alert to Color
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -423,7 +503,7 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
-                  color: alert ? AppColors.danger : AppColors.textPrimary,
+                  color: color, // ✅ Use dynamic color
                 ),
               ),
               const SizedBox(width: 4),
@@ -435,10 +515,25 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
     );
   }
 
-  Widget _statusPill(String status, bool alert) {
+  Widget _statusPill(String status, String alertLevel) {
     final connected = status.toLowerCase().contains('connected');
-    final color = alert ? AppColors.danger : connected ? AppColors.success : AppColors.textSecondary;
-    final label = alert ? 'ALERT' : connected ? 'LIVE' : 'OFFLINE';
+    final isCritical = alertLevel == 'critical';
+    final isWarning = alertLevel == 'warning';
+
+    Color color = AppColors.textSecondary;
+    String label = 'OFFLINE';
+
+    if (isCritical) {
+      color = AppColors.danger;
+      label = 'CRITICAL';
+    } else if (isWarning) {
+      color = Colors.amber.shade700;
+      label = 'WARNING';
+    } else if (connected) {
+      color = AppColors.success;
+      label = 'LIVE';
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -465,7 +560,13 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
   }
 
   Widget _buildReadingCard(dynamic r) {
-    final isAlert = r['is_alert'] == true || r['is_alert'] == 1;
+    // ✅ SAFE PARSING: Handles both String ("32.1") and Number (32.1)
+    final temp = double.tryParse(r['temperature']?.toString() ?? '0') ?? 0.0;
+
+    // ✅ Recalculate warning/critical from the raw temp for history cards
+    final isCritical = temp >= 15.0;
+    final isWarning = temp >= 5.0 && !isCritical;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       padding: const EdgeInsets.all(14),
@@ -473,8 +574,12 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isAlert ? AppColors.danger.withOpacity(0.5) : AppColors.border,
-          width: isAlert ? 1.5 : 1,
+          color: isCritical
+              ? AppColors.danger.withOpacity(0.5)
+              : isWarning
+              ? Colors.amber.withOpacity(0.5)
+              : AppColors.border,
+          width: (isCritical || isWarning) ? 1.5 : 1,
         ),
       ),
       child: Column(
@@ -483,9 +588,13 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
           Row(
             children: [
               Icon(
-                isAlert ? Icons.warning_amber_rounded : Icons.thermostat_rounded,
+                isCritical
+                    ? Icons.warning_amber_rounded
+                    : isWarning
+                    ? Icons.warning_rounded
+                    : Icons.thermostat_rounded,
                 size: 16,
-                color: isAlert ? AppColors.danger : AppColors.burgundy,
+                color: isCritical ? AppColors.danger : isWarning ? Colors.amber.shade700 : AppColors.burgundy,
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -498,17 +607,17 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
                   ),
                 ),
               ),
-              if (isAlert)
+              if (isCritical || isWarning)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.danger.withOpacity(0.1),
+                    color: isCritical ? AppColors.danger.withOpacity(0.1) : Colors.amber.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Text(
-                    'ALERT',
+                  child: Text(
+                    isCritical ? 'CRITICAL' : 'WARNING',
                     style: TextStyle(
-                      color: AppColors.danger,
+                      color: isCritical ? AppColors.danger : Colors.amber.shade800,
                       fontWeight: FontWeight.w700,
                       fontSize: 10,
                       letterSpacing: 0.5,
@@ -525,7 +634,7 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
                   label: 'Temperature',
                   value: '${r['temperature']}',
                   unit: '°C',
-                  highlight: isAlert,
+                  color: isCritical ? AppColors.danger : isWarning ? Colors.amber.shade800 : AppColors.textPrimary,
                 ),
               ),
               Container(
@@ -538,7 +647,7 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
                   label: 'Humidity',
                   value: '${r['humidity']}',
                   unit: '%',
-                  highlight: isAlert,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -552,7 +661,7 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
     required String label,
     required String value,
     required String unit,
-    required bool highlight,
+    required Color color,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -577,7 +686,7 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: highlight ? AppColors.danger : AppColors.textPrimary,
+                  color: color,
                 ),
               ),
               const SizedBox(width: 3),

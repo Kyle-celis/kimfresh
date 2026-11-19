@@ -30,12 +30,16 @@ class ViewOrderController extends Controller
 
         $items = $this->model->getItems($order_id);
         $driver_name = $this->model->getDriverName($order_id) ?? 'No driver assigned yet';
+        $proof = $this->model->getDeliveryProof($order_id);
+        $sensor_data = $this->model->getSensorData($order_id);
 
         $this->view('orders/view', [
             'order_id'    => $order_id,
             'order'       => $order,
             'items'       => $items,
-            'driver_name' => $driver_name
+            'driver_name' => $driver_name,
+            'proof'       => $proof,
+            'sensor_data' => $sensor_data
         ]);
     }
 

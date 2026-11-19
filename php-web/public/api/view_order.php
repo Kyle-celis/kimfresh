@@ -18,6 +18,8 @@ $sql = "
         o.order_status, 
         o.total_amount,
         d.name AS driver_name,
+        MAX(del.proof_photo) AS proof_photo,
+        MAX(del.proof_uploaded_at) AS proof_uploaded_at,
         GROUP_CONCAT(p.name SEPARATOR ', ') AS product_name
     FROM `order` o
     LEFT JOIN delivery del ON o.order_id = del.order_id
@@ -38,6 +40,15 @@ $orders = [];
 while ($row = $result->fetch_assoc()) {
     // Format total to be a number so Flutter handles it easily
     $row['total_amount'] = (float)$row['total_amount'];
+
+    // Absolute URL so the Flutter app can load the proof image directly
+    $row['proof_url'] = null;
+    if (!empty($row['proof_photo'])) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $row['proof_url'] = $scheme . '://' . $host . $row['proof_photo'];
+    }
+
     $orders[] = $row;
 }
 

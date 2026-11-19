@@ -713,6 +713,11 @@ class _TrackingSheet extends StatelessWidget {
                 _banner(status, isCancelled),
                 const SizedBox(height: 16),
 
+                if (order['proof_url'] != null && order['proof_url'].toString().isNotEmpty) ...[
+                  _proofCard(order),
+                  const SizedBox(height: 16),
+                ],
+
                 if (status == 'in_transit' || status == 'delivered') ...[
                   SizedBox(
                     height: 48,
@@ -836,6 +841,70 @@ class _TrackingSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _proofCard(dynamic order) {
+    final uploadedAt = order['proof_uploaded_at']?.toString();
+    final driverName = order['driver_name']?.toString();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.success.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.success.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.verified_outlined, size: 18, color: AppColors.success),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Proof of delivery',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.success),
+                ),
+              ),
+              Text(
+                driverName == null ? 'Photo' : 'by $driverName',
+                style: const TextStyle(fontSize: 11, color: AppColors.muted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              order['proof_url'].toString(),
+              width: double.infinity,
+              height: 200,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return Container(
+                  height: 200,
+                  alignment: Alignment.center,
+                  color: AppColors.background,
+                  child: const CircularProgressIndicator(color: AppColors.brand),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) => Container(
+                height: 200,
+                alignment: Alignment.center,
+                color: AppColors.background,
+                child: const Text('Proof photo could not be loaded', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+              ),
+            ),
+          ),
+          if (uploadedAt != null && uploadedAt.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Uploaded $uploadedAt', style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+          ],
+        ],
+      ),
     );
   }
 
